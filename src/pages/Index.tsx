@@ -60,8 +60,9 @@ const Index = () => {
     setIsStreaming(true);
     setStreamingContent("");
 
+    // Pass the actual user's prompt to Claude
     await streamClaudeResponse(
-      updatedMessages,
+      content,
       (chunk) => {
         setStreamingContent((prev) => prev + chunk);
       },
@@ -84,10 +85,19 @@ const Index = () => {
       },
       (error) => {
         toast({
-          title: "Error",
-          description: error.message || "Failed to get response from Claude. Please check Puter permissions.",
+          title: "Authorization Required",
+          description: error.message || "Please allow this app to use AI when prompted.",
           variant: "destructive",
+          duration: 6000,
         });
+        // Remove the user message if auth failed
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === currentConversationId
+              ? { ...conv, messages: messages }
+              : conv
+          )
+        );
         setStreamingContent("");
         setIsStreaming(false);
       }

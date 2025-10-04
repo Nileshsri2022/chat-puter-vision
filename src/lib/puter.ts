@@ -7,8 +7,20 @@ export interface Message {
   content: string;
 }
 
+// Type declaration for Puter SDK
+declare global {
+  interface Window {
+    puter: any;
+  }
+}
+
+// Initialize Puter when the module loads
+if (typeof window !== 'undefined' && !window.puter) {
+  console.warn('Puter SDK not loaded. Make sure to include <script src="https://js.puter.com/v2/"></script> in your HTML');
+}
+
 export async function streamClaudeResponse(
-  messages: Message[],
+  userPrompt: string,
   onChunk: (text: string) => void,
   onComplete: (fullContent: string) => void,
   onError: (error: Error) => void
@@ -16,11 +28,9 @@ export async function streamClaudeResponse(
   let fullContent = "";
   
   try {
-    // Get the last user message
-    const lastMessage = messages[messages.length - 1];
-    
-    const response = await puter.ai.chat(lastMessage.content, {
-      model: "claude-3-7-sonnet",
+    // Use the user's actual prompt with Claude Sonnet 4
+    const response = await puter.ai.chat(userPrompt, {
+      model: "claude-sonnet-4",
       stream: true,
     });
 
@@ -32,8 +42,15 @@ export async function streamClaudeResponse(
     }
 
     onComplete(fullContent);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error streaming from Puter:", error);
-    onError(error instanceof Error ? error : new Error("Unknown error"));
+    
+    // Check for permission error
+    if (error?.error?.code === "error_400_from_delegate" || 
+        error?.error?.message?.includes("Permission denied")) {
+      onError(new Error("Please authorize this app to use Puter AI. Click 'Allow' when prompted."));
+    } else {
+      onError(error instanceof Error ? error : new Error("Failed to connect to Claude AI"));
+    }
   }
 }
