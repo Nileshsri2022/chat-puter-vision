@@ -10,9 +10,11 @@ export interface Message {
 export async function streamClaudeResponse(
   messages: Message[],
   onChunk: (text: string) => void,
-  onComplete: () => void,
+  onComplete: (fullContent: string) => void,
   onError: (error: Error) => void
 ) {
+  let fullContent = "";
+  
   try {
     // Get the last user message
     const lastMessage = messages[messages.length - 1];
@@ -24,11 +26,12 @@ export async function streamClaudeResponse(
 
     for await (const part of response) {
       if (part?.text) {
+        fullContent += part.text;
         onChunk(part.text);
       }
     }
 
-    onComplete();
+    onComplete(fullContent);
   } catch (error) {
     console.error("Error streaming from Puter:", error);
     onError(error instanceof Error ? error : new Error("Unknown error"));

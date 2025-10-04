@@ -5,6 +5,7 @@ import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { streamClaudeResponse, Message } from "@/lib/puter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { ClaudeLogo } from "@/components/ClaudeLogo";
 
 interface Conversation {
   id: string;
@@ -64,7 +65,7 @@ const Index = () => {
       (chunk) => {
         setStreamingContent((prev) => prev + chunk);
       },
-      () => {
+      (fullContent) => {
         setConversations((prev) =>
           prev.map((conv) =>
             conv.id === currentConversationId
@@ -72,7 +73,7 @@ const Index = () => {
                   ...conv,
                   messages: [
                     ...updatedMessages,
-                    { role: "assistant", content: streamingContent },
+                    { role: "assistant", content: fullContent },
                   ],
                 }
               : conv
@@ -84,7 +85,7 @@ const Index = () => {
       (error) => {
         toast({
           title: "Error",
-          description: error.message || "Failed to get response from Claude",
+          description: error.message || "Failed to get response from Claude. Please check Puter permissions.",
           variant: "destructive",
         });
         setStreamingContent("");
@@ -118,13 +119,16 @@ const Index = () => {
       <main className="flex-1 flex flex-col md:ml-64">
         <ScrollArea className="flex-1" ref={scrollRef}>
           {messages.length === 0 && !isStreaming && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-4 p-8">
-                <h1 className="text-4xl font-semibold text-foreground">
-                  How can I help you today?
+            <div className="flex items-center justify-center h-full px-4">
+              <div className="text-center space-y-6 max-w-2xl">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-orange-500 text-white mb-4">
+                  <ClaudeLogo className="w-10 h-10" />
+                </div>
+                <h1 className="text-3xl md:text-4xl font-semibold text-foreground leading-tight">
+                  How can Claude help you today?
                 </h1>
-                <p className="text-muted-foreground">
-                  Start a conversation with Claude
+                <p className="text-muted-foreground text-base">
+                  I'm Claude, an AI assistant. I'm here to help with analysis, writing, math, coding, and more.
                 </p>
               </div>
             </div>
