@@ -1,73 +1,231 @@
-# Welcome to your Lovable project
+# AI Chat - Multi-Model Assistant
 
-## Project info
+A modern, responsive AI chat application that integrates with multiple AI models through the Puter platform. Chat with Claude, Grok, Mistral, Perplexity, and OpenRouter AI models in a unified interface with conversation management, image analysis capabilities, and a sleek design.
 
-**URL**: https://lovable.dev/projects/c91edb81-9be1-4caa-97aa-d26e8fa093b1
+## ✨ Key Features
 
-## How can I edit this code?
+- **Multi-Model Support**: Choose from Claude, Grok, Mistral, Perplexity, and OpenRouter AI models
+- **Conversation Management**: Create, manage, and switch between multiple conversations
+- **Image Analysis**: Upload and analyze images with Perplexity models
+- **Real-time Streaming**: Live responses from AI models
+- **Authentication**: Secure sign-in through Puter platform
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Modern UI**: Built with shadcn/ui components and Tailwind CSS
 
-There are several ways of editing your application.
+## 🤖 Supported AI Models
 
-**Use Lovable**
+### OpenRouter (Unified API Gateway)
+OpenRouter provides access to hundreds of AI models from various providers through a single, unified API. No API keys or backend setup required - everything works through Puter.js!
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/c91edb81-9be1-4caa-97aa-d26e8fa093b1) and start prompting.
+**Key Features:**
+- Access to 100+ AI models from OpenAI, Anthropic, Meta, Google, Mistral, and more
+- User-pays model (you only pay for what you use)
+- No API keys or server-side setup required
+- Streaming responses supported
+- Vision capabilities for compatible models
 
-Changes made via Lovable will be committed automatically to this repo.
+### Claude (Anthropic)
+- Claude Sonnet 4 (Recommended)
+- Claude Opus 4 & 4.1
+- Claude Sonnet 4.5
+- Claude 3.7 Sonnet & Opus
 
-**Use your preferred IDE**
+### Mistral AI
+- Codestral series (Code generation specialists)
+- Devstral series (Development focused)
+- Magistral series
+- Ministral series (Lightweight models)
+- Mistral Large (Flagship model)
+- Mixtral series (Mixture of experts)
+- Pixtral 12B (Vision capable)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Perplexity AI
+- R1 1776 (Historical research)
+- Sonar (General research - Recommended)
+- Sonar Deep Research (Comprehensive analysis)
+- Sonar Pro & Reasoning Pro (Professional/Advanced reasoning)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Grok (xAI)
+- Grok 4 (Latest model - Recommended)
+- Grok 4 Fast (Free tier)
+- Grok 3 series
+- Grok 2 Vision (Vision capable)
+- Grok Code Fast (Code specialist)
 
-Follow these steps:
+### OpenRouter (Unified API)
+- **GPT-4o** (OpenAI's latest flagship model - Recommended)
+- **GPT-4o Mini** (Fast and efficient GPT-4o)
+- **o1 & o1 Mini** (OpenAI's reasoning models)
+- **Claude Sonnet 4.5 & Opus 4** (Anthropic's latest models)
+- **Llama 3.1 405B/70B/8B** (Meta's open models)
+- **Mistral Large & Mixtral 8x22B** (Mistral's models)
+- **Gemini 2.0 Flash & Pro 1.5** (Google's models)
+- **Grok 4** (xAI's latest model)
+- **DeepSeek Chat** (DeepSeek's model)
+- **Qwen 2.5 72B** (Alibaba's model)
+- And hundreds more models from various providers
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🛠 Technology Stack
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+- **Frontend**: React 18, TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS, shadcn/ui
+- **State Management**: React Query (TanStack)
+- **Routing**: React Router
+- **Icons**: Lucide React
+- **AI Integration**: Puter SDK
+- **Development**: ESLint, TypeScript
 
-# Step 3: Install the necessary dependencies.
-npm i
+## 🚀 Quick Start
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### Prerequisites
+
+- Node.js & npm (or bun) installed
+- A Puter account for AI model access
+
+### Installation
+
+1. **Clone the repository**
+   ```sh
+   git clone <YOUR_GIT_URL>
+   cd <YOUR_PROJECT_NAME>
+   ```
+
+2. **Install dependencies**
+   ```sh
+   npm install
+   ```
+
+3. **Start development server**
+   ```sh
+   npm run dev
+   ```
+
+4. **Open your browser**
+   Navigate to `http://localhost:5173`
+
+## 📖 Usage Guide
+
+### Getting Started
+
+1. **Sign In**: Click the authentication button to sign in with Puter
+2. **Choose a Model**: Select from Claude, Grok, Mistral, Perplexity, or OpenRouter models
+3. **Start Chatting**: Type your message and press Enter or click Send
+
+### Model Selection
+
+- Use the model selector above the chat input to switch between AI providers
+- Each provider has multiple models optimized for different tasks
+- Perplexity models support image analysis
+- OpenRouter provides access to 100+ models from various providers
+
+### Image Analysis (Perplexity Only)
+
+1. Select a Perplexity model
+2. Click the image icon in the chat input
+3. Upload up to 4 images
+4. Ask questions about the uploaded images
+
+### Conversation Management
+
+- **New Conversation**: Click the "+" button in the sidebar
+- **Switch Conversations**: Click on any conversation in the sidebar
+- **Auto-titling**: Conversations are automatically titled from your first message
+
+## 🏗 Project Structure
+
+```
+src/
+├── components/
+│   ├── ui/           # shadcn/ui components
+│   ├── AuthButton.tsx
+│   ├── ChatInput.tsx
+│   ├── ChatMessage.tsx
+│   ├── ClaudeLogo.tsx
+│   ├── ConversationSidebar.tsx
+│   └── ModelSelector.tsx
+├── hooks/
+│   ├── use-mobile.tsx
+│   └── use-toast.ts
+├── lib/
+│   ├── puter.ts      # Puter SDK integration
+│   └── utils.ts
+├── pages/
+│   ├── Index.tsx     # Main chat interface
+│   └── NotFound.tsx
+├── App.tsx
+└── main.tsx
 ```
 
-**Edit a file directly in GitHub**
+## 🔧 Development
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Available Scripts
 
-**Use GitHub Codespaces**
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run build:dev` - Build for development
+- `npm run lint` - Run ESLint
+- `npm run preview` - Preview production build
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Key Components
 
-## What technologies are used for this project?
+- **Index.tsx**: Main chat interface with authentication and conversation management
+- **ChatInput.tsx**: Message input with model selection and image upload
+- **ModelSelector.tsx**: Tabbed interface for choosing AI models
+- **ConversationSidebar.tsx**: Conversation list and management
+- **puter.ts**: AI model integration and authentication utilities
 
-This project is built with:
+## 🚀 Deployment
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Via Lovable
 
-## How can I deploy this project?
+1. Open [Lovable](https://lovable.dev/projects/c91edb81-9be1-4caa-97aa-d26e8fa093b1)
+2. Click on **Share → Publish**
+3. Your app will be deployed automatically
 
-Simply open [Lovable](https://lovable.dev/projects/c91edb81-9be1-4caa-97aa-d26e8fa093b1) and click on Share -> Publish.
+### Custom Domain
 
-## Can I connect a custom domain to my Lovable project?
+1. Go to **Project → Settings → Domains**
+2. Click **Connect Domain**
+3. Follow the setup instructions
 
-Yes, you can!
+## 🤝 Contributing
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 📄 License
+
+This project is built with [Lovable](https://lovable.dev) and follows their terms of service.
+
+## ⚠️ Important Notes
+
+- **Authentication Required**: You must sign in with Puter to access AI models
+- **AI Model Limits**: Usage may be subject to Puter platform limits
+- **Image Analysis**: Only available with Perplexity models
+- **OpenRouter Models**: Access to 100+ models through unified API
+- **Browser Compatibility**: Requires modern browsers with ES6+ support
+
+## 🆘 Troubleshooting
+
+### Authentication Issues
+- Ensure popups are allowed for this site
+- Try the "Force Auth Check" button on the sign-in screen
+- Check browser console for error messages
+
+### Model Selection Issues
+- Make sure you're signed in to Puter
+- Try refreshing the page
+- Check that the selected model is available
+
+### Image Upload Issues
+- Ensure you're using a Perplexity model
+- Check file size limits (typically < 10MB per image)
+- Supported formats: PNG, JPG, JPEG, GIF, WebP
+
+---
+
+Built with ❤️ using [Lovable](https://lovable.dev)

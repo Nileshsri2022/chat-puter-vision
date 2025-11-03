@@ -1,21 +1,37 @@
-import { useState } from "react";
-import { Send } from "lucide-react";
+import { useState, useRef } from "react";
+import { Send, Image, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ModelSelector } from "./ModelSelector";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, model?: string, images?: File[]) => void;
   disabled?: boolean;
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
 }
 
-export const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
+export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: ChatInputProps) => {
   const [input, setInput] = useState("");
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !disabled) {
-      onSend(input.trim());
+    if ((input.trim() || selectedImages.length > 0) && !disabled) {
+      console.log('ChatInput: Sending message with:', {
+        content: input.trim(),
+        model: selectedModel,
+        imagesCount: selectedImages.length,
+        images: selectedImages.map(img => img.name)
+      });
+      onSend(input.trim(), selectedModel, selectedImages);
       setInput("");
+      clearImages();
     }
   };
 
@@ -26,29 +42,186 @@ export const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
     }
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    console.log('📁 ChatInput: Files selected:', files.length);
+    files.forEach((file, index) => {
+      console.log(`  ${index + 1}. ${file.name} (${file.size} bytes, ${file.type})`);
+    });
+
+    if (files.length > 0) {
+      setIsProcessingImages(true);
+      const validFiles = files.filter(file => file.type.startsWith('image/'));
+      console.log(`✅ Valid image files: ${validFiles.length}/${files.length}`);
+
+      if (validFiles.length === 0) {
+        toast({
+          title: "No valid images",
+          description: "Please select image files only.",
+          variant: "destructive",
+          duration: 3000,
+        });
+        setIsProcessingImages(false);
+        return;
+      }
+
+      setSelectedImages(prev => [...prev, ...validFiles].slice(0, 4)); // Max 4 images
+
+      let processedCount = 0;
+      validFiles.forEach((file, index) => {
+        console.log(`🔄 Processing file ${index + 1}: ${file.name}`);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          console.log(`✅ File ${file.name} loaded as data URL (${result.length} chars)`);
+          setImagePreviews(prev => [...prev, result].slice(0, 4));
+          processedCount++;
+
+          if (processedCount === validFiles.length) {
+            setIsProcessingImages(false);
+            console.log(`✅ All ${validFiles.length} images processed successfully`);
+          }
+        };
+        reader.onerror = () => {
+          console.error(`❌ Failed to read file: ${file.name}`);
+          processedCount++;
+
+          if (processedCount === validFiles.length) {
+            setIsProcessingImages(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const clearImages = () => {
+    setSelectedImages([]);
+    setImagePreviews([]);
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const isPerplexityModel = selectedModel?.startsWith("perplexity");
+  const isGrokModel = selectedModel?.startsWith("x-ai");
+
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto px-4 pb-6">
-      <div className="relative flex items-end gap-2 bg-background border-2 border-input rounded-2xl shadow-lg focus-within:border-primary/40 transition-all">
-        <Textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Reply to Claude..."
-          disabled={disabled}
-          className="flex-1 min-h-[56px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-5 py-4 text-[15px] placeholder:text-muted-foreground"
-        />
-        <Button
-          type="submit"
-          size="icon"
-          disabled={!input.trim() || disabled}
-          className="m-2 rounded-lg bg-primary hover:bg-primary/90 h-9 w-9"
-        >
-          <Send className="w-4 h-4" />
-        </Button>
-      </div>
-      <div className="text-xs text-center text-muted-foreground mt-3">
-        Claude can make mistakes. Please verify important information.
-      </div>
-    </form>
+    <div className="w-full max-w-4xl mx-auto px-4 py-4 md:py-6 bg-background border-t border-border">
+      {/* Model Selector */}
+      {onModelChange && (
+        <div className="flex justify-center mb-4 md:mb-6">
+          <ModelSelector
+            selectedModel={selectedModel || "claude-sonnet-4"}
+            onModelChange={onModelChange}
+          />
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
+        {/* Image Previews - Only show for Perplexity models */}
+        {isPerplexityModel && imagePreviews.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-2">
+            {imagePreviews.map((preview, index) => (
+              <div key={index} className="relative group">
+                <img
+                  src={preview}
+                  alt={`Upload ${index + 1}`}
+                  className="w-16 h-16 object-cover rounded-lg border border-border"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="destructive"
+                  className="absolute -top-2 -right-2 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => removeImage(index)}
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+            {selectedImages.length >= 4 && (
+              <div className="w-16 h-16 rounded-lg border border-border bg-muted flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">Max 4</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="relative flex items-end gap-2 md:gap-3 bg-card border border-border rounded-2xl shadow-sm focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200 hover:shadow-lg">
+          {/* Image Upload Button - Only show for Perplexity models */}
+          {isPerplexityModel && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="m-1 md:m-2 h-8 w-8 md:h-9 md:w-9 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || selectedImages.length >= 4}
+            >
+              <Image className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            </Button>
+          )}
+
+          <div className="flex-1 relative">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                selectedModel?.startsWith("claude")
+                  ? "Message Claude..."
+                  : selectedModel?.startsWith("mistral")
+                  ? "Message Mistral AI..."
+                  : selectedModel?.startsWith("x-ai")
+                  ? "Message Grok..."
+                  : "Ask about images or research topics..."
+              }
+              disabled={disabled}
+              className="w-full min-h-[44px] md:min-h-[52px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-3 md:px-4 py-2 md:py-3 text-sm md:text-[15px] placeholder:text-muted-foreground/70 leading-relaxed"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            size="icon"
+            disabled={(!input.trim() && selectedImages.length === 0) || disabled}
+            className="m-1 md:m-2 rounded-xl bg-primary hover:bg-primary/90 h-8 w-8 md:h-10 md:w-10 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 disabled:hover:scale-100"
+          >
+            <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
+          </Button>
+        </div>
+
+        {/* Hidden File Input */}
+        {isPerplexityModel && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+        )}
+
+        <div className="text-xs text-center text-muted-foreground/80 mt-4 px-2">
+          {selectedModel?.startsWith("claude")
+            ? "Claude can make mistakes. Consider checking important information."
+            : selectedModel?.startsWith("mistral")
+            ? "Mistral AI can make mistakes. Consider checking important information."
+            : selectedModel?.startsWith("x-ai")
+            ? "Grok can make mistakes. Consider checking important information."
+            : "Perplexity AI provides research-oriented responses. Images supported for analysis."
+          }
+        </div>
+      </form>
+    </div>
   );
 };
