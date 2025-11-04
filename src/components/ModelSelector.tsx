@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe } from "lucide-react";
 
 export interface AIModel {
@@ -20,10 +25,50 @@ export interface AIModel {
   type: "claude" | "mistral" | "perplexity" | "grok" | "openrouter";
 }
 
+export interface AIProvider {
+  id: "claude" | "mistral" | "perplexity" | "grok" | "openrouter";
+  name: string;
+  icon: React.ReactNode;
+  description: string;
+}
+
 interface ModelSelectorProps {
   selectedModel: string;
   onModelChange: (model: string) => void;
 }
+
+const PROVIDERS: AIProvider[] = [
+  {
+    id: "claude",
+    name: "Claude",
+    icon: <Brain className="w-5 h-5" />,
+    description: "Anthropic's Claude models"
+  },
+  {
+    id: "mistral",
+    name: "Mistral",
+    icon: <Wind className="w-5 h-5" />,
+    description: "Mistral AI models"
+  },
+  {
+    id: "perplexity",
+    name: "Perplexity",
+    icon: <Search className="w-5 h-5" />,
+    description: "Perplexity research models"
+  },
+  {
+    id: "grok",
+    name: "Grok",
+    icon: <MessageSquare className="w-5 h-5" />,
+    description: "xAI's Grok models"
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    icon: <Globe className="w-5 h-5" />,
+    description: "OpenRouter marketplace"
+  }
+];
 
 const CLAUDE_MODELS: AIModel[] = [
   {
@@ -3139,286 +3184,142 @@ const GROK_MODELS: AIModel[] = [
 ];
 
 export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
-  const [activeTab, setActiveTab] = useState<"claude" | "mistral" | "perplexity" | "grok" | "openrouter">(
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<"claude" | "mistral" | "perplexity" | "grok" | "openrouter">(
     selectedModel.startsWith("claude") ? "claude" :
     selectedModel.startsWith("mistral") ? "mistral" :
     selectedModel.startsWith("perplexity") ? "perplexity" :
     selectedModel.startsWith("x-ai") ? "grok" :
     selectedModel.startsWith("openrouter") ? "openrouter" : "claude"
   );
+  const [viewMode, setViewMode] = useState<"providers" | "models">("providers");
 
   const currentModel = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...OPENROUTER_MODELS].find(model => model.id === selectedModel);
 
   const handleModelChange = (modelId: string) => {
     onModelChange(modelId);
-    // Update active tab based on selected model
-    if (modelId.startsWith("claude")) {
-      setActiveTab("claude");
-    } else if (modelId.startsWith("mistral")) {
-      setActiveTab("mistral");
-    } else if (modelId.startsWith("perplexity")) {
-      setActiveTab("perplexity");
-    } else if (modelId.startsWith("x-ai")) {
-      setActiveTab("grok");
-    } else if (modelId.startsWith("openrouter")) {
-      setActiveTab("openrouter");
-    } else {
-      setActiveTab("claude");
+    setIsModalOpen(false);
+    setViewMode("providers");
+  };
+
+  const getModelsForProvider = (provider: typeof selectedProvider) => {
+    switch (provider) {
+      case "claude": return CLAUDE_MODELS;
+      case "mistral": return MISTRAL_MODELS;
+      case "perplexity": return PERPLEXITY_MODELS;
+      case "grok": return GROK_MODELS;
+      case "openrouter": return OPENROUTER_MODELS;
+      default: return CLAUDE_MODELS;
     }
   };
 
-  const handleTabChange = (tab: "claude" | "mistral" | "perplexity" | "grok" | "openrouter") => {
-    setActiveTab(tab);
-    // Auto-select the first model of the chosen type
-    const models = tab === "claude" ? CLAUDE_MODELS :
-                    tab === "mistral" ? MISTRAL_MODELS :
-                    tab === "perplexity" ? PERPLEXITY_MODELS :
-                    tab === "grok" ? GROK_MODELS : OPENROUTER_MODELS;
+  const handleProviderSelect = (provider: typeof selectedProvider) => {
+    setSelectedProvider(provider);
+    setViewMode("models");
+    // Auto-select the first model of the chosen provider
+    const models = getModelsForProvider(provider);
     if (models.length > 0) {
-      handleModelChange(models[0].id);
+      onModelChange(models[0].id);
     }
   };
+
+  const handleBackToProviders = () => {
+    setViewMode("providers");
+  };
+
+  const providerModels = getModelsForProvider(selectedProvider);
 
   return (
-    <div className="w-full max-w-md">
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-4 h-auto p-1">
-          <TabsTrigger
-            value="claude"
-            className="flex items-center gap-1 md:gap-2 data-[state=inactive]:opacity-60 data-[state=inactive]:cursor-not-allowed text-xs md:text-sm px-2 md:px-3 py-2 transition-all duration-200 hover:bg-accent/50"
+    <div className="w-auto max-w-[200px]">
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            className="h-10 px-2.5 border-0 bg-transparent hover:bg-accent/10 justify-start transition-all duration-300 hover:scale-[1.02] rounded-lg backdrop-blur-sm w-auto max-w-[180px] overflow-hidden"
           >
-            <Brain className="w-3 h-3 md:w-4 md:h-4" />
-            <span className="hidden sm:inline">Claude</span>
-            <span className="sm:hidden">C</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="mistral"
-            className="flex items-center gap-1 md:gap-2 data-[state=inactive]:opacity-60 data-[state=inactive]:cursor-not-allowed text-xs md:text-sm px-2 md:px-3 py-2 transition-all duration-200 hover:bg-accent/50"
-          >
-            <Wind className="w-3 h-3 md:w-4 md:h-4" />
-            <span className="hidden sm:inline">Mistral</span>
-            <span className="sm:hidden">M</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="perplexity"
-            className="flex items-center gap-1 md:gap-2 data-[state=inactive]:opacity-60 data-[state=inactive]:cursor-not-allowed text-xs md:text-sm px-2 md:px-3 py-2 transition-all duration-200 hover:bg-accent/50"
-          >
-            <Search className="w-3 h-3 md:w-4 md:h-4" />
-            <span className="hidden sm:inline">Perplexity</span>
-            <span className="sm:hidden">P</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="grok"
-            className="flex items-center gap-1 md:gap-2 data-[state=inactive]:opacity-60 data-[state=inactive]:cursor-not-allowed text-xs md:text-sm px-2 md:px-3 py-2 transition-all duration-200 hover:bg-accent/50"
-          >
-            <MessageSquare className="w-3 h-3 md:w-4 md:h-4" />
-            <span className="hidden sm:inline">Grok</span>
-            <span className="sm:hidden">G</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="openrouter"
-            className="flex items-center gap-1 md:gap-2 data-[state=inactive]:opacity-60 data-[state=inactive]:cursor-not-allowed text-xs md:text-sm px-2 md:px-3 py-2 transition-all duration-200 hover:bg-accent/50 col-span-2 md:col-span-1"
-          >
-            <Globe className="w-3 h-3 md:w-4 md:h-4" />
-            <span className="hidden md:inline">OpenRouter</span>
-            <span className="md:hidden">OR</span>
-          </TabsTrigger>
-        </TabsList>
+            <div className="flex flex-col items-start min-w-0 flex-1">
+              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors duration-300 leading-tight truncate block">
+                {currentModel?.name}
+              </span>
+              <span className="text-[10px] text-muted-foreground group-hover:text-muted-foreground/70 transition-colors duration-300 leading-tight font-medium truncate block">
+                {PROVIDERS.find(p => p.id === selectedProvider)?.name}
+              </span>
+            </div>
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-md sm:max-w-lg max-h-[85vh] overflow-hidden shadow-2xl border-border/50 bg-background/95 backdrop-blur-xl rounded-2xl p-6 sm:p-8 mt-12 pb-4 pl-4" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg font-semibold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              {viewMode === "providers" ? "Select AI Model" : `${PROVIDERS.find(p => p.id === selectedProvider)?.name} Models`}
+            </DialogTitle>
+          </DialogHeader>
 
-        <TabsContent value="claude" className="mt-0">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className={`w-full h-10 border-border/50 transition-all duration-200 hover:border-primary/50 focus:border-primary ${(activeTab === "mistral" || activeTab === "perplexity") ? "opacity-60 cursor-not-allowed bg-muted/30" : "bg-background/50 hover:bg-accent/10"}`}>
-              <div className="flex items-center gap-2">
-                <div className="transition-transform duration-200 group-hover:scale-110">
-                  {currentModel?.icon}
+          {viewMode === "models" && (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBackToProviders}
+                className="flex items-center gap-2 text-sm hover:bg-accent/50 rounded-lg transition-all duration-200 h-9 px-3"
+              >
+                <ChevronDown className="w-4 h-4 rotate-90 transition-transform duration-200" />
+                Back to Providers
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {viewMode === "providers" ? (
+              /* Provider Selection - Scrollable */
+              <div className="max-h-[55vh] overflow-y-auto scrollbar-thin scrollbar-thumb-accent scrollbar-track-transparent">
+                <div className="space-y-3 pr-2 pb-4">
+                  {PROVIDERS.map((provider) => (
+                    <div key={provider.id} className="bg-card border border-border/40 rounded-xl p-4 hover:bg-accent/40 hover:border-primary/30 transition-all duration-300 hover:shadow-lg group cursor-pointer" onClick={() => handleProviderSelect(provider.id)}>
+                      <div className="flex items-center gap-4">
+                        <div className="transition-transform duration-300 group-hover:scale-110 p-3 rounded-lg bg-primary/5 group-hover:bg-primary/15 flex-shrink-0">
+                          {provider.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium group-hover:text-primary transition-colors duration-200">{provider.name}</div>
+                          <div className="text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-200 mt-1">{provider.description}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <SelectValue>
-                  <span className="text-sm font-medium">{currentModel?.name}</span>
-                </SelectValue>
               </div>
-            </SelectTrigger>
-            <SelectContent className="max-h-64">
-              {CLAUDE_MODELS.map((model) => (
-                <SelectItem
-                  key={model.id}
-                  value={model.id}
-                  disabled={activeTab === "mistral" || activeTab === "perplexity"}
-                  className={(activeTab === "mistral" || activeTab === "perplexity") ? "opacity-50" : "hover:bg-accent/50 transition-colors duration-150"}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      <div className="transition-transform duration-150 hover:scale-110">
-                        {model.icon}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.description}</span>
+            ) : (
+              /* Model Selection - Card-like Design */
+              <div className="space-y-3 max-h-[55vh] overflow-y-auto scrollbar-thin scrollbar-thumb-accent scrollbar-track-transparent">
+                <div className="space-y-3 pb-4">
+                  {providerModels.map((model, index) => (
+                    <div key={model.id} className="bg-card border border-border/40 rounded-xl p-4 hover:bg-accent/40 hover:border-primary/30 transition-all duration-300 hover:shadow-lg group cursor-pointer" onClick={() => handleModelChange(model.id)}>
+                      <div className="flex items-center gap-4">
+                        <div className="transition-transform duration-300 group-hover:scale-110 p-2 rounded-lg bg-primary/5 group-hover:bg-primary/15 flex-shrink-0">
+                          {model.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-sm font-medium group-hover:text-primary transition-colors duration-200">{model.name}</span>
+                              <span className="text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-200 mt-1">{model.description}</span>
+                            </div>
+                            {model.badge && (
+                              <Badge variant="secondary" className="text-sm flex-shrink-0 shadow-sm animate-in fade-in duration-300 ml-3 px-2 py-1">
+                                {model.badge}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    {model.badge && (
-                      <Badge variant="secondary" className="text-xs animate-in fade-in duration-200">
-                        {model.badge}
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TabsContent>
-
-        <TabsContent value="mistral" className="mt-0">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className={`w-full h-10 border-border/50 ${(activeTab === "claude" || activeTab === "perplexity") ? "opacity-60 cursor-not-allowed bg-muted/30" : "bg-background/50"}`}>
-              <div className="flex items-center gap-2">
-                {currentModel?.icon}
-                <SelectValue>
-                  <span className="text-sm font-medium">{currentModel?.name}</span>
-                </SelectValue>
+                  ))}
+                </div>
               </div>
-            </SelectTrigger>
-            <SelectContent>
-              {MISTRAL_MODELS.map((model) => (
-                <SelectItem
-                  key={model.id}
-                  value={model.id}
-                  disabled={activeTab === "claude" || activeTab === "perplexity"}
-                  className={(activeTab === "claude" || activeTab === "perplexity") ? "opacity-50" : ""}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      {model.icon}
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.description}</span>
-                      </div>
-                    </div>
-                    {model.badge && (
-                      <Badge variant="secondary" className="text-xs">
-                        {model.badge}
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TabsContent>
-
-        <TabsContent value="perplexity" className="mt-0">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className={`w-full h-10 border-border/50 ${(activeTab === "claude" || activeTab === "mistral" || activeTab === "grok") ? "opacity-60 cursor-not-allowed bg-muted/30" : "bg-background/50"}`}>
-              <div className="flex items-center gap-2">
-                {currentModel?.icon}
-                <SelectValue>
-                  <span className="text-sm font-medium">{currentModel?.name}</span>
-                </SelectValue>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {PERPLEXITY_MODELS.map((model) => (
-                <SelectItem
-                  key={model.id}
-                  value={model.id}
-                  disabled={activeTab === "claude" || activeTab === "mistral" || activeTab === "grok"}
-                  className={(activeTab === "claude" || activeTab === "mistral" || activeTab === "grok") ? "opacity-50" : ""}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      {model.icon}
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.description}</span>
-                      </div>
-                    </div>
-                    {model.badge && (
-                      <Badge variant="secondary" className="text-xs">
-                        {model.badge}
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TabsContent>
-
-        <TabsContent value="grok" className="mt-0">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className={`w-full h-10 border-border/50 ${(activeTab === "claude" || activeTab === "mistral" || activeTab === "perplexity") ? "opacity-60 cursor-not-allowed bg-muted/30" : "bg-background/50"}`}>
-              <div className="flex items-center gap-2">
-                {currentModel?.icon}
-                <SelectValue>
-                  <span className="text-sm font-medium">{currentModel?.name}</span>
-                </SelectValue>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {GROK_MODELS.map((model) => (
-                <SelectItem
-                  key={model.id}
-                  value={model.id}
-                  disabled={activeTab === "claude" || activeTab === "mistral" || activeTab === "perplexity"}
-                  className={(activeTab === "claude" || activeTab === "mistral" || activeTab === "perplexity") ? "opacity-50" : ""}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      {model.icon}
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.description}</span>
-                      </div>
-                    </div>
-                    {model.badge && (
-                      <Badge variant="secondary" className="text-xs">
-                        {model.badge}
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TabsContent>
-
-        <TabsContent value="openrouter" className="mt-0">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className={`w-full h-10 border-border/50 ${(activeTab === "claude" || activeTab === "mistral" || activeTab === "perplexity" || activeTab === "grok") ? "opacity-60 cursor-not-allowed bg-muted/30" : "bg-background/50"}`}>
-              <div className="flex items-center gap-2">
-                {currentModel?.icon}
-                <SelectValue>
-                  <span className="text-sm font-medium">{currentModel?.name}</span>
-                </SelectValue>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {OPENROUTER_MODELS.map((model) => (
-                <SelectItem
-                  key={model.id}
-                  value={model.id}
-                  disabled={activeTab === "claude" || activeTab === "mistral" || activeTab === "perplexity" || activeTab === "grok"}
-                  className={(activeTab === "claude" || activeTab === "mistral" || activeTab === "perplexity" || activeTab === "grok") ? "opacity-50" : ""}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      {model.icon}
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.description}</span>
-                      </div>
-                    </div>
-                    {model.badge && (
-                      <Badge variant="secondary" className="text-xs">
-                        {model.badge}
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TabsContent>
-      </Tabs>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

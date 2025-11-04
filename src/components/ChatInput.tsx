@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Send, Image, X } from "lucide-react";
+import { Send, Image, X, Plus, SlidersHorizontal, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModelSelector } from "./ModelSelector";
@@ -114,16 +114,7 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
   const isGrokModel = selectedModel?.startsWith("x-ai");
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-4 md:py-6 bg-background border-t border-border">
-      {/* Model Selector */}
-      {onModelChange && (
-        <div className="flex justify-center mb-4 md:mb-6">
-          <ModelSelector
-            selectedModel={selectedModel || "claude-sonnet-4"}
-            onModelChange={onModelChange}
-          />
-        </div>
-      )}
+    <div className="w-full max-w-4xl mx-auto px-4 py-2 md:py-3 bg-background border-t border-border">
 
       <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
         {/* Image Previews - Only show for Perplexity models */}
@@ -155,22 +146,8 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
           </div>
         )}
 
-        <div className="relative flex items-end gap-2 md:gap-3 bg-card border border-border rounded-2xl shadow-sm focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200 hover:shadow-lg">
-          {/* Image Upload Button - Only show for Perplexity models */}
-          {isPerplexityModel && (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="m-1 md:m-2 h-8 w-8 md:h-9 md:w-9 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || selectedImages.length >= 4}
-            >
-              <Image className="w-3.5 h-3.5 md:w-4 md:h-4" />
-            </Button>
-          )}
-
-          <div className="flex-1 relative">
+        <div className="relative flex flex-col gap-1 bg-card border border-border rounded-2xl shadow-sm focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200 hover:shadow-lg p-1 md:p-2">
+          <div className="flex-1">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -182,21 +159,76 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
                   ? "Message Mistral AI..."
                   : selectedModel?.startsWith("x-ai")
                   ? "Message Grok..."
-                  : "Ask about images or research topics..."
+                  : "How can I help you today?"
               }
               disabled={disabled}
-              className="w-full min-h-[44px] md:min-h-[52px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-3 md:px-4 py-2 md:py-3 text-sm md:text-[15px] placeholder:text-muted-foreground/70 leading-relaxed"
+              className="w-full min-h-[44px] md:min-h-[52px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-3 md:px-3 py-1 md:py-2 text-sm md:text-[15px] placeholder:text-muted-foreground/70 leading-relaxed"
             />
           </div>
 
-          <Button
-            type="submit"
-            size="icon"
-            disabled={(!input.trim() && selectedImages.length === 0) || disabled}
-            className="m-1 md:m-2 rounded-xl bg-primary hover:bg-primary/90 h-8 w-8 md:h-10 md:w-10 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 disabled:hover:scale-100"
-          >
-            <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
-          </Button>
+          <div className="flex items-center justify-between px-1 md:px-2">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                disabled={disabled}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                disabled={disabled}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                disabled={disabled}
+              >
+                <Timer className="w-4 h-4" />
+              </Button>
+
+              {isPerplexityModel && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled || selectedImages.length >= 4}
+                >
+                  <Image className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onModelChange && (
+                <div className="flex-shrink-0">
+                  <ModelSelector
+                    selectedModel={selectedModel || "claude-sonnet-4"}
+                    onModelChange={onModelChange}
+                  />
+                </div>
+              )}
+              <Button
+                type="submit"
+                size="icon"
+                disabled={(!input.trim() && selectedImages.length === 0) || disabled}
+                className="rounded-xl bg-primary hover:bg-primary/90 h-8 w-8 md:h-9 md:w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 disabled:hover:scale-100"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Hidden File Input */}
