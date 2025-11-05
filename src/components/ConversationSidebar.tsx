@@ -15,6 +15,7 @@ interface ConversationSidebarProps {
   currentConversationId?: string;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
+  onDeleteConversation: (id: string) => void;
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -26,6 +27,7 @@ export const ConversationSidebar = ({
   onNewConversation,
   isOpen,
   onToggle,
+  onDeleteConversation,
 }: ConversationSidebarProps) => {
   return (
     <>
@@ -116,8 +118,7 @@ export const ConversationSidebar = ({
                     className="h-8 w-8 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation(); // Prevent selecting conversation
-                      // Handle delete logic here
-                      console.log("Delete conversation", conv.id);
+                      onDeleteConversation(conv.id);
                     }}
                   >
                     <Trash2 className="w-4 h-4" />

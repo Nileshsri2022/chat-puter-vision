@@ -71,7 +71,7 @@ const PROVIDERS: AIProvider[] = [
   }
 ];
 
-const CLAUDE_MODELS: AIModel[] = [
+export const CLAUDE_MODELS: AIModel[] = [
   {
     id: "claude-sonnet-4",
     name: "Claude Sonnet 4",
@@ -117,7 +117,7 @@ const CLAUDE_MODELS: AIModel[] = [
   },
 ];
 
-const MISTRAL_MODELS: AIModel[] = [
+export const MISTRAL_MODELS: AIModel[] = [
   {
     id: "mistralai/codestral-2501",
     name: "Codestral 2501",
@@ -275,7 +275,7 @@ const MISTRAL_MODELS: AIModel[] = [
   },
 ];
 
-const PERPLEXITY_MODELS: AIModel[] = [
+export const PERPLEXITY_MODELS: AIModel[] = [
   {
     id: "perplexity/r1-1776",
     name: "R1 1776",
@@ -323,7 +323,7 @@ const PERPLEXITY_MODELS: AIModel[] = [
   },
 ];
 
-const OPENROUTER_MODELS: AIModel[] = [
+export const OPENROUTER_MODELS: AIModel[] = [
   {
     id: "openrouter:agentica-org/deepcoder-14b-preview",
     name: "DeepCoder 14B Preview",
@@ -3110,7 +3110,7 @@ const OPENROUTER_MODELS: AIModel[] = [
   }
 ];
 
-const GROK_MODELS: AIModel[] = [
+export const GROK_MODELS: AIModel[] = [
   {
     id: "x-ai/grok-4",
     name: "Grok 4",

@@ -1,6 +1,7 @@
-import { User } from "lucide-react";
+import { User, Brain, Wind, Search, MessageSquare, Globe } from "lucide-react"; // Import icons
 import { cn } from "@/lib/utils";
-import { ClaudeLogo } from "./ClaudeLogo";
+import { ClaudeLogo } from "./ClaudeLogo"; // Keep ClaudeLogo for now, might replace with dynamic import or component
+import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -12,18 +13,26 @@ interface ChatMessageProps {
 export const ChatMessage = ({ role, content, isStreaming, model }: ChatMessageProps) => {
   const isUser = role === "user";
 
-  const getAIModelName = () => {
-    if (model?.startsWith("claude")) return "Claude";
-    if (model?.startsWith("mistral")) return "Mistral AI";
-    if (model?.startsWith("perplexity")) return "Perplexity";
-    return "AI";
+  const allModels: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...OPENROUTER_MODELS];
+
+  const getModelDisplayName = (modelId?: string) => {
+    const foundModel = allModels.find(m => m.id === modelId);
+    return foundModel ? foundModel.name : "AI";
   };
 
-  const getModelBadge = () => {
-    if (model?.startsWith("claude")) return "Claude";
-    if (model?.startsWith("mistral")) return "Mistral";
-    if (model?.startsWith("perplexity")) return "Perplexity";
-    return "AI";
+  const getModelIcon = (modelId?: string) => {
+    const foundModel = allModels.find(m => m.id === modelId);
+    if (foundModel) {
+      switch (foundModel.type) {
+        case "claude": return <Brain className="w-4 h-4 md:w-5 md:h-5" />;
+        case "mistral": return <Wind className="w-4 h-4 md:w-5 md:h-5" />;
+        case "perplexity": return <Search className="w-4 h-4 md:w-5 md:h-5" />;
+        case "grok": return <MessageSquare className="w-4 h-4 md:w-5 md:h-5" />;
+        case "openrouter": return <Globe className="w-4 h-4 md:w-5 md:h-5" />;
+        default: return <Brain className="w-4 h-4 md:w-5 md:h-5" />;
+      }
+    }
+    return <Brain className="w-4 h-4 md:w-5 md:h-5" />; // Default AI icon
   };
 
   // Format content for better display
@@ -76,19 +85,19 @@ export const ChatMessage = ({ role, content, isStreaming, model }: ChatMessagePr
               : "bg-gradient-to-br from-orange-400 to-orange-500 text-white"
           )}
         >
-          {isUser ? <User className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <ClaudeLogo className="w-4 h-4 md:w-5 md:h-5" />}
+          {isUser ? <User className="w-3.5 h-3.5 md:w-4 md:h-4" /> : getModelIcon(model)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
             <div className="text-sm font-semibold text-foreground">
-              {isUser ? "You" : getAIModelName()}
+              {isUser ? "You" : "AI"}
             </div>
             {!isUser && (
               <div className={cn(
                 "text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full transition-all duration-200",
                 isStreaming && "bg-primary/10 text-primary animate-pulse"
               )}>
-                {isStreaming ? "Thinking..." : getModelBadge()}
+                {isStreaming ? "Thinking..." : getModelDisplayName(model)}
               </div>
             )}
           </div>

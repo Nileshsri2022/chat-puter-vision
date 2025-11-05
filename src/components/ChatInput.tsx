@@ -10,9 +10,10 @@ interface ChatInputProps {
   disabled?: boolean;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  currentModelName?: string; // Add prop for current model name
 }
 
-export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: ChatInputProps) => {
+export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, currentModelName }: ChatInputProps) => {
   const [input, setInput] = useState("");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -243,15 +244,20 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
           />
         )}
 
-        <div className="text-xs text-center text-muted-foreground/80 mt-4 px-2">
-          {selectedModel?.startsWith("claude")
-            ? "Claude can make mistakes. Consider checking important information."
-            : selectedModel?.startsWith("mistral")
-            ? "Mistral AI can make mistakes. Consider checking important information."
-            : selectedModel?.startsWith("x-ai")
-            ? "Grok can make mistakes. Consider checking important information."
-            : "Perplexity AI provides research-oriented responses. Images supported for analysis."
-          }
+        <div className="text-xs text-center text-muted-foreground/80 mt-4 px-2 flex items-center justify-center gap-1">
+          {currentModelName && (
+            <span className="font-medium text-foreground/90">{currentModelName}:</span>
+          )}
+          <span>
+            {selectedModel?.startsWith("claude")
+              ? "Claude can make mistakes. Consider checking important information."
+              : selectedModel?.startsWith("mistral")
+              ? "Mistral AI can make mistakes. Consider checking important information."
+              : selectedModel?.startsWith("x-ai")
+              ? "Grok can make mistakes. Consider checking important information."
+              : "Perplexity AI provides research-oriented responses. Images supported for analysis."
+            }
+          </span>
         </div>
       </form>
     </div>
