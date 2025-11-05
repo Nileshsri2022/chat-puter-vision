@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Menu, PanelLeftClose } from "lucide-react";
+import { MessageSquare, Plus, Menu, PanelLeftClose, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,10 @@ export const ConversationSidebar = ({
         {/* New chat button */}
         <div className="p-3">
           <Button
-            onClick={onNewConversation}
+            onClick={() => {
+              onNewConversation();
+              if (window.innerWidth < 768) onToggle();
+            }}
             className="w-full justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg h-10 font-medium"
           >
             <Plus className="w-4 h-4" />
@@ -102,9 +105,23 @@ export const ConversationSidebar = ({
                     : "text-sidebar-foreground"
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-60" />
-                  <span className="truncate">{conv.title}</span>
+                <div className="flex items-center justify-between group">
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-60" />
+                    <span className="truncate">{conv.title}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent selecting conversation
+                      // Handle delete logic here
+                      console.log("Delete conversation", conv.id);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </button>
             ))}

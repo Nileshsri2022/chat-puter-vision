@@ -114,9 +114,9 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
   const isGrokModel = selectedModel?.startsWith("x-ai");
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-2 md:py-3 bg-background border-t border-border">
+    <div className="w-full max-w-4xl mx-auto px-4 py-0.5 md:py-1 bg-background border-t border-border">
 
-      <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-2 md:space-y-2">
         {/* Image Previews - Only show for Perplexity models */}
         {isPerplexityModel && imagePreviews.length > 0 && (
           <div className="flex flex-wrap gap-2 px-2">
@@ -146,7 +146,7 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
           </div>
         )}
 
-        <div className="relative flex flex-col gap-1 bg-card border border-border rounded-2xl shadow-sm focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200 hover:shadow-lg p-1 md:p-2">
+        <div className="relative flex flex-col gap-0.5 bg-card border border-border rounded-2xl shadow-sm focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200 hover:shadow-lg p-0.5 md:p-1">
           <div className="flex-1">
             <Textarea
               value={input}
@@ -162,38 +162,38 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
                   : "How can I help you today?"
               }
               disabled={disabled}
-              className="w-full min-h-[44px] md:min-h-[52px] max-h-[200px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-3 md:px-3 py-1 md:py-2 text-sm md:text-[15px] placeholder:text-muted-foreground/70 leading-relaxed"
+              className="w-full min-h-[28px] md:min-h-[36px] max-h-[120px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-2 md:px-2 py-0.5 md:py-0.5 text-sm md:text-[15px] placeholder:text-muted-foreground/70 leading-relaxed"
             />
           </div>
 
-          <div className="flex items-center justify-between px-1 md:px-2">
+          <div className="flex items-center justify-between px-1 md:px-1">
             <div className="flex items-center gap-2">
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
                 disabled={disabled}
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
               </Button>
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
                 disabled={disabled}
               >
-                <SlidersHorizontal className="w-4 h-4" />
+                <SlidersHorizontal className="w-3.5 h-3.5" />
               </Button>
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
                 disabled={disabled}
               >
-                <Timer className="w-4 h-4" />
+                <Timer className="w-3.5 h-3.5" />
               </Button>
 
               {isPerplexityModel && (
@@ -201,11 +201,11 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                  className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={disabled || selectedImages.length >= 4}
                 >
-                  <Image className="w-4 h-4" />
+                  <Image className="w-3.5 h-3.5" />
                 </Button>
               )}
             </div>
@@ -223,9 +223,9 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange }: Ch
                 type="submit"
                 size="icon"
                 disabled={(!input.trim() && selectedImages.length === 0) || disabled}
-                className="rounded-xl bg-primary hover:bg-primary/90 h-8 w-8 md:h-9 md:w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 disabled:hover:scale-100"
+                className="rounded-xl bg-primary hover:bg-primary/90 h-6 w-6 md:h-6 md:w-6 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 disabled:hover:scale-100"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-3 h-3" />
               </Button>
             </div>
           </div>

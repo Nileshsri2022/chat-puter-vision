@@ -35,6 +35,7 @@ export interface AIProvider {
 interface ModelSelectorProps {
   selectedModel: string;
   onModelChange: (model: string) => void;
+  compact?: boolean;
 }
 
 const PROVIDERS: AIProvider[] = [
@@ -3183,7 +3184,7 @@ const GROK_MODELS: AIModel[] = [
   },
 ];
 
-export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
+export const ModelSelector = ({ selectedModel, onModelChange, compact = false }: ModelSelectorProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<"claude" | "mistral" | "perplexity" | "grok" | "openrouter">(
     selectedModel.startsWith("claude") ? "claude" :
@@ -3235,7 +3236,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
         <DialogTrigger asChild>
           <Button
             variant="ghost"
-            className="h-10 px-2.5 border-0 bg-transparent hover:bg-accent/10 justify-start transition-all duration-300 hover:scale-[1.02] rounded-lg backdrop-blur-sm w-auto max-w-[180px] overflow-hidden"
+            className={`border-0 bg-transparent hover:bg-accent/10 justify-start transition-all duration-300 hover:scale-[1.02] rounded-lg backdrop-blur-sm w-auto max-w-[180px] overflow-hidden ${compact ? "h-7 px-2" : "h-9 px-2.5"}`}
           >
             <div className="flex flex-col items-start min-w-0 flex-1">
               <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors duration-300 leading-tight truncate block">
@@ -3247,7 +3248,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
             </div>
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-md sm:max-w-lg max-h-[85vh] overflow-hidden shadow-2xl border-border/50 bg-background/95 backdrop-blur-xl rounded-2xl p-6 sm:p-8 mt-12 pb-4 pl-4" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] overflow-hidden shadow-2xl border-border/50 bg-background/95 backdrop-blur-xl rounded-2xl p-6 sm:p-8 mt-12 pb-4 pl-4" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="pb-4">
             <DialogTitle className="text-lg font-semibold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
               {viewMode === "providers" ? "Select AI Model" : `${PROVIDERS.find(p => p.id === selectedProvider)?.name} Models`}
