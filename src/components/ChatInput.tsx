@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
-import { Send, Image, X, Plus, SlidersHorizontal, Timer } from "lucide-react";
+import { Send, Image, X, Plus, SlidersHorizontal, Timer, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModelSelector } from "./ModelSelector";
 import { useToast } from "@/hooks/use-toast";
+import { uploadFilesToPuter } from "@/lib/utils";
 
 interface ChatInputProps {
   onSend: (message: string, model?: string, images?: File[]) => void;
@@ -14,16 +15,17 @@ interface ChatInputProps {
 }
 
 export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, currentModelName }: ChatInputProps) => {
-  const [input, setInput] = useState("");
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [isProcessingImages, setIsProcessingImages] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
+   const [input, setInput] = useState("");
+   const [selectedImages, setSelectedImages] = useState<File[]>([]);
+   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+   const [isProcessingImages, setIsProcessingImages] = useState(false);
+   const [isUploading, setIsUploading] = useState(false);
+   const fileInputRef = useRef<HTMLInputElement>(null);
+   const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if ((input.trim() || selectedImages.length > 0) && !disabled) {
+    if ((input.trim() || selectedImages.length > 0) && !disabled && !isUploading) {
       console.log('ChatInput: Sending message with:', {
         content: input.trim(),
         model: selectedModel,
@@ -106,6 +108,44 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
     setImagePreviews([]);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    console.log('📁 ChatInput: Files selected for upload:', files.length);
+    files.forEach((file, index) => {
+      console.log(`  ${index + 1}. ${file.name} (${file.size} bytes, ${file.type})`);
+    });
+
+    if (files.length > 0) {
+      setIsUploading(true);
+      try {
+        const result = await uploadFilesToPuter(files);
+
+        // The uploadFilesToPuter function already logs the URLs to console
+        // So we just need to show a success toast
+        toast({
+          title: "Files uploaded successfully",
+          description: `${files.length} file${files.length > 1 ? 's' : ''} uploaded to Puter filesystem.`,
+          duration: 5000,
+        });
+
+      } catch (error: any) {
+        console.error('❌ Upload failed:', error);
+        toast({
+          title: "Upload failed",
+          description: error.message || "Failed to upload files to Puter.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      } finally {
+        setIsUploading(false);
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    }
+  };
+
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
@@ -174,9 +214,15 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
                 size="icon"
                 variant="ghost"
                 className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
-                disabled={disabled}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || isUploading}
+                title="Upload files to Puter"
               >
-                <Plus className="w-3.5 h-3.5" />
+                {isUploading ? (
+                  <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
               </Button>
               <Button
                 type="button"
@@ -243,6 +289,15 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
             onChange={handleImageSelect}
           />
         )}
+
+        {/* Hidden File Upload Input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileUpload}
+        />
 
         <div className="text-xs text-center text-muted-foreground/80 mt-4 px-2 flex items-center justify-center gap-1">
           {currentModelName && (

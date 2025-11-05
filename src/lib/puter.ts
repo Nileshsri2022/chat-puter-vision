@@ -250,3 +250,57 @@ export async function streamOpenRouterResponse(
   }
 }
 
+// Kimi streaming response
+export async function streamKimiResponse(
+   prompt: string,
+   onChunk: (text: string) => void,
+   onComplete: (fullContent: string) => void,
+   onError: (error: Error) => void,
+   model: string = 'moonshotai/kimi-k2'
+): Promise<void> {
+   try {
+     const response = await puter.ai.chat(prompt, {
+       model: model,
+       stream: true
+     });
+
+     let fullContent = '';
+     for await (const part of response) {
+       if (part?.text) {
+         fullContent += part.text;
+         onChunk(part.text);
+       }
+     }
+     onComplete(fullContent);
+   } catch (error: any) {
+     onError(error instanceof Error ? error : new Error(`Kimi streaming failed: ${error?.message || 'Unknown error'}`));
+   }
+}
+
+// OpenAI streaming response
+export async function streamOpenAIResponse(
+   prompt: string,
+   onChunk: (text: string) => void,
+   onComplete: (fullContent: string) => void,
+   onError: (error: Error) => void,
+   model: string = 'gpt-4o'
+): Promise<void> {
+   try {
+     const response = await puter.ai.chat(prompt, {
+       model: model,
+       stream: true
+     });
+
+     let fullContent = '';
+     for await (const part of response) {
+       if (part?.text) {
+         fullContent += part.text;
+         onChunk(part.text);
+       }
+     }
+     onComplete(fullContent);
+   } catch (error: any) {
+     onError(error instanceof Error ? error : new Error(`OpenAI streaming failed: ${error?.message || 'Unknown error'}`));
+   }
+}
+

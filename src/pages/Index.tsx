@@ -11,6 +11,8 @@ import {
   streamPerplexityResearch,
   streamOpenRouterResponse,
   streamGroqResponse,
+  streamKimiResponse,
+  streamOpenAIResponse,
   Message,
   checkAuthStatus,
   getCurrentUser,
@@ -21,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ClaudeLogo } from "@/components/ClaudeLogo";
 import { Menu, X } from "lucide-react";
-import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, OPENROUTER_MODELS } from "@/components/ModelSelector";
+import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "@/components/ModelSelector";
 
 interface Conversation {
   id: string;
@@ -170,8 +172,12 @@ const Index = () => {
         await streamMistralResponse(content, onChunk, onComplete, onError, selectedModelId);
       } else if (selectedModelId.startsWith("perplexity")) {
         await streamPerplexityResearch(content, onChunk, onComplete, onError, selectedModelId);
+      } else if (selectedModelId.startsWith("moonshotai")) {
+        await streamKimiResponse(content, onChunk, onComplete, onError, selectedModelId);
       } else if (selectedModelId.startsWith("openrouter")) {
         await streamOpenRouterResponse(content, onChunk, onComplete, onError, selectedModelId);
+      } else if (selectedModelId.startsWith("gpt-") || selectedModelId.startsWith("o")) {
+        await streamOpenAIResponse(content, onChunk, onComplete, onError, selectedModelId);
       } else {
         onError(new Error("Unsupported model selected."));
       }
@@ -212,7 +218,7 @@ const Index = () => {
     setCurrentConversationId(newConv.id);
   };
 
-  const allModels: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...OPENROUTER_MODELS];
+  const allModels: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
   const currentModel = allModels.find(model => model.id === selectedModel);
 
   return (

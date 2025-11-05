@@ -7,29 +7,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe } from "lucide-react";
 
 export interface AIModel {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  badge?: string;
-  type: "claude" | "mistral" | "perplexity" | "grok" | "openrouter";
+   id: string;
+   name: string;
+   description: string;
+   icon: React.ReactNode;
+   badge?: string;
+   type: "claude" | "mistral" | "perplexity" | "grok" | "openrouter" | "kimi" | "openai";
 }
 
 export interface AIProvider {
-  id: "claude" | "mistral" | "perplexity" | "grok" | "openrouter";
-  name: string;
-  icon: React.ReactNode;
-  description: string;
+   id: "claude" | "mistral" | "perplexity" | "grok" | "openrouter" | "kimi" | "openai";
+   name: string;
+   icon: React.ReactNode;
+   description: string;
 }
 
 interface ModelSelectorProps {
@@ -39,36 +33,48 @@ interface ModelSelectorProps {
 }
 
 const PROVIDERS: AIProvider[] = [
-  {
-    id: "claude",
-    name: "Claude",
-    icon: <Brain className="w-5 h-5" />,
-    description: "Anthropic's Claude models"
-  },
-  {
-    id: "mistral",
-    name: "Mistral",
-    icon: <Wind className="w-5 h-5" />,
-    description: "Mistral AI models"
-  },
-  {
-    id: "perplexity",
-    name: "Perplexity",
-    icon: <Search className="w-5 h-5" />,
-    description: "Perplexity research models"
-  },
-  {
-    id: "grok",
-    name: "Grok",
-    icon: <MessageSquare className="w-5 h-5" />,
-    description: "xAI's Grok models"
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    icon: <Globe className="w-5 h-5" />,
-    description: "OpenRouter marketplace"
-  }
+   {
+     id: "claude",
+     name: "Claude",
+     icon: <Brain className="w-5 h-5" />,
+     description: "Anthropic's Claude models"
+   },
+   {
+     id: "mistral",
+     name: "Mistral",
+     icon: <Wind className="w-5 h-5" />,
+     description: "Mistral AI models"
+   },
+   {
+     id: "perplexity",
+     name: "Perplexity",
+     icon: <Search className="w-5 h-5" />,
+     description: "Perplexity research models"
+   },
+   {
+     id: "grok",
+     name: "Grok",
+     icon: <MessageSquare className="w-5 h-5" />,
+     description: "xAI's Grok models"
+   },
+   {
+     id: "kimi",
+     name: "Kimi",
+     icon: <Brain className="w-5 h-5" />,
+     description: "Moonshot AI's Kimi models"
+   },
+   {
+     id: "openai",
+     name: "OpenAI",
+     icon: <Brain className="w-5 h-5" />,
+     description: "OpenAI's GPT models"
+   },
+   {
+     id: "openrouter",
+     name: "OpenRouter",
+     icon: <Globe className="w-5 h-5" />,
+     description: "OpenRouter marketplace"
+   }
 ];
 
 export const CLAUDE_MODELS: AIModel[] = [
@@ -321,6 +327,188 @@ export const PERPLEXITY_MODELS: AIModel[] = [
     badge: "Pro",
     type: "perplexity"
   },
+];
+
+export const KIMI_MODELS: AIModel[] = [
+  {
+    id: "moonshotai/kimi-dev-72b:free",
+    name: "Kimi Dev 72B (Free)",
+    description: "Moonshot AI's open-source coding LLM specialized for software engineering tasks, achieving SOTA on SWE-bench Verified (free tier)",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Free",
+    type: "kimi"
+  },
+  {
+    id: "moonshotai/kimi-k2",
+    name: "Kimi K2",
+    description: "Moonshot AI's state-of-the-art MoE model with 1T total parameters and 32B activated, optimized for agentic intelligence and tool use",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "MoE",
+    type: "kimi"
+  },
+  {
+    id: "moonshotai/kimi-k2:free",
+    name: "Kimi K2 (Free)",
+    description: "Moonshot AI's Kimi K2 MoE model (free tier)",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Free",
+    type: "kimi"
+  },
+  {
+    id: "moonshotai/kimi-k2-0905",
+    name: "Kimi K2 (0905)",
+    description: "Moonshot AI's updated Kimi K2 with 256K context, enhanced coding and tool use capabilities",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Latest",
+    type: "kimi"
+  },
+  {
+    id: "moonshotai/kimi-vl-a3b-thinking",
+    name: "Kimi VL A3B Thinking",
+    description: "Moonshot AI's efficient MoE vision-language model with advanced multimodal reasoning and thinking capabilities",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Vision",
+    type: "kimi"
+  },
+  {
+    id: "moonshotai/kimi-vl-a3b-thinking:free",
+    name: "Kimi VL A3B Thinking (Free)",
+    description: "Moonshot AI's Kimi VL A3B Thinking model (free tier)",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Free",
+    type: "kimi"
+  }
+];
+
+export const OPENAI_MODELS: AIModel[] = [
+  {
+    id: "gpt-5",
+    name: "GPT-5",
+    description: "OpenAI's next-generation flagship model with breakthrough reasoning and multimodal capabilities",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Next-Gen",
+    type: "openai"
+  },
+  {
+    id: "gpt-5-mini",
+    name: "GPT-5 Mini",
+    description: "OpenAI's efficient GPT-5 Mini for fast, cost-effective inference",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Mini",
+    type: "openai"
+  },
+  {
+    id: "gpt-5-nano",
+    name: "GPT-5 Nano",
+    description: "OpenAI's ultra-lightweight GPT-5 Nano for edge and mobile deployment",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Nano",
+    type: "openai"
+  },
+  {
+    id: "gpt-5-chat-latest",
+    name: "GPT-5 Chat Latest",
+    description: "OpenAI's latest conversational GPT-5 with real-time updates and enhanced interaction",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Latest",
+    type: "openai"
+  },
+  {
+    id: "gpt-4.1",
+    name: "GPT-4.1",
+    description: "OpenAI's refined GPT-4.1 with improved accuracy and instruction following",
+    icon: <Brain className="w-4 h-4" />,
+    badge: null,
+    type: "openai"
+  },
+  {
+    id: "gpt-4.1-mini",
+    name: "GPT-4.1 Mini",
+    description: "OpenAI's compact GPT-4.1 Mini for lightweight applications",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Mini",
+    type: "openai"
+  },
+  {
+    id: "gpt-4.1-nano",
+    name: "GPT-4.1 Nano",
+    description: "OpenAI's smallest GPT-4.1 variant for minimal resource usage",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Nano",
+    type: "openai"
+  },
+  {
+    id: "gpt-4.5-preview",
+    name: "GPT-4.5 Preview",
+    description: "OpenAI's experimental GPT-4.5 with advanced reasoning and tool use (preview)",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Preview",
+    type: "openai"
+  },
+  {
+    id: "gpt-4o",
+    name: "GPT-4o",
+    description: "OpenAI's multimodal GPT-4o with native vision, audio, and text processing",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Multimodal",
+    type: "openai"
+  },
+  {
+    id: "gpt-4o-mini",
+    name: "GPT-4o Mini",
+    description: "OpenAI's efficient multimodal GPT-4o Mini for fast vision and text tasks",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Mini",
+    type: "openai"
+  },
+  {
+    id: "o1",
+    name: "o1",
+    description: "OpenAI's reasoning model with step-by-step thinking for complex problem-solving",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Reasoning",
+    type: "openai"
+  },
+  {
+    id: "o1-mini",
+    name: "o1 Mini",
+    description: "OpenAI's lightweight reasoning model with efficient chain-of-thought",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Mini",
+    type: "openai"
+  },
+  {
+    id: "o1-pro",
+    name: "o1 Pro",
+    description: "OpenAI's professional-grade reasoning model with extended context and precision",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Pro",
+    type: "openai"
+  },
+  {
+    id: "o3",
+    name: "o3",
+    description: "OpenAI's advanced reasoning engine with superior math, science, and logic performance",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Advanced",
+    type: "openai"
+  },
+  {
+    id: "o3-mini",
+    name: "o3 Mini",
+    description: "OpenAI's compact reasoning model optimized for speed and STEM tasks",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Mini",
+    type: "openai"
+  },
+  {
+    id: "o4-mini",
+    name: "o4 Mini",
+    description: "OpenAI's next-generation lightweight model with enhanced efficiency and multimodal support",
+    icon: <Brain className="w-4 h-4" />,
+    badge: "Next-Gen",
+    type: "openai"
+  }
 ];
 
 export const OPENROUTER_MODELS: AIModel[] = [
@@ -3185,17 +3373,19 @@ export const GROK_MODELS: AIModel[] = [
 ];
 
 export const ModelSelector = ({ selectedModel, onModelChange, compact = false }: ModelSelectorProps) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<"claude" | "mistral" | "perplexity" | "grok" | "openrouter">(
-    selectedModel.startsWith("claude") ? "claude" :
-    selectedModel.startsWith("mistral") ? "mistral" :
-    selectedModel.startsWith("perplexity") ? "perplexity" :
-    selectedModel.startsWith("x-ai") ? "grok" :
-    selectedModel.startsWith("openrouter") ? "openrouter" : "claude"
-  );
+   const [isModalOpen, setIsModalOpen] = useState(false);
+   const [selectedProvider, setSelectedProvider] = useState<"claude" | "mistral" | "perplexity" | "grok" | "openrouter" | "kimi" | "openai">(
+     selectedModel.startsWith("claude") ? "claude" :
+     selectedModel.startsWith("mistral") ? "mistral" :
+     selectedModel.startsWith("perplexity") ? "perplexity" :
+     selectedModel.startsWith("x-ai") ? "grok" :
+     selectedModel.startsWith("moonshotai") ? "kimi" :
+     selectedModel.startsWith("gpt-") || selectedModel.startsWith("o") ? "openai" :
+     selectedModel.startsWith("openrouter") ? "openrouter" : "claude"
+   );
   const [viewMode, setViewMode] = useState<"providers" | "models">("providers");
 
-  const currentModel = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...OPENROUTER_MODELS].find(model => model.id === selectedModel);
+  const currentModel = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS].find(model => model.id === selectedModel);
 
   const handleModelChange = (modelId: string) => {
     onModelChange(modelId);
@@ -3204,15 +3394,17 @@ export const ModelSelector = ({ selectedModel, onModelChange, compact = false }:
   };
 
   const getModelsForProvider = (provider: typeof selectedProvider) => {
-    switch (provider) {
-      case "claude": return CLAUDE_MODELS;
-      case "mistral": return MISTRAL_MODELS;
-      case "perplexity": return PERPLEXITY_MODELS;
-      case "grok": return GROK_MODELS;
-      case "openrouter": return OPENROUTER_MODELS;
-      default: return CLAUDE_MODELS;
-    }
-  };
+     switch (provider) {
+       case "claude": return CLAUDE_MODELS;
+       case "mistral": return MISTRAL_MODELS;
+       case "perplexity": return PERPLEXITY_MODELS;
+       case "grok": return GROK_MODELS;
+       case "kimi": return KIMI_MODELS;
+       case "openai": return OPENAI_MODELS;
+       case "openrouter": return OPENROUTER_MODELS;
+       default: return CLAUDE_MODELS;
+     }
+   };
 
   const handleProviderSelect = (provider: typeof selectedProvider) => {
     setSelectedProvider(provider);
