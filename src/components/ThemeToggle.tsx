@@ -27,8 +27,9 @@ export const ThemeToggle = () => {
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
-      className="h-9 w-9 rounded-lg border border-border/50 bg-background/50 hover:bg-accent/10 transition-all duration-200"
+      className="h-8 w-8 rounded-lg border border-border/50 bg-background/50 hover:bg-accent/10 transition-all duration-200"
       title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+      aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
     >
       {theme === "light" ? (
         <Moon className="h-4 w-4 text-muted-foreground" />

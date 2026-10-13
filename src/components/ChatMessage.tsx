@@ -127,18 +127,30 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
       // Blockquotes
       .replace(/^&gt; (.*$)/gim, '<blockquote class="border-l-4 border-border pl-4 italic text-muted-foreground mb-4">$1</blockquote>')
       // Unordered lists
-      .replace(/^\s*[-*] (.*$)/gim, '<li class="mb-2">$1</li>')
+      .replace(/^\s*[-*] (.*$)/gim, '<li class="mb-2 list-item-u">$1</li>')
       // Ordered lists
-      .replace(/^\s*\d+\. (.*$)/gim, '<li class="mb-2">$1</li>')
+      .replace(/^\s*\d+\. (.*$)/gim, '<li class="mb-2 list-item-o">$1</li>')
       // Paragraphs
       .replace(/\n\n+/g, '</p><p class="mb-4 leading-relaxed">')
       .replace(/\n/g, '<br>');
 
     // Wrap loose list items
-    formatted = formatted.replace(/(<li class="mb-2">.*<\/li>(?:\s*<li class="mb-2">.*<\/li>)*)/g, '<ul class="mb-4 list-disc pl-6">$1</ul>');
+    formatted = formatted
+      .replace(/(<li class="mb-2 list-item-u">.*<\/li>(?:\s*<li class="mb-2 list-item-u">.*<\/li>)*)/g, '<ul class="mb-4 list-disc pl-6 space-y-1">$1</ul>')
+      .replace(/(<li class="mb-2 list-item-o">.*<\/li>(?:\s*<li class="mb-2 list-item-o">.*<\/li>)*)/g, '<ol class="mb-4 list-decimal pl-6 space-y-1">$1</ol>');
+
+    // Clean marker classes from li
+    formatted = formatted.replace(/ class="mb-2 list-item-[uo]"/g, ' class="mb-1.5"');
 
     // Wrap in paragraph if not already wrapped
-    if (!formatted.includes('<p>') && !formatted.includes('<h') && !formatted.includes('<pre>') && !formatted.includes('<li>') && !formatted.includes('<blockquote')) {
+    if (
+      !formatted.includes('<p>') &&
+      !formatted.includes('<h') &&
+      !formatted.includes('<pre>') &&
+      !formatted.includes('<li>') &&
+      !formatted.includes('<blockquote') &&
+      !formatted.includes('\uE000CODEBLOCK')
+    ) {
       formatted = `<p class="mb-4 leading-relaxed">${formatted}</p>`;
     }
 
@@ -149,73 +161,86 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
   };
 
   return (
-    <>
+    <div className="mx-auto max-w-3xl px-4 py-2.5 sm:py-3">
       {isUser ? (
-        <div className="flex justify-end px-4 py-2">
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed">
+        <div className="flex justify-end">
+          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed text-foreground shadow-sm">
             {content}
           </div>
         </div>
       ) : (
-        <div className="group px-4 py-2">
-          <div className="mx-auto max-w-3xl">
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              {isStreaming ? "Thinking..." : getModelDisplayName(model)}
-            </div>
-            {image && (
-              <img
-                src={image}
-                alt="Generated image"
-                className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover"
-              />
-            )}
-            <div
-              className="break-words text-[15px] leading-relaxed text-foreground"
-              dangerouslySetInnerHTML={{ __html: formatContent(content) }}
-            />
-            {isStreaming && content.length === 0 && (
-              <div className="flex gap-1 py-2">
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
-              </div>
-            )}
-            {!isStreaming && (speakable || onCopy || onDelete) && (
-              <div className="mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                {speakable && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSpeak}
-                    disabled={ttsState === "loading"}
-                    className="h-7 px-2 text-xs text-muted-foreground"
-                    title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
-                  >
-                    {ttsState === "loading" ? (
-                      <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                    ) : ttsState === "playing" ? (
-                      <Square className="mr-1 h-3 w-3" />
-                    ) : (
-                      <Volume2 className="mr-1 h-3 w-3" />
-                    )}
-                    {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading" : "Read aloud"}
-                  </Button>
-                )}
-                {onCopy && (
-                  <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 text-xs text-muted-foreground">
-                    {copied ? <><Check className="mr-1 h-3 w-3" /> Copied</> : <><Copy className="mr-1 h-3 w-3" /> Copy</>}
-                  </Button>
-                )}
-                {onDelete && (
-                  <Button variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive">
-                    <Trash2 className="mr-1 h-3 w-3" /> Delete
-                  </Button>
-                )}
-              </div>
-            )}
+        <div className="group space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground select-none">
+            {isStreaming ? "Thinking…" : getModelDisplayName(model)}
           </div>
+          {image && (
+            <img
+              src={image}
+              alt="Generated output"
+              className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover shadow-sm"
+              loading="lazy"
+            />
+          )}
+          <div
+            className="break-words text-[15px] leading-relaxed text-foreground"
+            dangerouslySetInnerHTML={{ __html: formatContent(content) }}
+          />
+          {isStreaming && content.length === 0 && (
+            <div className="flex items-center gap-1.5 py-2" role="status" aria-label="Thinking">
+              <div className="h-1.5 w-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground" />
+              <div className="h-1.5 w-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
+              <div className="h-1.5 w-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
+              <span className="sr-only">Thinking…</span>
+            </div>
+          )}
+          {!isStreaming && (speakable || onCopy || onDelete) && (
+            <div className="pt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              {speakable && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSpeak}
+                  disabled={ttsState === "loading"}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
+                  aria-label={ttsState === "playing" ? "Stop reading aloud" : "Read message aloud"}
+                >
+                  {ttsState === "loading" ? (
+                    <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+                  ) : ttsState === "playing" ? (
+                    <Square className="mr-1 h-3 w-3" aria-hidden="true" />
+                  ) : (
+                    <Volume2 className="mr-1 h-3 w-3" aria-hidden="true" />
+                  )}
+                  {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading…" : "Read aloud"}
+                </Button>
+              )}
+              {onCopy && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  aria-label="Copy message to clipboard"
+                >
+                  {copied ? <><Check className="mr-1 h-3 w-3 text-emerald-500" aria-hidden="true" /> Copied</> : <><Copy className="mr-1 h-3 w-3" aria-hidden="true" /> Copy</>}
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDelete}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                  aria-label="Delete message"
+                >
+                  <Trash2 className="mr-1 h-3 w-3" aria-hidden="true" /> Delete
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type SetStateAction } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type SetStateAction } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
@@ -23,10 +23,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw } from "lucide-react";
+import { Menu, X, Sparkles, RotateCcw, PanelLeft, Download, LogOut, CircleUserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
 import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from "@/lib/utils/export";
-import { Download, LogOut, CircleUserRound } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,27 +141,37 @@ const Index = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
-  const messages = currentConversation?.messages || [];
+  const messages = useMemo(() => currentConversation?.messages || [], [currentConversation?.messages]);
   const canRegenerate =
     !isStreaming &&
     messages.length > 0 &&
     messages[messages.length - 1].role === "assistant";
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  const scrollToBottom = useCallback((smooth = false) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: smooth ? "smooth" : "auto",
+        block: "end",
+      });
+    } else if (viewportRef.current) {
+      viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
     }
-  }, [messages, streamingContent]);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [messages, streamingContent, scrollToBottom]);
 
   useEffect(() => {
     // Documented sign-in check: puter.auth.isSignedIn() (synchronous boolean).
@@ -378,11 +388,7 @@ const Index = () => {
 
     const onChunk = (chunk: string) => {
       setStreamingContent((prev) => prev + chunk);
-      setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 10);
+      scrollToBottom(false);
     };
 
     const onComplete = (fullContent: string) => {
@@ -613,21 +619,34 @@ const Index = () => {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col md:ml-64">
+      <main
+        className={cn(
+          "flex min-w-0 flex-1 flex-col transition-[margin] duration-300",
+          sidebarOpen ? "md:ml-64" : "md:ml-0"
+        )}
+      >
         {isAuthenticated && (
           <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2 min-w-0">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:hidden"
+                className={cn("h-8 w-8 shrink-0", sidebarOpen && "md:hidden")}
                 onClick={() => setSidebarOpen(!sidebarOpen)}
+                aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+                title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
-                {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                {sidebarOpen ? <X className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Export conversation">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    title="Export conversation"
+                    aria-label="Export conversation"
+                  >
                     <Download className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -640,8 +659,13 @@ const Index = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              {currentConversation?.title && currentConversation.title !== "New Conversation" && (
+                <span className="truncate text-sm font-medium text-muted-foreground hidden sm:inline-block max-w-[200px] md:max-w-md">
+                  {currentConversation.title}
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 shrink-0">
               <CreditPill />
               <ThemeToggle />
               <DropdownMenu>
@@ -651,6 +675,7 @@ const Index = () => {
                     size="icon"
                     className="h-8 w-8 rounded-full"
                     title={profile?.name ?? "Account"}
+                    aria-label={profile?.name ? `Account: ${profile.name}` : "Account menu"}
                   >
                     {profile?.picture ? (
                       <img
@@ -695,9 +720,9 @@ const Index = () => {
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 bg-background" ref={scrollRef}>
+            <ScrollArea className="flex-1 min-h-0 bg-background" viewportRef={viewportRef}>
               {messages.length === 0 && !isStreaming ? (
-                <div className="flex h-full flex-col items-center justify-center px-4 py-12">
+                <div className="flex min-h-full flex-col items-center justify-center px-4 py-8 sm:py-12">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                     <Sparkles className="h-7 w-7" />
                   </div>
@@ -718,7 +743,7 @@ const Index = () => {
                   </div>
                 </div>
               ) : (
-                <div className="py-4">
+                <div className="pt-2 pb-6 space-y-1">
                   {messages.map((message, index) => (
                     <ChatMessage
                       key={index}
@@ -738,6 +763,7 @@ const Index = () => {
                       model={selectedModel}
                     />
                   )}
+                  <div ref={messagesEndRef} className="h-2" aria-hidden="true" />
                 </div>
               )}
             </ScrollArea>

@@ -325,10 +325,13 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
 
         <div className="rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md">
           <Textarea
+            id="chat-message-input"
+            name="message"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={modelSupportsImages ? "Message (images supported)..." : "Message AI Chat..."}
+            placeholder={modelSupportsImages ? "Message (images supported)…" : "Message AI Chat…"}
+            aria-label="Message prompt"
             disabled={disabled}
             rows={1}
             className="max-h-[200px] min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -344,11 +347,12 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   onClick={() => setShowImagePrompt((v) => !v)}
                   disabled={disabled || isGeneratingImage}
                   title="Generate image"
+                  aria-label="Generate image"
                 >
                   {isGeneratingImage ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
                   ) : (
-                    <Sparkles className="h-4 w-4" />
+                    <Sparkles className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               )}
@@ -360,11 +364,12 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 onClick={toggleRecording}
                 disabled={disabled || recordingState === "transcribing"}
                 title={recordingState === "recording" ? "Stop recording" : "Voice input"}
+                aria-label={recordingState === "recording" ? "Stop voice recording" : "Start voice input"}
               >
                 {recordingState === "transcribing" ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+                  <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
                 ) : (
-                  <Mic className={"h-4 w-4" + (recordingState === "recording" ? " text-red-500 animate-pulse" : "")} />
+                  <Mic className={"h-4 w-4" + (recordingState === "recording" ? " text-destructive animate-pulse" : "")} aria-hidden="true" />
                 )}
               </Button>
               {modelSupportsImages && (
@@ -376,11 +381,12 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   onClick={() => imageInputRef.current?.click()}
                   disabled={disabled || selectedImages.length >= 4 || isProcessingImages}
                   title="Attach images"
+                  aria-label="Attach images"
                 >
                   {isProcessingImages ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
                   ) : (
-                    <Image className="h-4 w-4" />
+                    <Image className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               )}
@@ -398,8 +404,9 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 onClick={onStop}
                 className="h-9 w-9 rounded-full"
                 title="Stop generating"
+                aria-label="Stop generating response"
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-4 w-4" aria-hidden="true" />
               </Button>
             ) : (
               <Button
@@ -408,8 +415,9 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 disabled={(!input.trim() && selectedImages.length === 0) || disabled}
                 className="h-9 w-9 rounded-full"
                 title="Send message"
+                aria-label="Send message"
               >
-                <ArrowUp className="h-4 w-4" />
+                <ArrowUp className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
           </div>
@@ -417,6 +425,8 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
 
         {modelSupportsImages && (
           <input
+            id="chat-image-input"
+            name="images"
             ref={imageInputRef}
             type="file"
             accept="image/*"
