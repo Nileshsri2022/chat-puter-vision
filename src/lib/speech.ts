@@ -5,7 +5,7 @@
 // Resolves to a result object by default, or a plain string when
 // `response_format: "text"` is passed.
 
-import type { Speech2TxtResult } from "./puter";
+import type { Speech2TxtResult } from "./backend";
 
 interface SttErrorBody {
   message?: unknown;
@@ -19,7 +19,7 @@ function friendlyTranscriptionError(error: unknown): Error {
       : {};
   const message = typeof body.message === "string" ? body.message : "";
   if (body.code === "insufficient_funds")
-    return new Error("Puter credit exhausted for this month.");
+    return new Error("Monthly credit exhausted.");
   if (body.code === "bad_request")
     return new Error(message || "Transcription was rejected.");
   return new Error(message || "Transcription failed.");

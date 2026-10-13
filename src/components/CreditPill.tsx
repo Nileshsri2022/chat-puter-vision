@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Zap } from "lucide-react";
-import { checkAuthStatus } from "@/lib/puter";
+import { checkAuthStatus } from "@/lib/backend";
 import { getCreditBalance, formatCredits, type CreditBalance } from "@/lib/usage";
 
 /**
- * Remaining Puter credit, refreshed on mount and when the tab regains focus.
+ * Remaining account credit, refreshed on mount and when the tab regains focus.
  * Amber when under 10% of the monthly allowance. Hidden when unavailable.
  */
 export const CreditPill = () => {

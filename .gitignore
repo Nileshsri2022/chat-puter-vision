@@ -22,9 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.vercel
-AGENTS.md
-skills-lock.json
-.agents/
-.claude/
-.gitnexus/

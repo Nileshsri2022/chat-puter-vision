@@ -1,4 +1,5 @@
 import { Conversation } from "@/pages/Index";
+import { stripThinkBlocks } from "../streamingHandler";
 
 /**
  * Export conversation as Markdown format
@@ -11,7 +12,7 @@ export function exportAsMarkdown(conversation: Conversation): string {
         .map(msg => {
             const role = msg.role === 'user' ? '**You**' : '**AI**';
             const model = msg.model ? ` (${msg.model})` : '';
-            return `${role}${model}:\n\n${msg.content}\n`;
+            return `${role}${model}:\n\n${stripThinkBlocks(msg.content)}\n`;
         })
         .join('\n---\n\n');
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { checkAuthStatus, signIn, getCurrentUser, type PuterUser } from "@/lib/puter";
+import { checkAuthStatus, signIn, getCurrentUser, type BackendUser } from "@/lib/backend";
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthButtonProps {
@@ -14,7 +14,7 @@ interface AuthButtonProps {
  */
 export const AuthButton = ({ onAuthChange }: AuthButtonProps) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<PuterUser | null>(null);
+  const [user, setUser] = useState<BackendUser | null>(null);
   const { toast } = useToast();
 
   const refresh = useCallback(async () => {
@@ -79,7 +79,7 @@ export const AuthButton = ({ onAuthChange }: AuthButtonProps) => {
       disabled={isLoading}
       className="bg-primary hover:bg-primary/90"
     >
-      {isLoading ? "Signing in..." : "Sign in to Puter"}
+      {isLoading ? "Signing in..." : "Sign in"}
     </Button>
   );
 };

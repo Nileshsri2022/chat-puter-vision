@@ -2,7 +2,7 @@
 // Docs: https://docs.puter.com/Auth/getMonthlyUsage/ (read 2026-10-13).
 // Resources are measured in microcents ($0.50 = 50,000,000).
 
-import type { MonthlyUsage } from "./puter";
+import type { MonthlyUsage } from "./backend";
 
 const MICROCENTS_PER_DOLLAR = 100_000_000;
 

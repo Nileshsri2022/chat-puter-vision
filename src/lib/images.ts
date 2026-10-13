@@ -29,7 +29,7 @@ function friendlyImageError(error: unknown): Error {
       "Image generation failed on the provider side. Please try again."
     );
   if (code === "insufficient_funds")
-    return new Error("Puter credit exhausted for this month.");
+    return new Error("Monthly credit exhausted.");
   if (code === "bad_request")
     return new Error(message || "The image request was rejected.");
   return new Error(message || "Image generation failed.");
@@ -37,7 +37,7 @@ function friendlyImageError(error: unknown): Error {
 
 /**
  * Generate an image from a text prompt.
- * Resolves to the image src (URL or data URI). Uses Puter's default provider.
+ * Resolves to the image src (URL or data URI). Uses the default provider.
  */
 export async function generateImage(prompt: string): Promise<string> {
   try {

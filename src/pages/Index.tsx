@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, type SetStateAction } from "react";
+import { useState, useRef, useEffect, useCallback, type SetStateAction } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
@@ -10,7 +10,7 @@ import {
   Message,
   checkAuthStatus,
   signOut
-} from "@/lib/puter";
+} from "@/lib/backend";
 import { streamAIResponse } from "@/lib/streamingHandler";
 import { generateImage } from "@/lib/images";
 import { syncConversations, recordDelete } from "@/lib/sync";
@@ -23,10 +23,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw, PanelLeft, Download, LogOut, CircleUserRound } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Menu, X, Sparkles, RotateCcw } from "lucide-react";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
 import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from "@/lib/utils/export";
+import { saveConversationToDrive } from "@/lib/drive";
+import { Download, LogOut, CircleUserRound } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,37 +142,27 @@ const Index = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
-  const messages = useMemo(() => currentConversation?.messages || [], [currentConversation?.messages]);
+  const messages = currentConversation?.messages || [];
   const canRegenerate =
     !isStreaming &&
     messages.length > 0 &&
     messages[messages.length - 1].role === "assistant";
 
-  const scrollToBottom = useCallback((smooth = false) => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({
-        behavior: smooth ? "smooth" : "auto",
-        block: "end",
-      });
-    } else if (viewportRef.current) {
-      viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
-    }
-  }, []);
-
   useEffect(() => {
-    scrollToBottom(false);
-  }, [messages, streamingContent, scrollToBottom]);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, streamingContent]);
 
   useEffect(() => {
     // Documented sign-in check: puter.auth.isSignedIn() (synchronous boolean).
@@ -262,7 +253,7 @@ const Index = () => {
     if (!isAuthenticated) {
       toast({
         title: "Authentication Required",
-        description: "Please sign in to Puter to use AI models.",
+        description: "Please sign in to use AI models.",
         variant: "destructive",
         duration: 5000,
       });
@@ -388,7 +379,11 @@ const Index = () => {
 
     const onChunk = (chunk: string) => {
       setStreamingContent((prev) => prev + chunk);
-      scrollToBottom(false);
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 10);
     };
 
     const onComplete = (fullContent: string) => {
@@ -469,7 +464,7 @@ const Index = () => {
     if (!isAuthenticated) {
       toast({
         title: "Authentication Required",
-        description: "Please sign in to Puter to generate images.",
+        description: "Please sign in to generate images.",
         variant: "destructive",
         duration: 5000,
       });
@@ -606,6 +601,33 @@ const Index = () => {
     });
   };
 
+  const handleSaveToDrive = async () => {
+    if (!currentConversation) return;
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to save to Drive.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    try {
+      const name = await saveConversationToDrive(
+        currentConversation.title,
+        exportAsMarkdown(currentConversation)
+      );
+      toast({ title: "Saved to Drive", description: name, duration: 3000 });
+    } catch (error) {
+      toast({
+        title: "Could not save to Drive",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <ConversationSidebar
@@ -619,34 +641,21 @@ const Index = () => {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
 
-      <main
-        className={cn(
-          "flex min-w-0 flex-1 flex-col transition-[margin] duration-300",
-          sidebarOpen ? "md:ml-64" : "md:ml-0"
-        )}
-      >
+      <main className="flex min-w-0 flex-1 flex-col md:ml-64">
         {isAuthenticated && (
           <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn("h-8 w-8 shrink-0", sidebarOpen && "md:hidden")}
+                className="h-8 w-8 md:hidden"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-                title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
-                {sidebarOpen ? <X className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+                {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    title="Export conversation"
-                    aria-label="Export conversation"
-                  >
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Export conversation">
                     <Download className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -657,15 +666,14 @@ const Index = () => {
                   <DropdownMenuItem onClick={() => handleExport('json')}>
                     Export as JSON
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSaveToDrive}>
+                    Save to Drive
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {currentConversation?.title && currentConversation.title !== "New Conversation" && (
-                <span className="truncate text-sm font-medium text-muted-foreground hidden sm:inline-block max-w-[200px] md:max-w-md">
-                  {currentConversation.title}
-                </span>
-              )}
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1">
               <CreditPill />
               <ThemeToggle />
               <DropdownMenu>
@@ -675,7 +683,6 @@ const Index = () => {
                     size="icon"
                     className="h-8 w-8 rounded-full"
                     title={profile?.name ?? "Account"}
-                    aria-label={profile?.name ? `Account: ${profile.name}` : "Account menu"}
                   >
                     {profile?.picture ? (
                       <img
@@ -713,16 +720,16 @@ const Index = () => {
                 Welcome to AI Chat
               </h1>
               <p className="text-muted-foreground">
-                Sign in to Puter to start chatting with AI models.
+                Sign in to start chatting with AI models.
               </p>
               <AuthButton onAuthChange={setIsAuthenticated} />
             </div>
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 min-h-0 bg-background" viewportRef={viewportRef}>
+            <ScrollArea className="flex-1 bg-background" ref={scrollRef}>
               {messages.length === 0 && !isStreaming ? (
-                <div className="flex min-h-full flex-col items-center justify-center px-4 py-8 sm:py-12">
+                <div className="flex h-full flex-col items-center justify-center px-4 py-12">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                     <Sparkles className="h-7 w-7" />
                   </div>
@@ -743,7 +750,7 @@ const Index = () => {
                   </div>
                 </div>
               ) : (
-                <div className="pt-2 pb-6 space-y-1">
+                <div className="py-4">
                   {messages.map((message, index) => (
                     <ChatMessage
                       key={index}
@@ -763,7 +770,6 @@ const Index = () => {
                       model={selectedModel}
                     />
                   )}
-                  <div ref={messagesEndRef} className="h-2" aria-hidden="true" />
                 </div>
               )}
             </ScrollArea>

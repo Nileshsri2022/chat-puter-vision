@@ -1,11 +1,11 @@
-// Typed wrapper around the Puter.js SDK (loaded from https://js.puter.com/v2/).
+// Typed wrapper around the cloud backend SDK (loaded from the vendor CDN).
 //
 // The SDK exposes itself as `window.puter`. Shapes below follow
-// https://docs.puter.com/ (Auth + AI/chat sections, read 2026-10-13).
+// the vendor API docs (Auth + AI/chat sections, read 2026-10-13).
 // NOTE: `puter.auth.currentUser` is intentionally absent — it is not a
 // documented API. The documented sign-in check is `isSignedIn()`.
 
-export interface PuterUser {
+export interface BackendUser {
   uuid: string;
   username: string;
   email?: string;
@@ -13,7 +13,7 @@ export interface PuterUser {
   is_temp?: boolean;
 }
 
-export interface PuterSignInResult {
+export interface SignInResult {
   success: boolean;
   token?: string;
   username?: string;
@@ -21,26 +21,26 @@ export interface PuterSignInResult {
   msg?: string;
 }
 
-export type PuterChatRole = "system" | "user" | "assistant" | "tool";
+export type ChatRole = "system" | "user" | "assistant" | "tool";
 
-export interface PuterTextBlock {
+export interface TextBlock {
   type: "text";
   text: string;
 }
 
-export interface PuterImageBlock {
+export interface ImageBlock {
   type: "image_url";
   image_url: { url: string };
 }
 
-export type PuterContentBlock = PuterTextBlock | PuterImageBlock;
+export type ContentBlock = TextBlock | ImageBlock;
 
-export interface PuterChatMessage {
-  role: PuterChatRole;
-  content: string | PuterContentBlock[];
+export interface BackendChatMessage {
+  role: ChatRole;
+  content: string | ContentBlock[];
 }
 
-export interface PuterChatOptions {
+export interface ChatOptions {
   model?: string;
   stream?: boolean;
   max_tokens?: number;
@@ -48,7 +48,7 @@ export interface PuterChatOptions {
   signal?: AbortSignal;
 }
 
-export interface PuterStreamPart {
+export interface StreamPart {
   type?: string;
   text?: string;
   message?: string;
@@ -56,7 +56,7 @@ export interface PuterStreamPart {
   [key: string]: unknown;
 }
 
-export interface PuterModelInfo {
+export interface ModelInfo {
   id: string;
   puterId?: string;
   /** Documented: listModels() objects always contain `id` and `provider`. */
@@ -67,13 +67,13 @@ export interface PuterModelInfo {
   [key: string]: unknown;
 }
 
-interface PuterAuth {
-  signIn(options?: { attempt_temp_user_creation?: boolean; request_auth?: boolean }): Promise<PuterSignInResult>;
+interface BackendAuth {
+  signIn(options?: { attempt_temp_user_creation?: boolean; request_auth?: boolean }): Promise<SignInResult>;
   signOut(): void;
   /** Documented synchronous sign-in check. */
   isSignedIn(): boolean;
   /** Returns a Promise resolving to the User object (or rejects when signed out). */
-  getUser(): Promise<PuterUser>;
+  getUser(): Promise<BackendUser>;
   /** https://docs.puter.com/Auth/getProfile/ — resolves null when unavailable. */
   getProfile(): Promise<UserProfile | null>;
   /** https://docs.puter.com/Auth/getMonthlyUsage/ */
@@ -113,11 +113,11 @@ export interface Speech2TxtResult {
   [key: string]: unknown;
 }
 
-interface PuterAI {
-  chat(prompt: string, options?: PuterChatOptions): Promise<unknown>;
-  chat(prompt: string, media: string | File | Array<string | File>, testMode: boolean, options?: PuterChatOptions): Promise<unknown>;
-  chat(messages: PuterChatMessage[], testMode: boolean, options?: PuterChatOptions): Promise<unknown>;
-  listModels(provider?: string | null): Promise<PuterModelInfo[]>;
+interface BackendAI {
+  chat(prompt: string, options?: ChatOptions): Promise<unknown>;
+  chat(prompt: string, media: string | File | Array<string | File>, testMode: boolean, options?: ChatOptions): Promise<unknown>;
+  chat(messages: BackendChatMessage[], testMode: boolean, options?: ChatOptions): Promise<unknown>;
+  listModels(provider?: string | null): Promise<ModelInfo[]>;
   /** https://docs.puter.com/AI/listModelProviders/ — resolves to string[] */
   listModelProviders(): Promise<string[]>;
   /** https://docs.puter.com/AI/img2txt/ — resolves to the recognized text string */
@@ -130,26 +130,48 @@ interface PuterAI {
   speech2txt(source: string | File | Blob, options?: Record<string, unknown>): Promise<Speech2TxtResult | string>;
 }
 
-interface PuterKV {
+/**
+ * https://docs.puter.com/FS/write/ — resolves to the FSItem of the written file.
+ * Relative paths resolve against the app's own Drive folder.
+ */
+export interface FSItem {
+  name?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
+export interface FSWriteOptions {
+  overwrite?: boolean;
+  dedupeName?: boolean;
+  createMissingParents?: boolean;
+}
+
+interface BackendFS {
+  write(path: string, data?: string | File | Blob | ArrayBuffer, options?: FSWriteOptions): Promise<FSItem>;
+  read(path: string): Promise<Blob>;
+}
+
+interface BackendKV {
   set(key: string, value: string): Promise<boolean>;
   get(key: string): Promise<unknown>;
   del(key: string): Promise<boolean>;
   list(pattern?: string): Promise<string[]>;
 }
 
-interface PuterSDK {
-  auth: PuterAuth;
-  ai: PuterAI;
-  kv: PuterKV;
+interface BackendSDK {
+  auth: BackendAuth;
+  ai: BackendAI;
+  kv: BackendKV;
+  fs: BackendFS;
 }
 
 declare global {
   interface Window {
-    puter?: PuterSDK;
+    puter?: BackendSDK;
   }
 }
 
-function getSDK(): PuterSDK | undefined {
+function getSDK(): BackendSDK | undefined {
   if (typeof window !== "undefined") return window.puter;
   return undefined;
 }
@@ -171,7 +193,7 @@ export function checkAuthStatus(): boolean {
 }
 
 /** Resolves to the signed-in user, or null when signed out / unavailable. */
-export async function getCurrentUser(): Promise<PuterUser | null> {
+export async function getCurrentUser(): Promise<BackendUser | null> {
   try {
     const sdk = getSDK();
     if (!sdk?.auth) return null;
@@ -183,11 +205,13 @@ export async function getCurrentUser(): Promise<PuterUser | null> {
   }
 }
 
-/** Opens the Puter sign-in popup. Must be called from a user gesture. */
-export async function signIn(): Promise<PuterSignInResult> {
+/** Opens the sign-in popup. Must be called from a user gesture. */
+export async function signIn(): Promise<SignInResult> {
   const sdk = getSDK();
-  if (!sdk?.auth?.signIn) throw new Error("Puter auth not available");
-  return sdk.auth.signIn();
+  if (!sdk?.auth?.signIn) throw new Error("Sign-in is not available");
+  // Guest onboarding: Puter auto-creates a temporary user, no sign-up form.
+  // The user can convert to a full account later.
+  return sdk.auth.signIn({ attempt_temp_user_creation: true });
 }
 
 /** Signs out. Per docs this returns nothing (fire-and-forget). */

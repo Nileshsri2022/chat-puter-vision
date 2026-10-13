@@ -614,15 +614,12 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
           <ChevronDown className="h-3.5 w-3.5 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-80 p-1">
+      <DropdownMenuContent align="start" className="w-72 p-1">
         <div className="p-1">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              id="model-search"
-              name="model-search"
-              placeholder="Search models…"
-              aria-label="Search models"
+              placeholder="Search models..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
@@ -630,7 +627,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
             />
           </div>
         </div>
-        <div className="max-h-[320px] overflow-y-auto overflow-x-hidden">
+        <div className="max-h-[320px] overflow-y-auto">
           {groups.length === 0 && (
             <div className="px-2 py-6 text-center text-sm text-muted-foreground">
               No models found

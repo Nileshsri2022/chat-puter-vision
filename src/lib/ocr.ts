@@ -18,7 +18,7 @@ function friendlyOcrError(error: unknown): Error {
   if (body.code === "input_too_large")
     return new Error("Image is too large for OCR (10 MB limit).");
   if (body.code === "insufficient_funds")
-    return new Error("Puter credit exhausted for this month.");
+    return new Error("Monthly credit exhausted.");
   if (body.code === "bad_request")
     return new Error(message || "OCR could not read the image.");
   if (body.code === "source_required" || body.code === "arguments_required")

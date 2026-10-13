@@ -12,12 +12,13 @@
 //   `{ code: "network_error" }`; 15 min idle throws `{ code: "request_timeout" }`.
 
 import type {
-  PuterChatMessage,
-  PuterContentBlock,
-  PuterStreamPart,
-} from "./puter";
+  BackendChatMessage,
+  ContentBlock,
+  StreamPart,
+} from "./backend";
 
 export interface StreamCallbacks {
+  /** Called per text chunk with the new delta; the consumer appends it. */
   onChunk: (text: string) => void;
   onComplete: (fullContent: string) => void;
   onError: (error: Error) => void;
@@ -34,7 +35,7 @@ export interface HistoryMessage {
 const MAX_HISTORY_MESSAGES = 20;
 
 /** Convert raw base64 (no data: prefix) to the SDK's image wire form. */
-function toImageBlock(base64: string): PuterContentBlock {
+function toImageBlock(base64: string): ContentBlock {
   return { type: "image_url", image_url: { url: `b${base64}` } };
 }
 
@@ -42,8 +43,8 @@ function buildMessages(
   history: HistoryMessage[],
   prompt: string,
   imageBase64s?: string[]
-): PuterChatMessage[] {
-  const messages: PuterChatMessage[] = history
+): BackendChatMessage[] {
+  const messages: BackendChatMessage[] = history
     .slice(-MAX_HISTORY_MESSAGES)
     .map((m) => ({ role: m.role, content: m.content }));
 
@@ -79,8 +80,41 @@ function friendlyError(error: unknown): Error {
   if (code === "too_many_requests" || code === "429")
     return new Error("Rate limit reached. Please wait a moment and retry.");
   if (code === "insufficient_funds")
-    return new Error("Puter credit exhausted for this month.");
+    return new Error("Monthly credit exhausted.");
   return new Error(message || "AI request failed.");
+}
+
+export interface SplitThinking {
+  /** Combined text of all <think> blocks (reasoning), without the tags. */
+  thinking: string;
+  /** Message text with all <think> blocks removed. */
+  answer: string;
+  /** A trailing <think> block hasn't closed yet (still streaming). */
+  thinkingOpen: boolean;
+}
+
+/**
+ * Reasoning models (e.g. DeepSeek R1) emit their chain-of-thought as plain
+ * text wrapped in <think>...</think>. Split it out so the UI can render it
+ * as a collapsible "Thought for N seconds" section like DeepSeek's own app.
+ */
+export function splitThinkBlocks(text: string): SplitThinking {
+  const parts: string[] = [];
+  let thinkingOpen = false;
+  const answer = text.replace(
+    /<think>([\s\S]*?)(?:<\/think>|$)/g,
+    (match, inner: string) => {
+      parts.push(inner);
+      if (!match.endsWith("</think>")) thinkingOpen = true;
+      return "";
+    }
+  );
+  return { thinking: parts.join("\n\n").trim(), answer, thinkingOpen };
+}
+
+/** Remove all <think> blocks (complete or trailing) from the text. */
+export function stripThinkBlocks(text: string): string {
+  return splitThinkBlocks(text).answer;
 }
 
 /**
@@ -106,7 +140,7 @@ export async function streamAIResponse(
 
   try {
     const puter = window.puter;
-    if (!puter?.ai?.chat) throw new Error("Puter AI not available");
+    if (!puter?.ai?.chat) throw new Error("AI is not available");
 
     const messages = buildMessages(history, prompt, imageBase64s);
     // NOTE: testMode (2nd arg) must be passed explicitly; otherwise the
@@ -114,7 +148,7 @@ export async function streamAIResponse(
     const response = (await puter.ai.chat(messages, false, {
       model,
       stream: true,
-    })) as AsyncIterable<PuterStreamPart>;
+    })) as AsyncIterable<StreamPart>;
 
     let fullContent = "";
     for await (const part of response) {

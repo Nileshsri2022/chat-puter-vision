@@ -1,10 +1,14 @@
-import { Copy, Trash2, Check, Volume2, Square } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, Atom, ChevronDown } from "lucide-react";
 import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { checkAuthStatus } from "@/lib/puter";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { copyToClipboard } from "@/lib/utils/export";
+import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -46,7 +50,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     if (!checkAuthStatus()) {
       toast({
         title: "Authentication Required",
-        description: "Please sign in to Puter to use read-aloud.",
+        description: "Please sign in to use read-aloud.",
         variant: "destructive",
         duration: 5000,
       });
@@ -73,9 +77,29 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     }
   };
 
+  // Reasoning models (e.g. DeepSeek R1) wrap chain-of-thought in
+  // <think>...</think>; render it as a collapsible section like DeepSeek's app.
+  const { thinking, answer, thinkingOpen } = useMemo(
+    () => (isUser ? { thinking: "", answer: content, thinkingOpen: false } : splitThinkBlocks(content)),
+    [content, isUser]
+  );
+
+  // "Thought for N seconds": measure from first thinking chunk to block close.
+  const thinkStartRef = useRef<number | null>(null);
+  const [thinkSecs, setThinkSecs] = useState<number | null>(null);
+  useEffect(() => {
+    const hasThinking = thinking.length > 0 || thinkingOpen;
+    if (hasThinking && thinkStartRef.current === null) thinkStartRef.current = Date.now();
+    if (hasThinking && !thinkingOpen && thinkStartRef.current !== null) {
+      setThinkSecs(Math.max(1, Math.round((Date.now() - thinkStartRef.current) / 1000)));
+      thinkStartRef.current = null;
+    }
+  }, [thinking, thinkingOpen]);
+  const [showThinking, setShowThinking] = useState(true);
+
   const handleCopy = async () => {
     if (onCopy) {
-      onCopy(content);
+      onCopy(stripThinkBlocks(content));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -88,159 +112,226 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     return foundModel ? foundModel.name : "AI";
   };
 
-  // Minimal markdown renderer for model output.
-  // Model output is untrusted: escape HTML first so a response can never
-  // inject markup/scripts, then apply formatting. Fenced code blocks are
-  // extracted before inline code so backticks inside fences aren't mangled.
-  const formatContent = (text: string) => {
-    if (!text) return "";
+  // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
+  // nested lists). Raw HTML in model output is escaped by default, so a
+  // response can never inject markup/scripts.
+  const CodeBlock = ({ children }: { children?: ReactNode }) => {
+    const [codeCopied, setCodeCopied] = useState(false);
+    const preRef = useRef<HTMLPreElement>(null);
 
-    const escapeHtml = (s: string) =>
-      s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    const handleCopyCode = async () => {
+      const text = preRef.current?.querySelector("code")?.innerText ?? "";
+      await copyToClipboard(text);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    };
 
-    // Pull fenced code blocks out first, restore at the end.
-    const codeBlocks: string[] = [];
-    let formatted = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code: string) => {
-      codeBlocks.push(
-        `<pre class="bg-muted/50 p-4 rounded-lg text-sm font-mono text-foreground border my-4 overflow-x-auto"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre>`
+    return (
+      <div className="group/code relative my-4">
+        <pre
+          ref={preRef}
+          className="overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm text-foreground"
+        >
+          {children}
+        </pre>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleCopyCode}
+          title="Copy code"
+          className="absolute right-2 top-2 h-7 w-7 opacity-0 transition-opacity group-hover/code:opacity-100"
+        >
+          {codeCopied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </div>
+    );
+  };
+
+  const markdownComponents: Components = {
+    h1: ({ children }) => (
+      <h1 className="mb-4 mt-5 text-2xl font-bold text-foreground first:mt-0">
+        {children}
+      </h1>
+    ),
+    h2: ({ children }) => (
+      <h2 className="mb-4 mt-5 text-xl font-semibold text-foreground first:mt-0">
+        {children}
+      </h2>
+    ),
+    h3: ({ children }) => (
+      <h3 className="mb-3 mt-4 text-lg font-semibold text-foreground first:mt-0">
+        {children}
+      </h3>
+    ),
+    p: ({ children }) => <p className="mb-4 leading-relaxed">{children}</p>,
+    ul: ({ children }) => (
+      <ul className="mb-4 list-disc pl-6">{children}</ul>
+    ),
+    ol: ({ children }) => (
+      <ol className="mb-4 list-decimal pl-6">{children}</ol>
+    ),
+    li: ({ children }) => <li className="mb-1">{children}</li>,
+    strong: ({ children }) => (
+      <strong className="font-semibold text-foreground">{children}</strong>
+    ),
+    em: ({ children }) => <em className="italic text-foreground">{children}</em>,
+    a: ({ children, href }) => (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-primary underline underline-offset-2"
+      >
+        {children}
+      </a>
+    ),
+    blockquote: ({ children }) => (
+      <blockquote className="mb-4 border-l-4 border-border pl-4 italic text-muted-foreground">
+        {children}
+      </blockquote>
+    ),
+    pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+    code: ({ className, children }) => {
+      const text = String(children ?? "");
+      const isBlock =
+        /language-/.test(className || "") || text.includes("\n");
+      if (!isBlock) {
+        return (
+          <code className="rounded-md border bg-muted/70 px-2 py-1 font-mono text-sm text-foreground">
+            {children}
+          </code>
+        );
+      }
+      return (
+        <code className="font-mono text-[13px] leading-relaxed">{children}</code>
       );
-      return `\uE000CODEBLOCK${codeBlocks.length - 1}\uE000`;
-    });
-
-    formatted = escapeHtml(formatted);
-
-    formatted = formatted
-      // Headers
-      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold text-foreground mb-3 mt-4 first:mt-0">$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold text-foreground mb-4 mt-5 first:mt-0">$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold text-foreground mb-4 mt-5 first:mt-0">$1</h1>')
-      // Bold text
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
-      // Italic text
-      .replace(/(^|\W)\*([^*\n]+)\*/g, '$1<em class="italic text-foreground">$2</em>')
-      // Inline code
-      .replace(/`([^`\n]+)`/g, '<code class="bg-muted/70 px-2 py-1 rounded-md text-sm font-mono text-foreground border">$1</code>')
-      // Blockquotes
-      .replace(/^&gt; (.*$)/gim, '<blockquote class="border-l-4 border-border pl-4 italic text-muted-foreground mb-4">$1</blockquote>')
-      // Unordered lists
-      .replace(/^\s*[-*] (.*$)/gim, '<li class="mb-2 list-item-u">$1</li>')
-      // Ordered lists
-      .replace(/^\s*\d+\. (.*$)/gim, '<li class="mb-2 list-item-o">$1</li>')
-      // Paragraphs
-      .replace(/\n\n+/g, '</p><p class="mb-4 leading-relaxed">')
-      .replace(/\n/g, '<br>');
-
-    // Wrap loose list items
-    formatted = formatted
-      .replace(/(<li class="mb-2 list-item-u">.*<\/li>(?:\s*<li class="mb-2 list-item-u">.*<\/li>)*)/g, '<ul class="mb-4 list-disc pl-6 space-y-1">$1</ul>')
-      .replace(/(<li class="mb-2 list-item-o">.*<\/li>(?:\s*<li class="mb-2 list-item-o">.*<\/li>)*)/g, '<ol class="mb-4 list-decimal pl-6 space-y-1">$1</ol>');
-
-    // Clean marker classes from li
-    formatted = formatted.replace(/ class="mb-2 list-item-[uo]"/g, ' class="mb-1.5"');
-
-    // Wrap in paragraph if not already wrapped
-    if (
-      !formatted.includes('<p>') &&
-      !formatted.includes('<h') &&
-      !formatted.includes('<pre>') &&
-      !formatted.includes('<li>') &&
-      !formatted.includes('<blockquote') &&
-      !formatted.includes('\uE000CODEBLOCK')
-    ) {
-      formatted = `<p class="mb-4 leading-relaxed">${formatted}</p>`;
-    }
-
-    // Restore code blocks
-    formatted = formatted.replace(/\uE000CODEBLOCK(\d+)\uE000/g, (_m, i: string) => codeBlocks[Number(i)]);
-
-    return formatted;
+    },
+    table: ({ children }) => (
+      <div className="my-4 overflow-x-auto">
+        <table className="w-full border-collapse text-sm">{children}</table>
+      </div>
+    ),
+    th: ({ children }) => (
+      <th className="border border-border bg-muted/50 px-3 py-2 text-left font-semibold">
+        {children}
+      </th>
+    ),
+    td: ({ children }) => (
+      <td className="border border-border px-3 py-2">{children}</td>
+    ),
+    img: ({ src, alt }) => (
+      <img
+        src={src}
+        alt={alt ?? ""}
+        className="max-w-full rounded-lg border border-border"
+      />
+    ),
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-2.5 sm:py-3">
+    <>
       {isUser ? (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed text-foreground shadow-sm">
+        <div className="flex justify-end px-4 py-2">
+          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed">
             {content}
           </div>
         </div>
       ) : (
-        <div className="group space-y-1.5">
-          <div className="text-xs font-medium text-muted-foreground select-none">
-            {isStreaming ? "Thinking…" : getModelDisplayName(model)}
+        <div className="group px-4 py-2">
+          <div className="mx-auto max-w-3xl">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              {isStreaming ? "Thinking..." : getModelDisplayName(model)}
+            </div>
+            {image && (
+              <img
+                src={image}
+                alt="Generated image"
+                className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover"
+              />
+            )}
+            {(thinking || thinkingOpen) && (
+              <div className="mb-2">
+                <button
+                  onClick={() => setShowThinking((v) => !v)}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Atom className="h-4 w-4 text-blue-500" />
+                  {thinkingOpen
+                    ? "Thinking…"
+                    : thinkSecs !== null
+                      ? `Thought for ${thinkSecs} second${thinkSecs === 1 ? "" : "s"}`
+                      : "Thought process"}
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${showThinking ? "" : "-rotate-90"}`}
+                  />
+                </button>
+                {showThinking && (
+                  <div className="mt-1.5 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
+                      {thinking}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="break-words text-[15px] leading-relaxed text-foreground">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {answer}
+              </ReactMarkdown>
+            </div>
+            {isStreaming && content.length === 0 && (
+              <div className="flex gap-1 py-2">
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
+              </div>
+            )}
+            {!isStreaming && (speakable || onCopy || onDelete) && (
+              <div className="mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                {speakable && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSpeak}
+                    disabled={ttsState === "loading"}
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
+                  >
+                    {ttsState === "loading" ? (
+                      <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    ) : ttsState === "playing" ? (
+                      <Square className="mr-1 h-3 w-3" />
+                    ) : (
+                      <Volume2 className="mr-1 h-3 w-3" />
+                    )}
+                    {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading" : "Read aloud"}
+                  </Button>
+                )}
+                {onCopy && (
+                  <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 text-xs text-muted-foreground">
+                    {copied ? <><Check className="mr-1 h-3 w-3" /> Copied</> : <><Copy className="mr-1 h-3 w-3" /> Copy</>}
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive">
+                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-          {image && (
-            <img
-              src={image}
-              alt="Generated output"
-              className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover shadow-sm"
-              loading="lazy"
-            />
-          )}
-          <div
-            className="break-words text-[15px] leading-relaxed text-foreground"
-            dangerouslySetInnerHTML={{ __html: formatContent(content) }}
-          />
-          {isStreaming && content.length === 0 && (
-            <div className="flex items-center gap-1.5 py-2" role="status" aria-label="Thinking">
-              <div className="h-1.5 w-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground" />
-              <div className="h-1.5 w-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
-              <div className="h-1.5 w-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
-              <span className="sr-only">Thinking…</span>
-            </div>
-          )}
-          {!isStreaming && (speakable || onCopy || onDelete) && (
-            <div className="pt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-              {speakable && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSpeak}
-                  disabled={ttsState === "loading"}
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
-                  aria-label={ttsState === "playing" ? "Stop reading aloud" : "Read message aloud"}
-                >
-                  {ttsState === "loading" ? (
-                    <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
-                  ) : ttsState === "playing" ? (
-                    <Square className="mr-1 h-3 w-3" aria-hidden="true" />
-                  ) : (
-                    <Volume2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                  )}
-                  {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading…" : "Read aloud"}
-                </Button>
-              )}
-              {onCopy && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopy}
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  aria-label="Copy message to clipboard"
-                >
-                  {copied ? <><Check className="mr-1 h-3 w-3 text-emerald-500" aria-hidden="true" /> Copied</> : <><Copy className="mr-1 h-3 w-3" aria-hidden="true" /> Copy</>}
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onDelete}
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                  aria-label="Delete message"
-                >
-                  <Trash2 className="mr-1 h-3 w-3" aria-hidden="true" /> Delete
-                </Button>
-              )}
-            </div>
-          )}
         </div>
       )}
-    </div>
+    </>
   );
 };

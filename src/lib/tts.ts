@@ -5,6 +5,8 @@
 // under 3000 chars — longer input is truncated. Defaults to the AWS Polly
 // voice when no options are passed.
 
+import { stripThinkBlocks } from "./streamingHandler";
+
 /** Max chars the API accepts per call (docs). */
 export const TTS_CHAR_LIMIT = 3000;
 
@@ -14,7 +16,7 @@ export const TTS_CHAR_LIMIT = 3000;
  * removed; links keep their label text.
  */
 export function stripMarkdownForSpeech(md: string): string {
-  return md
+  return stripThinkBlocks(md)
     .replace(/```[\s\S]*?```/g, " [code omitted] ")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/^#{1,6}\s+/gm, "")
@@ -44,7 +46,7 @@ function friendlySpeechError(error: unknown): Error {
       : {};
   const message = typeof body.message === "string" ? body.message : "";
   if (body.code === "insufficient_funds")
-    return new Error("Puter credit exhausted for this month.");
+    return new Error("Monthly credit exhausted.");
   if (body.code === "bad_request")
     return new Error(message || "Speech synthesis was rejected.");
   return new Error(message || "Speech synthesis failed.");

@@ -59,7 +59,7 @@ export async function convertImagesToPNG(files: File[]): Promise<File[]> {
 }
 
 /**
- * Check if image format is supported by Puter AI
+ * Check if image format is supported by the backend
  */
 export function isSupportedImageFormat(type: string): boolean {
     const supported = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];

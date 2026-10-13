@@ -4,7 +4,7 @@
 // 2026-10-13); the catalog lets the UI hide dead models and gate vision
 // features on real `modalities` data instead of keyword guessing.
 
-import type { PuterModelInfo } from "./puter";
+import type { ModelInfo } from "./backend";
 
 export interface ModelCatalog {
   /** Every ID the API accepts: primary id + puterId + aliases. */
@@ -22,11 +22,11 @@ let inflight: Promise<ModelCatalog | null> | null = null;
 export function getModelCatalog(): Promise<ModelCatalog | null> {
   if (cache) return Promise.resolve(cache);
   if (inflight) return inflight;
-  inflight = (async () => {
+  const p: Promise<ModelCatalog | null> = (async () => {
     try {
       const sdk = typeof window !== "undefined" ? window.puter : undefined;
       if (!sdk?.ai?.listModels) return null;
-      const models: PuterModelInfo[] = await sdk.ai.listModels();
+      const models: ModelInfo[] = await sdk.ai.listModels();
       if (!Array.isArray(models) || models.length === 0) return null;
       const ids = new Set<string>();
       const vision = new Set<string>();
@@ -60,11 +60,16 @@ export function getModelCatalog(): Promise<ModelCatalog | null> {
       return cache;
     } catch {
       return null;
-    } finally {
-      inflight = null;
     }
   })();
-  return inflight;
+  inflight = p;
+  // Clear the in-flight marker once settled so a transient failure can be
+  // retried; a successful result stays cached via `cache`.
+  const clear = () => {
+    if (inflight === p) inflight = null;
+  };
+  p.then(clear, clear);
+  return p;
 }
 
 /** The documented default model for puter.ai.chat. Verified live 2026-10-13. */

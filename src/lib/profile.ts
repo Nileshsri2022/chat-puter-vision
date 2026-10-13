@@ -2,7 +2,7 @@
 // Docs: https://docs.puter.com/Auth/getProfile/ (read 2026-10-13).
 // Resolves to { picture, display name, bio } or null when unavailable.
 
-import type { UserProfile } from "./puter";
+import type { UserProfile } from "./backend";
 
 export interface ProfileInfo {
   name: string | null;

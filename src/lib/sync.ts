@@ -7,7 +7,7 @@
 // Everything is offline-first: KV failures never break local use.
 
 import type { Conversation } from "@/pages/Index";
-import { checkAuthStatus } from "./puter";
+import { checkAuthStatus } from "./backend";
 
 export interface SyncDoc {
   version: 1;
@@ -157,7 +157,7 @@ export function mergeDocs(
 
 export interface SyncResult {
   doc: SyncDoc;
-  /** True when the merged doc differs from local (apply it) or was pushed. */
+  /** True when the merged doc differs from local state — apply it. */
   changed: boolean;
 }
 
@@ -189,8 +189,15 @@ export async function syncConversations(
       remote = raw;
     }
     const { doc, changed } = mergeDocs(base, remote);
-    if (changed) {
-      await kv.set(SYNC_KEY, JSON.stringify(doc));
+    const mergedJson = JSON.stringify(doc);
+    // Push whenever the merged doc differs from what's stored remotely.
+    // `changed` only flags "local state must be applied"; it stays false
+    // when local is newer than remote or holds conversations remote lacks —
+    // both cases still need a push, or edits would never leave the device.
+    const remoteJson =
+      typeof raw === "string" ? raw : remote ? JSON.stringify(remote) : null;
+    if (remoteJson === null || mergedJson !== remoteJson) {
+      await kv.set(SYNC_KEY, mergedJson);
     }
     writeLocalTombstones(doc.deleted);
     return { doc, changed };
