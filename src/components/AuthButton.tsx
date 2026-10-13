@@ -1,102 +1,77 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { checkAuthStatus, signIn, getCurrentUser } from "@/lib/puter";
+import { checkAuthStatus, signIn, getCurrentUser, type PuterUser } from "@/lib/puter";
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthButtonProps {
   onAuthChange?: (isAuthenticated: boolean) => void;
 }
 
+/**
+ * Sign-in button. Auth state comes from the documented synchronous
+ * `puter.auth.isSignedIn()` check; re-checked on mount and when the tab
+ * regains focus (no polling — the SDK documents no auth-change events).
+ */
 export const AuthButton = ({ onAuthChange }: AuthButtonProps) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<PuterUser | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Check authentication status on component mount
-    const checkAuth = () => {
-      console.log('Checking auth status...');
-      const authStatus = checkAuthStatus();
-      console.log('Auth status:', authStatus, 'User:', getCurrentUser());
-      setIsAuthenticated(authStatus);
-      setUser(getCurrentUser());
-      onAuthChange?.(authStatus);
-    };
-
-    checkAuth();
-
-    // Set up a listener for auth changes if available
-    if (typeof window !== 'undefined' && window.puter?.auth) {
-      // Check periodically for auth changes
-      const interval = setInterval(checkAuth, 2000);
-      return () => clearInterval(interval);
-    }
+  const refresh = useCallback(async () => {
+    const signedIn = checkAuthStatus();
+    const u = signedIn ? await getCurrentUser() : null;
+    setUser(u);
+    onAuthChange?.(signedIn);
+    return u;
   }, [onAuthChange]);
+
+  useEffect(() => {
+    refresh();
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [refresh]);
 
   const handleSignIn = async () => {
     setIsLoading(true);
     try {
       const result = await signIn();
-      setIsAuthenticated(true);
-      setUser(result);
-      onAuthChange?.(true);
-
+      if (result && result.success === false) {
+        throw new Error(result.msg || result.error || "Sign in failed");
+      }
+      await refresh();
+      const u = await getCurrentUser();
       toast({
         title: "Signed in successfully",
-        description: "You can now use Claude AI.",
+        description: u?.username
+          ? `Welcome, ${u.username}. You can now use AI models.`
+          : "You can now use AI models.",
         duration: 3000,
       });
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-
-      let errorMessage = "Failed to sign in. Please try again.";
-
-      if (error.message?.includes("popup") || error.message?.includes("blocked")) {
-        errorMessage = "Popup blocked. Please allow popups for this site and try signing in again.";
-      } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
-        errorMessage = "Network error. Please check your connection and try again.";
-      } else if (error.message?.includes("timeout")) {
-        errorMessage = "Sign in timed out. Please try again.";
-      } else if (error.message) {
-        errorMessage = error.message;
+    } catch (error) {
+      console.error("Sign in error:", error);
+      const message = error instanceof Error ? error.message : "";
+      let description = "Failed to sign in. Please try again.";
+      if (/popup|blocked/i.test(message)) {
+        description = "Popup blocked. Please allow popups for this site and try signing in again.";
+      } else if (/network|fetch/i.test(message)) {
+        description = "Network error. Please check your connection and try again.";
+      } else if (/timeout/i.test(message)) {
+        description = "Sign in timed out. Please try again.";
+      } else if (/auth_window_closed/i.test(message)) {
+        description = "Sign-in window was closed before completing.";
+      } else if (message) {
+        description = message;
       }
-
-      toast({
-        title: "Sign in failed",
-        description: errorMessage,
-        variant: "destructive",
-        duration: 5000,
-      });
+      toast({ title: "Sign in failed", description, variant: "destructive", duration: 5000 });
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (isAuthenticated && user) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>Signed in as {user.name || user.email || 'User'}</span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            // Force refresh auth status
-            const refreshAuth = () => {
-              console.log('Refreshing auth status...');
-              const authStatus = checkAuthStatus();
-              setIsAuthenticated(authStatus);
-              setUser(getCurrentUser());
-              onAuthChange?.(authStatus);
-            };
-            refreshAuth();
-          }}
-        >
-          Refresh
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <Button

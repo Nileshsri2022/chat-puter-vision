@@ -1,58 +1,161 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, type SetStateAction } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { AuthButton } from "@/components/AuthButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { MessageSkeleton, ChatInputSkeleton } from "@/components/SkeletonLoader";
+import { CreditPill } from "@/components/CreditPill";
+import { getProfileInfo, type ProfileInfo } from "@/lib/profile";
 import {
-  streamClaudeResponse,
-  streamMistralResponse,
-  streamPerplexityResearch,
-  streamOpenRouterResponse,
-  streamGroqResponse,
-  streamKimiResponse,
-  streamOpenAIResponse,
   Message,
   checkAuthStatus,
-  getCurrentUser,
-  resetAuthState
+  signOut
 } from "@/lib/puter";
+import { streamAIResponse } from "@/lib/streamingHandler";
+import { generateImage } from "@/lib/images";
+import { syncConversations, recordDelete } from "@/lib/sync";
+import {
+  getModelCatalog,
+  resolveDefaultModel,
+  DEFAULT_MODEL_ID,
+  type ModelCatalog,
+} from "@/lib/models";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ClaudeLogo } from "@/components/ClaudeLogo";
-import { Menu, X } from "lucide-react";
-import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "@/components/ModelSelector";
+import { Menu, X, Sparkles, RotateCcw } from "lucide-react";
+import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
+import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from "@/lib/utils/export";
+import { Download, LogOut, CircleUserRound } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface Conversation {
+export interface Conversation {
   id: string;
   title: string;
   timestamp: Date;
   messages: Message[];
+  /** Epoch ms of last local mutation. Powers KV last-writer-wins merge. */
+  updatedAt?: number;
 }
 
+const SUGGESTIONS = [
+  "Explain quantum computing in simple terms",
+  "Write a haiku about the monsoon",
+  "Help me plan a 3-day trip to Goa",
+  "Give me tips for better sleep",
+];
+
 const Index = () => {
-   const [conversations, setConversations] = useState<Conversation[]>([
-     {
-       id: "1",
-       title: "New Conversation",
-       timestamp: new Date(),
-       messages: [],
-     },
-   ]);
-   const [currentConversationId, setCurrentConversationId] = useState("1");
-   const [isStreaming, setIsStreaming] = useState(false);
-   const [streamingContent, setStreamingContent] = useState("");
-   const [sidebarOpen, setSidebarOpen] = useState(false);
-   const [isAuthenticated, setIsAuthenticated] = useState(false);
-   const [selectedModel, setSelectedModel] = useState("x-ai/grok-4");
-   const [isLoading, setIsLoading] = useState(true);
-   const scrollRef = useRef<HTMLDivElement>(null);
-   const { toast } = useToast();
+  const [conversations, setConversationsRaw] = useState<Conversation[]>([
+    {
+      id: "1",
+      title: "New Conversation",
+      timestamp: new Date(),
+      messages: [],
+    },
+  ]);
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+
+  // Stamping wrapper around setConversationsRaw: any conversation whose
+  // reference changed (matched by id) gets updatedAt=now. Gives the KV
+  // merge a per-conversation last-writer-wins clock with zero call-site
+  // changes. Sync itself applies via setConversationsRaw (unstamped).
+  const setConversations = useCallback((updater: SetStateAction<Conversation[]>) => {
+    setConversationsRaw((prev) => {
+      const next =
+        typeof updater === "function"
+          ? (updater as (p: Conversation[]) => Conversation[])(prev)
+          : updater;
+      // Fast path: identical length and references -> nothing changed.
+      // (Length check matters: filter-removals keep survivor references.)
+      if (next.length === prev.length && next.every((c, i) => c === prev[i])) {
+        return prev;
+      }
+      const prevById = new Map(prev.map((c) => [c.id, c]));
+      const now = Date.now();
+      return next.map((c) =>
+        prevById.get(c.id) !== c ? { ...c, updatedAt: now } : c
+      );
+    });
+  }, []);
+
+  const [syncStatus, setSyncStatus] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const syncInflight = useRef(false);
+  const syncTimer = useRef<number | null>(null);
+
+  const runSync = useCallback(async () => {
+    if (syncInflight.current) return;
+    if (!checkAuthStatus()) {
+      setSyncStatus("local");
+      return;
+    }
+    syncInflight.current = true;
+    setSyncStatus((s) => (s === "synced" ? s : "syncing"));
+    try {
+      const { doc, changed } = await syncConversations(conversationsRef.current);
+      if (changed) {
+        if (doc.conversations.length > 0) {
+          setConversationsRaw(doc.conversations);
+          if (!doc.conversations.some((c) => c.id === currentConversationIdRef.current)) {
+            setCurrentConversationId(doc.conversations[0].id);
+          }
+        } else {
+          const fresh: Conversation = {
+            id: Date.now().toString(),
+            title: "New Conversation",
+            timestamp: new Date(),
+            messages: [],
+            updatedAt: Date.now(),
+          };
+          setConversationsRaw([fresh]);
+          setCurrentConversationId(fresh.id);
+        }
+      }
+      setSyncStatus("synced");
+    } catch {
+      setSyncStatus("error");
+    } finally {
+      syncInflight.current = false;
+    }
+  }, []);
+
+  const scheduleSync = useCallback(() => {
+    if (!checkAuthStatus()) return;
+    if (syncTimer.current !== null) window.clearTimeout(syncTimer.current);
+    syncTimer.current = window.setTimeout(() => {
+      syncTimer.current = null;
+      void runSync();
+    }, 2000);
+  }, [runSync]);
+  const [currentConversationId, setCurrentConversationId] = useState("1");
+  const currentConversationIdRef = useRef(currentConversationId);
+  currentConversationIdRef.current = currentConversationId;
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
+  const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const { toast } = useToast();
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
   const messages = currentConversation?.messages || [];
+  const canRegenerate =
+    !isStreaming &&
+    messages.length > 0 &&
+    messages[messages.length - 1].role === "assistant";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -61,17 +164,84 @@ const Index = () => {
   }, [messages, streamingContent]);
 
   useEffect(() => {
-    resetAuthState();
-    const authStatus = checkAuthStatus();
-    setIsAuthenticated(authStatus && !!getCurrentUser());
-    setTimeout(() => setIsLoading(false), 800);
+    // Documented sign-in check: puter.auth.isSignedIn() (synchronous boolean).
+    setIsAuthenticated(checkAuthStatus());
+    // Validate the selected model against the live catalog; fall back to the
+    // documented default when the stored selection no longer resolves.
+    getModelCatalog().then((catalog) => {
+      if (!catalog) return;
+      setModelCatalog(catalog);
+      setSelectedModel((prev) =>
+        prev && catalog.ids.has(prev) ? prev : resolveDefaultModel(catalog)
+      );
+    });
   }, []);
 
+  // Load conversations from localStorage on mount
   useEffect(() => {
-    // Reset streaming content and input when conversation changes
+    const loaded = loadConversations();
+    if (loaded.length > 0) {
+      setConversations(loaded);
+      const savedId = loadCurrentConversationId();
+      if (savedId && loaded.find(c => c.id === savedId)) {
+        setCurrentConversationId(savedId);
+      } else {
+        setCurrentConversationId(loaded[0].id);
+      }
+    }
+  }, []);
+
+  // Auto-save conversations to localStorage whenever they change
+  useEffect(() => {
+    if (conversations.length > 0) {
+      saveConversations(conversations);
+    }
+    scheduleSync(); // debounced KV push while signed in
+  }, [conversations, scheduleSync]);
+
+  // Pull + merge KV state whenever sign-in becomes active.
+  useEffect(() => {
+    if (isAuthenticated) void runSync();
+  }, [isAuthenticated, runSync]);
+
+  // Load profile (avatar + display name) for the account menu.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setProfile(null);
+      return;
+    }
+    let alive = true;
+    getProfileInfo().then((p) => {
+      if (alive) setProfile(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isAuthenticated]);
+
+  // Pull + merge when the tab regains focus (other device may have written).
+  useEffect(() => {
+    const onFocus = () => void runSync();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void runSync();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (syncTimer.current !== null) window.clearTimeout(syncTimer.current);
+    };
+  }, [runSync]);
+
+  // Save current conversation ID whenever it changes
+  useEffect(() => {
+    saveCurrentConversationId(currentConversationId);
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    // Reset streaming content when conversation changes
     setStreamingContent("");
-    // You might also want to clear the input field of ChatInput here if it's not handled internally
-    // For now, assuming ChatInput manages its own input state, but it might need a prop to reset
   }, [currentConversationId]);
 
 
@@ -92,10 +262,43 @@ const Index = () => {
     // Use provided model or fallback to selected model
     const selectedModelId = model || selectedModel;
 
+    // Convert images to raw base64 (no data: prefix). The streaming layer
+    // wraps them in the SDK's image_url wire form ("b" + base64).
+    let imageBase64s: string[] = [];
+    if (images && images.length > 0) {
+      try {
+        const conversionPromises = images.map(file => {
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === 'string') {
+                const comma = reader.result.indexOf(',');
+                resolve(comma >= 0 ? reader.result.slice(comma + 1) : reader.result);
+              } else {
+                reject(new Error(`Failed to convert ${file.name} to string`));
+              }
+            };
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          });
+        });
+
+        imageBase64s = await Promise.all(conversionPromises);
+      } catch (error) {
+        toast({
+          title: "Image processing failed",
+          description: "Failed to process images. Please try again.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
     // Create user message with content and image info if present
     let messageContent = content;
-    if (images && images.length > 0) {
-      messageContent = `${content}${content ? '\n\n' : ''}[Images: ${images.length} file${images.length > 1 ? 's' : ''} uploaded]`;
+    if (imageBase64s.length > 0) {
+      messageContent = `${content}${content ? '\n\n' : ''}[Images: ${imageBase64s.length} attached]`;
     }
 
     const userMessage: Message = { role: "user", content: messageContent };
@@ -105,17 +308,73 @@ const Index = () => {
       prev.map((conv) =>
         conv.id === currentConversationId
           ? {
-              ...conv,
-              messages: updatedMessages,
-              title: conv.messages.length === 0 ? content.slice(0, 30) + "..." : conv.title,
-            }
+            ...conv,
+            messages: updatedMessages,
+            title: conv.messages.length === 0 ? truncateTitle(content) : conv.title,
+          }
           : conv
       )
     );
 
+    // Prior turns go as conversation history (text only); the current
+    // message carries the images via image_url content blocks.
+    runAssistantReply({
+      baseMessages: updatedMessages,
+      rollbackMessages: messages,
+      history: messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      prompt: content,
+      modelId: selectedModelId,
+      imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
+    });
+  };
+
+  interface ReplyRunnerArgs {
+    baseMessages: Message[];
+    rollbackMessages: Message[];
+    history: { role: "user" | "assistant"; content: string }[];
+    prompt: string;
+    modelId: string;
+    imageBase64s?: string[];
+  }
+
+  /** Shared streaming flow for new messages and regenerations. */
+  const runAssistantReply = async ({
+    baseMessages,
+    rollbackMessages,
+    history,
+    prompt,
+    modelId,
+    imageBase64s,
+  }: ReplyRunnerArgs) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setIsStreaming(true);
     setStreamingContent("");
 
+    const resetStreaming = () => {
+      setStreamingContent("");
+      setIsStreaming(false);
+      abortRef.current = null;
+    };
+
+    const appendAssistantMessage = (assistantContent: string) => {
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === currentConversationId
+            ? {
+              ...conv,
+              messages: [
+                ...baseMessages,
+                { role: "assistant", content: assistantContent, model: modelId },
+              ],
+            }
+            : conv
+        )
+      );
+    };
 
     const onChunk = (chunk: string) => {
       setStreamingContent((prev) => prev + chunk);
@@ -127,21 +386,8 @@ const Index = () => {
     };
 
     const onComplete = (fullContent: string) => {
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.id === currentConversationId
-            ? {
-                ...conv,
-                messages: [
-                  ...updatedMessages,
-                  { role: "assistant", content: fullContent, model: selectedModelId },
-                ],
-              }
-            : conv
-        )
-      );
-      setStreamingContent("");
-      setIsStreaming(false);
+      appendAssistantMessage(fullContent);
+      resetStreaming();
     };
 
     const onError = (error: Error) => {
@@ -155,56 +401,138 @@ const Index = () => {
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === currentConversationId
-            ? { ...conv, messages: messages }
+            ? { ...conv, messages: rollbackMessages }
             : conv
         )
       );
-      setStreamingContent("");
-      setIsStreaming(false);
+      resetStreaming();
+    };
+
+    const onAbort = (partialContent: string) => {
+      // Keep whatever streamed so far, like ChatGPT's stop button.
+      if (partialContent) appendAssistantMessage(partialContent);
+      resetStreaming();
     };
 
     try {
-      if (selectedModelId.startsWith("x-ai/grok")) {
-        await streamGroqResponse(content, onChunk, onComplete, onError, selectedModelId);
-      } else if (selectedModelId.startsWith("claude")) {
-        await streamClaudeResponse(content, onChunk, onComplete, onError, selectedModelId);
-      } else if (selectedModelId.startsWith("mistral")) {
-        await streamMistralResponse(content, onChunk, onComplete, onError, selectedModelId);
-      } else if (selectedModelId.startsWith("perplexity")) {
-        await streamPerplexityResearch(content, onChunk, onComplete, onError, selectedModelId);
-      } else if (selectedModelId.startsWith("moonshotai")) {
-        await streamKimiResponse(content, onChunk, onComplete, onError, selectedModelId);
-      } else if (selectedModelId.startsWith("openrouter")) {
-        await streamOpenRouterResponse(content, onChunk, onComplete, onError, selectedModelId);
-      } else if (selectedModelId.startsWith("gpt-") || selectedModelId.startsWith("o")) {
-        await streamOpenAIResponse(content, onChunk, onComplete, onError, selectedModelId);
-      } else {
-        onError(new Error("Unsupported model selected."));
-      }
-    } catch (error: any) {
-      onError(error instanceof Error ? error : new Error(`AI request failed: ${error?.message || 'Unknown error'}`));
+      await streamAIResponse(history, prompt, modelId, {
+        onChunk,
+        onComplete,
+        onError,
+        onAbort,
+      }, imageBase64s, controller.signal);
+    } catch (error) {
+      onError(error instanceof Error ? error : new Error(`AI request failed: ${(error as Error)?.message || 'Unknown error'}`));
     }
   };
 
-  const handleDeleteConversation = (id: string) => {
-    setConversations((prev) => {
-      const updatedConversations = prev.filter((conv) => conv.id !== id);
-      if (updatedConversations.length === 0) {
-        // If no conversations left, create a new one
-        const newConv: Conversation = {
-          id: Date.now().toString(),
-          title: "New Conversation",
-          timestamp: new Date(),
-          messages: [],
-        };
-        setCurrentConversationId(newConv.id);
-        return [newConv];
-      } else if (currentConversationId === id) {
-        // If the deleted conversation was the current one, select the first available
-        setCurrentConversationId(updatedConversations[0].id);
-      }
-      return updatedConversations;
+  const handleStop = () => {
+    abortRef.current?.abort();
+  };
+
+  const handleRegenerate = () => {
+    if (isStreaming || !currentConversation) return;
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx < 0) return;
+    // Images aren't stored on messages, so regeneration is text-only; strip
+    // the "[Images: N attached]" marker the send flow appends.
+    const prompt = messages[lastUserIdx].content.replace(/\n\n\[Images: \d+ attached\]$/, "");
+    const trimmed = messages.slice(0, lastUserIdx + 1);
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === currentConversationId ? { ...conv, messages: trimmed } : conv
+      )
+    );
+    runAssistantReply({
+      baseMessages: trimmed,
+      rollbackMessages: trimmed,
+      history: trimmed
+        .slice(0, -1)
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      prompt,
+      modelId: selectedModel,
     });
+  };
+
+  const handleGenerateImage = async (prompt: string) => {
+    if (!currentConversation) return;
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to Puter to generate images.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    const userMessage: Message = { role: "user", content: prompt };
+    const withPrompt = [...messages, userMessage];
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === currentConversationId
+          ? {
+            ...conv,
+            messages: withPrompt,
+            title: conv.messages.length === 0 ? truncateTitle(prompt) : conv.title,
+          }
+          : conv
+      )
+    );
+    setIsGeneratingImage(true);
+    try {
+      const src = await generateImage(prompt);
+      const assistantMessage: Message = { role: "assistant", content: "", image: src };
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === currentConversationId
+            ? { ...conv, messages: [...withPrompt, assistantMessage] }
+            : conv
+        )
+      );
+    } catch (error) {
+      toast({
+        title: "Image generation failed",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+        duration: 6000,
+      });
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === currentConversationId ? { ...conv, messages } : conv
+        )
+      );
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const truncateTitle = (text: string): string =>
+    text.length > 30 ? text.slice(0, 30) + "..." : text || "New Conversation";
+
+  const handleDeleteConversation = (id: string) => {
+    recordDelete(id);
+    const remaining = conversations.filter((conv) => conv.id !== id);
+    if (remaining.length === 0) {
+      // If no conversations left, create a new one
+      const newConv: Conversation = {
+        id: Date.now().toString(),
+        title: "New Conversation",
+        timestamp: new Date(),
+        messages: [],
+      };
+      setConversations([newConv]);
+      setCurrentConversationId(newConv.id);
+    } else {
+      setConversations(remaining);
+      // If the deleted conversation was the current one, select the first available
+      if (currentConversationId === id) {
+        setCurrentConversationId(remaining[0].id);
+      }
+    }
   };
 
   const handleNewConversation = () => {
@@ -218,12 +546,64 @@ const Index = () => {
     setCurrentConversationId(newConv.id);
   };
 
-  const allModels: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
-  const currentModel = allModels.find(model => model.id === selectedModel);
+  const handleSignOut = () => {
+    signOut();
+    setIsAuthenticated(false);
+    toast({
+      title: "Signed out",
+      duration: 2000,
+    });
+  };
+
+  const handleCopyMessage = async (content: string) => {
+    const success = await copyToClipboard(content);
+    if (success) {
+      toast({
+        title: "Copied to clipboard",
+        duration: 2000,
+      });
+    } else {
+      toast({
+        title: "Failed to copy",
+        variant: "destructive",
+        duration: 2000,
+      });
+    }
+  };
+
+  const handleDeleteMessage = (messageIndex: number) => {
+    setConversations(prev => prev.map(conv =>
+      conv.id === currentConversationId
+        ? { ...conv, messages: conv.messages.filter((_, i) => i !== messageIndex) }
+        : conv
+    ));
+    toast({
+      title: "Message deleted",
+      duration: 2000,
+    });
+  };
+
+  const handleExport = (format: 'md' | 'json') => {
+    if (!currentConversation) return;
+
+    const content = format === 'md'
+      ? exportAsMarkdown(currentConversation)
+      : exportAsJSON(currentConversation);
+
+    const ext = format === 'md' ? 'md' : 'json';
+    const filename = `${currentConversation.title.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+    downloadFile(filename, content);
+
+    toast({
+      title: `Exported as ${format.toUpperCase()}`,
+      duration: 2000,
+    });
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <ConversationSidebar
+        syncStatus={syncStatus}
         conversations={conversations}
         currentConversationId={currentConversationId}
         onSelectConversation={setCurrentConversationId}
@@ -233,116 +613,162 @@ const Index = () => {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
 
-      <main className="flex-1 flex flex-col md:ml-64 min-w-0">
-        {/* Header with theme toggle - only show when authenticated */}
+      <main className="flex min-w-0 flex-1 flex-col md:ml-64">
         {isAuthenticated && (
-          <header className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="flex items-center gap-3">
-              {/* Mobile menu button */}
+          <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+            <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="md:hidden h-8 w-8"
+                className="h-8 w-8 md:hidden"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
               >
                 {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
               </Button>
-              <h1 className="text-lg font-semibold text-foreground">AI Chat</h1>
-              {currentModel && (
-                <span className="text-sm text-muted-foreground ml-2">
-                  ({currentModel.name})
-                </span>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Export conversation">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => handleExport('md')}>
+                    Export as Markdown
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('json')}>
+                    Export as JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-1">
+              <CreditPill />
+              <ThemeToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
+                    title={profile?.name ?? "Account"}
+                  >
+                    {profile?.picture ? (
+                      <img
+                        src={profile.picture}
+                        alt=""
+                        className="h-8 w-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <CircleUserRound className="h-5 w-5" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel className="max-w-[200px] truncate">
+                    {profile?.name ?? "Account"}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </header>
         )}
 
         {!isAuthenticated ? (
-          <div className="flex items-center justify-center h-full px-4">
-            <div className="text-center space-y-6 max-w-2xl">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-orange-500 text-white mb-4">
-                <ClaudeLogo className="w-10 h-10" />
+          <div className="flex h-full items-center justify-center px-4">
+            <div className="max-w-md space-y-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                <Sparkles className="h-7 w-7" />
               </div>
-              <h1 className="text-3xl md:text-4xl font-semibold text-foreground leading-tight">
+              <h1 className="text-3xl font-semibold text-foreground">
                 Welcome to AI Chat
               </h1>
-              <p className="text-muted-foreground text-base mb-6">
-                To start chatting with AI models (Claude, Grok, Mistral, Perplexity), please sign in to Puter first.
+              <p className="text-muted-foreground">
+                Sign in to Puter to start chatting with AI models.
               </p>
-              <div className="flex flex-col items-center gap-4">
-                <AuthButton onAuthChange={setIsAuthenticated} />
-              </div>
+              <AuthButton onAuthChange={setIsAuthenticated} />
             </div>
-          </div>
-        ) : isLoading ? (
-          <div className="flex-1 bg-background">
-            <div className="space-y-0">
-              <MessageSkeleton />
-              <MessageSkeleton />
-              <MessageSkeleton />
-            </div>
-            <ChatInputSkeleton />
           </div>
         ) : (
-          <ScrollArea className="flex-1 bg-background" ref={scrollRef}>
-            {messages.length === 0 && !isStreaming && (
-              <div className="flex items-center justify-center h-full px-4 py-12">
-                <div className="text-center space-y-8 max-w-2xl">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg animate-pulse">
-                    <ClaudeLogo className="w-12 h-12" />
+          <>
+            <ScrollArea className="flex-1 bg-background" ref={scrollRef}>
+              {messages.length === 0 && !isStreaming ? (
+                <div className="flex h-full flex-col items-center justify-center px-4 py-12">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                    <Sparkles className="h-7 w-7" />
                   </div>
-                  <div className="space-y-4">
-                    <h1 className="text-4xl md:text-5xl font-bold text-foreground leading-tight">
-                      How can I help you today?
-                    </h1>
-                    <p className="text-muted-foreground text-lg leading-relaxed">
-                      Choose from Claude, Grok, Mistral, or Perplexity AI models. Each model offers unique capabilities for your tasks and questions.
-                    </p>
+                  <h1 className="mt-6 text-center text-3xl font-semibold text-foreground">
+                    How can I help you today?
+                  </h1>
+                  <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
+                    {SUGGESTIONS.map((s) => (
+                      <Button
+                        key={s}
+                        variant="outline"
+                        className="h-auto justify-start rounded-xl px-4 py-3 text-left text-sm font-normal"
+                        onClick={() => handleSendMessage(s)}
+                      >
+                        {s}
+                      </Button>
+                    ))}
                   </div>
                 </div>
-              </div>
-            )}
-
-            <div className="min-h-full">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className="animate-in slide-in-from-bottom-2 duration-300"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <ChatMessage
-                    role={message.role}
-                    content={message.content}
-                    model={message.model}
-                  />
-                </div>
-              ))}
-              {isStreaming && (
-                <div className="animate-in slide-in-from-bottom-2 duration-300">
-                  <ChatMessage
-                    role="assistant"
-                    content={streamingContent}
-                    isStreaming
-                    model={selectedModel} // Use selectedModel for streaming content
-                  />
+              ) : (
+                <div className="py-4">
+                  {messages.map((message, index) => (
+                    <ChatMessage
+                      key={index}
+                      role={message.role}
+                      content={message.content}
+                      model={message.model}
+                      image={message.image}
+                      onCopy={handleCopyMessage}
+                      onDelete={() => handleDeleteMessage(index)}
+                    />
+                  ))}
+                  {isStreaming && (
+                    <ChatMessage
+                      role="assistant"
+                      content={streamingContent}
+                      isStreaming
+                      model={selectedModel}
+                    />
+                  )}
                 </div>
               )}
-            </div>
-          </ScrollArea>
-        )}
+            </ScrollArea>
 
-        {isAuthenticated && (
-          <div className="border-t border-border bg-background py-4">
-            <ChatInput
-              key={currentConversationId} // Add key to force re-mount and reset internal state
-              onSend={handleSendMessage}
-              disabled={isStreaming}
-              selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-              currentModelName={currentModel?.name}
-            />
-          </div>
+            <div className="shrink-0 border-t bg-background pt-3">
+              {canRegenerate && (
+                <div className="flex justify-center pb-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    className="gap-2 rounded-full"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Regenerate
+                  </Button>
+                </div>
+              )}
+              <ChatInput
+                key={currentConversationId}
+                onSend={handleSendMessage}
+                onStop={handleStop}
+                onGenerateImage={handleGenerateImage}
+                isGeneratingImage={isGeneratingImage}
+                disabled={isStreaming}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                modelCatalog={modelCatalog}
+              />
+            </div>
+          </>
         )}
       </main>
     </div>

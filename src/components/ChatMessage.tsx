@@ -1,46 +1,119 @@
-import { User, Brain, Wind, Search, MessageSquare, Globe } from "lucide-react"; // Import icons
-import { cn } from "@/lib/utils";
-import { ClaudeLogo } from "./ClaudeLogo"; // Keep ClaudeLogo for now, might replace with dynamic import or component
-import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
+import { Copy, Trash2, Check, Volume2, Square } from "lucide-react";
+import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { checkAuthStatus } from "@/lib/puter";
+import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
+import { useState, useRef } from "react";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
   model?: string;
+  image?: string;
+  onCopy?: (content: string) => void;
+  onDelete?: () => void;
 }
 
-export const ChatMessage = ({ role, content, isStreaming, model }: ChatMessageProps) => {
-  const isUser = role === "user";
+const ALL_MODELS: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
 
-  const allModels: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...OPENROUTER_MODELS];
+export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete }: ChatMessageProps) => {
+  const isUser = role === "user";
+  const [copied, setCopied] = useState(false);
+  const [ttsState, setTtsState] = useState<"idle" | "loading" | "playing">("idle");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { toast } = useToast();
+
+  const speakable = !isUser && stripMarkdownForSpeech(content).trim().length > 0;
+
+  const resetSpeech = () => {
+    audioRef.current = null;
+    setCurrentSpeech(null);
+    setTtsState("idle");
+  };
+
+  const handleSpeak = async () => {
+    if (ttsState === "playing") {
+      // Reset directly: pause() may not fire onpause when nothing is
+      // actually playing (e.g. play() was rejected), so don't rely on it.
+      const audio = audioRef.current;
+      resetSpeech();
+      audio?.pause();
+      return;
+    }
+    if (ttsState === "loading") return;
+    if (!checkAuthStatus()) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to Puter to use read-aloud.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    stopAllSpeech();
+    setTtsState("loading");
+    try {
+      const audio = await synthesizeSpeech(stripMarkdownForSpeech(content));
+      audioRef.current = audio;
+      setCurrentSpeech(audio);
+      audio.onended = resetSpeech;
+      audio.onpause = resetSpeech; // stop() or another message taking over
+      setTtsState("playing");
+      await audio.play();
+    } catch (error) {
+      resetSpeech();
+      toast({
+        title: "Read-aloud failed",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleCopy = async () => {
+    if (onCopy) {
+      onCopy(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const allModels: AIModel[] = ALL_MODELS;
 
   const getModelDisplayName = (modelId?: string) => {
     const foundModel = allModels.find(m => m.id === modelId);
     return foundModel ? foundModel.name : "AI";
   };
 
-  const getModelIcon = (modelId?: string) => {
-    const foundModel = allModels.find(m => m.id === modelId);
-    if (foundModel) {
-      switch (foundModel.type) {
-        case "claude": return <Brain className="w-4 h-4 md:w-5 md:h-5" />;
-        case "mistral": return <Wind className="w-4 h-4 md:w-5 md:h-5" />;
-        case "perplexity": return <Search className="w-4 h-4 md:w-5 md:h-5" />;
-        case "grok": return <MessageSquare className="w-4 h-4 md:w-5 md:h-5" />;
-        case "openrouter": return <Globe className="w-4 h-4 md:w-5 md:h-5" />;
-        default: return <Brain className="w-4 h-4 md:w-5 md:h-5" />;
-      }
-    }
-    return <Brain className="w-4 h-4 md:w-5 md:h-5" />; // Default AI icon
-  };
-
-  // Format content for better display
+  // Minimal markdown renderer for model output.
+  // Model output is untrusted: escape HTML first so a response can never
+  // inject markup/scripts, then apply formatting. Fenced code blocks are
+  // extracted before inline code so backticks inside fences aren't mangled.
   const formatContent = (text: string) => {
     if (!text) return "";
 
-    // Handle markdown formatting with better styling
-    let formatted = text
+    const escapeHtml = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    // Pull fenced code blocks out first, restore at the end.
+    const codeBlocks: string[] = [];
+    let formatted = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code: string) => {
+      codeBlocks.push(
+        `<pre class="bg-muted/50 p-4 rounded-lg text-sm font-mono text-foreground border my-4 overflow-x-auto"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre>`
+      );
+      return `\uE000CODEBLOCK${codeBlocks.length - 1}\uE000`;
+    });
+
+    formatted = escapeHtml(formatted);
+
+    formatted = formatted
       // Headers
       .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold text-foreground mb-3 mt-4 first:mt-0">$1</h3>')
       .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold text-foreground mb-4 mt-5 first:mt-0">$1</h2>')
@@ -48,93 +121,101 @@ export const ChatMessage = ({ role, content, isStreaming, model }: ChatMessagePr
       // Bold text
       .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
       // Italic text
-      .replace(/\*(.*?)\*/g, '<em class="italic text-foreground">$1</em>')
+      .replace(/(^|\W)\*([^*\n]+)\*/g, '$1<em class="italic text-foreground">$2</em>')
       // Inline code
-      .replace(/`(.*?)`/g, '<code class="bg-muted/70 px-2 py-1 rounded-md text-sm font-mono text-foreground border">$1</code>')
-      // Code blocks
-      .replace(/```([\s\S]*?)```/g, '<pre class="bg-muted/50 p-4 rounded-lg text-sm font-mono text-foreground border my-4 overflow-x-auto"><code>$1</code></pre>')
-      // Lists - improved formatting with proper ul/ol tags
-      .replace(/(<li class="mb-2 pl-2">.*<\/li>(?:\s*<li class="mb-2 pl-2">.*<\/li>)*)/g, '<ul class="mb-4">$1</ul>')
-      .replace(/<li class="mb-2 pl-2">• (.*$)<\/li>/gim, '<li class="mb-2">• $1</li>')
-      .replace(/<li class="mb-2 pl-2">(.*$)<\/li>/gim, '<li class="mb-2">$1</li>')
+      .replace(/`([^`\n]+)`/g, '<code class="bg-muted/70 px-2 py-1 rounded-md text-sm font-mono text-foreground border">$1</code>')
+      // Blockquotes
+      .replace(/^&gt; (.*$)/gim, '<blockquote class="border-l-4 border-border pl-4 italic text-muted-foreground mb-4">$1</blockquote>')
+      // Unordered lists
+      .replace(/^\s*[-*] (.*$)/gim, '<li class="mb-2">$1</li>')
+      // Ordered lists
+      .replace(/^\s*\d+\. (.*$)/gim, '<li class="mb-2">$1</li>')
       // Paragraphs
       .replace(/\n\n+/g, '</p><p class="mb-4 leading-relaxed">')
       .replace(/\n/g, '<br>');
 
+    // Wrap loose list items
+    formatted = formatted.replace(/(<li class="mb-2">.*<\/li>(?:\s*<li class="mb-2">.*<\/li>)*)/g, '<ul class="mb-4 list-disc pl-6">$1</ul>');
+
     // Wrap in paragraph if not already wrapped
-    if (!formatted.includes('<p>') && !formatted.includes('<h') && !formatted.includes('<pre>') && !formatted.includes('<li>')) {
+    if (!formatted.includes('<p>') && !formatted.includes('<h') && !formatted.includes('<pre>') && !formatted.includes('<li>') && !formatted.includes('<blockquote')) {
       formatted = `<p class="mb-4 leading-relaxed">${formatted}</p>`;
     }
+
+    // Restore code blocks
+    formatted = formatted.replace(/\uE000CODEBLOCK(\d+)\uE000/g, (_m, i: string) => codeBlocks[Number(i)]);
 
     return formatted;
   };
 
   return (
-    <div
-      className={cn(
-        "w-full py-4 md:py-6 px-3 md:px-4 transition-all duration-300 border-b border-border/50 hover:bg-accent/5",
-        isUser ? "bg-background" : "bg-card/30"
-      )}
-    >
-      <div className="max-w-4xl mx-auto flex gap-3 md:gap-4">
-        <div
-          className={cn(
-            "flex-shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center mt-1 transition-all duration-200 hover:scale-110 shadow-sm",
-            isUser
-              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white"
-              : "bg-gradient-to-br from-orange-400 to-orange-500 text-white"
-          )}
-        >
-          {isUser ? <User className="w-3.5 h-3.5 md:w-4 md:h-4" /> : getModelIcon(model)}
+    <>
+      {isUser ? (
+        <div className="flex justify-end px-4 py-2">
+          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed">
+            {content}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-            <div className="text-sm font-semibold text-foreground">
-              {isUser ? "You" : "AI"}
+      ) : (
+        <div className="group px-4 py-2">
+          <div className="mx-auto max-w-3xl">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              {isStreaming ? "Thinking..." : getModelDisplayName(model)}
             </div>
-            {!isUser && (
-              <div className={cn(
-                "text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full transition-all duration-200",
-                isStreaming && "bg-primary/10 text-primary animate-pulse"
-              )}>
-                {isStreaming ? "Thinking..." : getModelDisplayName(model)}
+            {image && (
+              <img
+                src={image}
+                alt="Generated image"
+                className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover"
+              />
+            )}
+            <div
+              className="break-words text-[15px] leading-relaxed text-foreground"
+              dangerouslySetInnerHTML={{ __html: formatContent(content) }}
+            />
+            {isStreaming && content.length === 0 && (
+              <div className="flex gap-1 py-2">
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
+              </div>
+            )}
+            {!isStreaming && (speakable || onCopy || onDelete) && (
+              <div className="mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                {speakable && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSpeak}
+                    disabled={ttsState === "loading"}
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
+                  >
+                    {ttsState === "loading" ? (
+                      <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    ) : ttsState === "playing" ? (
+                      <Square className="mr-1 h-3 w-3" />
+                    ) : (
+                      <Volume2 className="mr-1 h-3 w-3" />
+                    )}
+                    {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading" : "Read aloud"}
+                  </Button>
+                )}
+                {onCopy && (
+                  <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 text-xs text-muted-foreground">
+                    {copied ? <><Check className="mr-1 h-3 w-3" /> Copied</> : <><Copy className="mr-1 h-3 w-3" /> Copy</>}
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive">
+                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                  </Button>
+                )}
               </div>
             )}
           </div>
-          <div
-            className={cn(
-              "prose prose-sm max-w-none text-foreground/95 leading-relaxed",
-              "prose-headings:text-foreground prose-headings:font-semibold prose-headings:tracking-tight",
-              "prose-p:text-foreground/95 prose-p:leading-relaxed prose-p:mb-4",
-              "prose-strong:text-foreground prose-strong:font-semibold",
-              "prose-em:text-foreground/90 prose-em:italic",
-              "prose-code:text-foreground prose-code:bg-muted/60 prose-code:border prose-code:border-border/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono",
-              "prose-pre:bg-muted/30 prose-pre:border prose-pre:border-border/50 prose-pre:rounded-lg prose-pre:p-4 prose-pre:overflow-x-auto",
-              "prose-li:text-foreground/95 prose-li:leading-relaxed",
-              "prose-ul:space-y-2 prose-ol:space-y-2",
-              "prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground",
-              isStreaming && "animate-pulse"
-            )}
-            style={{
-              wordWrap: "break-word",
-              overflowWrap: "break-word",
-              lineHeight: "1.6"
-            }}
-            dangerouslySetInnerHTML={{
-              __html: isUser ? content : formatContent(content)
-            }}
-          />
-          {isStreaming && (
-            <div className="inline-flex items-center gap-1 mt-2">
-              <div className="flex gap-1">
-                <div className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 };

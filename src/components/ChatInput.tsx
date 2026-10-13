@@ -1,37 +1,47 @@
+import { convertImagesToPNG, needsConversion } from "@/lib/utils/imageConversion";
+import { modelSupportsVision, type ModelCatalog } from "@/lib/models";
 import { useState, useRef } from "react";
-import { Send, Image, X, Plus, SlidersHorizontal, Timer, Upload } from "lucide-react";
+import { ArrowUp, Image, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { ModelSelector } from "./ModelSelector";
 import { useToast } from "@/hooks/use-toast";
-import { uploadFilesToPuter } from "@/lib/utils";
+import { transcribeAudio } from "@/lib/speech";
+import { extractText } from "@/lib/ocr";
+import { checkAuthStatus } from "@/lib/puter";
+
 
 interface ChatInputProps {
   onSend: (message: string, model?: string, images?: File[]) => void;
+  onStop?: () => void;
+  onGenerateImage?: (prompt: string) => Promise<void>;
+  isGeneratingImage?: boolean;
   disabled?: boolean;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
-  currentModelName?: string; // Add prop for current model name
+  modelCatalog?: ModelCatalog | null;
 }
 
-export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, currentModelName }: ChatInputProps) => {
-   const [input, setInput] = useState("");
-   const [selectedImages, setSelectedImages] = useState<File[]>([]);
-   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-   const [isProcessingImages, setIsProcessingImages] = useState(false);
-   const [isUploading, setIsUploading] = useState(false);
-   const fileInputRef = useRef<HTMLInputElement>(null);
-   const { toast } = useToast();
+export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog }: ChatInputProps) => {
+  const [input, setInput] = useState("");
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);  // For attaching images to messages
+  const [showImagePrompt, setShowImagePrompt] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [recordingState, setRecordingState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [ocrIndex, setOcrIndex] = useState<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
     if ((input.trim() || selectedImages.length > 0) && !disabled && !isUploading) {
-      console.log('ChatInput: Sending message with:', {
-        content: input.trim(),
-        model: selectedModel,
-        imagesCount: selectedImages.length,
-        images: selectedImages.map(img => img.name)
-      });
       onSend(input.trim(), selectedModel, selectedImages);
       setInput("");
       clearImages();
@@ -45,17 +55,12 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
     }
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    console.log('📁 ChatInput: Files selected:', files.length);
-    files.forEach((file, index) => {
-      console.log(`  ${index + 1}. ${file.name} (${file.size} bytes, ${file.type})`);
-    });
 
     if (files.length > 0) {
       setIsProcessingImages(true);
       const validFiles = files.filter(file => file.type.startsWith('image/'));
-      console.log(`✅ Valid image files: ${validFiles.length}/${files.length}`);
 
       if (validFiles.length === 0) {
         toast({
@@ -68,25 +73,52 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
         return;
       }
 
-      setSelectedImages(prev => [...prev, ...validFiles].slice(0, 4)); // Max 4 images
+      // Auto-convert unsupported formats (AVIF, HEIC, etc.) to PNG
+      const needsConversionFiles = validFiles.filter(file => needsConversion(file.type));
+
+      let filesToUse = validFiles;
+      if (needsConversionFiles.length > 0) {
+        const formatNames = needsConversionFiles.map(f => f.type.replace('image/', '').toUpperCase()).join(', ');
+        toast({
+          title: "Converting images",
+          description: `Converting ${formatNames} to PNG format...`,
+          duration: 3000,
+        });
+
+        try {
+          filesToUse = await convertImagesToPNG(validFiles);
+          toast({
+            title: "Conversion complete",
+            description: `Successfully converted ${needsConversionFiles.length} image(s) to PNG`,
+            duration: 2000,
+          });
+        } catch (error) {
+          toast({
+            title: "Conversion failed",
+            description: error instanceof Error ? error.message : "Failed to convert images",
+            variant: "destructive",
+            duration: 5000,
+          });
+          setIsProcessingImages(false);
+          return;
+        }
+      }
+
+      setSelectedImages(prev => [...prev, ...filesToUse].slice(0, 4)); // Max 4 images
 
       let processedCount = 0;
-      validFiles.forEach((file, index) => {
-        console.log(`🔄 Processing file ${index + 1}: ${file.name}`);
+      filesToUse.forEach((file, index) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const result = e.target?.result as string;
-          console.log(`✅ File ${file.name} loaded as data URL (${result.length} chars)`);
           setImagePreviews(prev => [...prev, result].slice(0, 4));
           processedCount++;
 
           if (processedCount === validFiles.length) {
             setIsProcessingImages(false);
-            console.log(`✅ All ${validFiles.length} images processed successfully`);
           }
         };
         reader.onerror = () => {
-          console.error(`❌ Failed to read file: ${file.name}`);
           processedCount++;
 
           if (processedCount === validFiles.length) {
@@ -97,9 +129,9 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
       });
     }
 
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    // Reset image input
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
     }
   };
 
@@ -108,180 +140,284 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
     setImagePreviews([]);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    console.log('📁 ChatInput: Files selected for upload:', files.length);
-    files.forEach((file, index) => {
-      console.log(`  ${index + 1}. ${file.name} (${file.size} bytes, ${file.type})`);
-    });
 
-    if (files.length > 0) {
-      setIsUploading(true);
-      try {
-        const result = await uploadFilesToPuter(files);
-
-        // The uploadFilesToPuter function already logs the URLs to console
-        // So we just need to show a success toast
-        toast({
-          title: "Files uploaded successfully",
-          description: `${files.length} file${files.length > 1 ? 's' : ''} uploaded to Puter filesystem.`,
-          duration: 5000,
-        });
-
-      } catch (error: any) {
-        console.error('❌ Upload failed:', error);
-        toast({
-          title: "Upload failed",
-          description: error.message || "Failed to upload files to Puter.",
-          variant: "destructive",
-          duration: 5000,
-        });
-      } finally {
-        setIsUploading(false);
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    }
-  };
 
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  const isPerplexityModel = selectedModel?.startsWith("perplexity");
-  const isGrokModel = selectedModel?.startsWith("x-ai");
+  const transcribeRecording = async (blob: Blob) => {
+    setRecordingState("transcribing");
+    try {
+      const text = await transcribeAudio(blob);
+      setInput((prev) => (prev ? prev + " " : "") + text);
+    } catch (error) {
+      toast({
+        title: "Transcription failed",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setRecordingState("idle");
+    }
+  };
+
+  const toggleRecording = async () => {
+    if (recordingState === "recording") {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    if (recordingState !== "idle") return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast({
+        title: "Voice input unavailable",
+        description: "Microphone access needs a secure context (localhost or HTTPS).",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        void transcribeRecording(new Blob(audioChunksRef.current, { type: recorder.mimeType }));
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecordingState("recording");
+    } catch {
+      toast({
+        title: "Microphone access denied",
+        description: "Allow microphone access to use voice input.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
+
+  const submitImagePrompt = () => {
+    const prompt = imagePrompt.trim();
+    if (!prompt || isGeneratingImage || !onGenerateImage) return;
+    setImagePrompt("");
+    setShowImagePrompt(false);
+    void onGenerateImage(prompt);
+  };
+
+  const extractFromImage = async (index: number) => {
+    const file = selectedImages[index];
+    if (!file || ocrIndex !== null) return;
+    if (!checkAuthStatus()) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to Puter to extract text.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    setOcrIndex(index);
+    try {
+      const text = await extractText(file);
+      setInput((prev) => (prev ? prev + "\n\n" : "") + text);
+      toast({ title: "Text extracted", duration: 2000 });
+    } catch (error) {
+      toast({
+        title: "Text extraction failed",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setOcrIndex(null);
+    }
+  };
+
+  // Vision support comes from the live model catalog (modalities data);
+  // keyword matching is only the offline fallback inside modelSupportsVision.
+  const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-0.5 md:py-1 bg-background border-t border-border">
-
-      <form onSubmit={handleSubmit} className="space-y-2 md:space-y-2">
-        {/* Image Previews - Only show for Perplexity models */}
-        {isPerplexityModel && imagePreviews.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-2">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-2">
+      <form onSubmit={handleSubmit}>
+        {/* Image previews */}
+        {modelSupportsImages && imagePreviews.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
             {imagePreviews.map((preview, index) => (
-              <div key={index} className="relative group">
+              <div key={index} className="group relative">
                 <img
                   src={preview}
                   alt={`Upload ${index + 1}`}
-                  className="w-16 h-16 object-cover rounded-lg border border-border"
+                  className="h-16 w-16 rounded-xl border border-border object-cover"
                 />
                 <Button
                   type="button"
                   size="icon"
+                  variant="secondary"
+                  className="absolute -left-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={() => extractFromImage(index)}
+                  disabled={ocrIndex !== null}
+                  title="Extract text from image"
+                >
+                  {ocrIndex === index ? (
+                    <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <ScanText className="h-3 w-3" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
                   variant="destructive"
-                  className="absolute -top-2 -right-2 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -right-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                   onClick={() => removeImage(index)}
                 >
-                  <X className="w-3 h-3" />
+                  <X className="h-3 w-3" />
                 </Button>
               </div>
             ))}
-            {selectedImages.length >= 4 && (
-              <div className="w-16 h-16 rounded-lg border border-border bg-muted flex items-center justify-center">
-                <span className="text-xs text-muted-foreground">Max 4</span>
-              </div>
-            )}
           </div>
         )}
 
-        <div className="relative flex flex-col gap-0.5 bg-card border border-border rounded-2xl shadow-sm focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200 hover:shadow-lg p-0.5 md:p-1">
-          <div className="flex-1">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                selectedModel?.startsWith("claude")
-                  ? "Message Claude..."
-                  : selectedModel?.startsWith("mistral")
-                  ? "Message Mistral AI..."
-                  : selectedModel?.startsWith("x-ai")
-                  ? "Message Grok..."
-                  : "How can I help you today?"
-              }
-              disabled={disabled}
-              className="w-full min-h-[28px] md:min-h-[36px] max-h-[120px] resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-2 md:px-2 py-0.5 md:py-0.5 text-sm md:text-[15px] placeholder:text-muted-foreground/70 leading-relaxed"
+        {showImagePrompt && onGenerateImage && (
+          <div className="mb-2 flex items-center gap-2">
+            <Input
+              value={imagePrompt}
+              onChange={(e) => setImagePrompt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitImagePrompt(); } }}
+              placeholder="Describe the image to generate..."
+              disabled={isGeneratingImage}
+              className="h-9"
+              autoFocus
             />
+            <Button
+              type="button"
+              size="sm"
+              onClick={submitImagePrompt}
+              disabled={!imagePrompt.trim() || isGeneratingImage}
+              className="shrink-0"
+            >
+              {isGeneratingImage ? (
+                <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+              ) : (
+                "Generate"
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowImagePrompt(false)}
+              disabled={isGeneratingImage}
+              className="shrink-0"
+            >
+              Cancel
+            </Button>
           </div>
+        )}
 
-          <div className="flex items-center justify-between px-1 md:px-1">
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || isUploading}
-                title="Upload files to Puter"
-              >
-                {isUploading ? (
-                  <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Upload className="w-3.5 h-3.5" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
-                disabled={disabled}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
-                disabled={disabled}
-              >
-                <Timer className="w-3.5 h-3.5" />
-              </Button>
-
-              {isPerplexityModel && (
+        <div className="rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={modelSupportsImages ? "Message (images supported)..." : "Message AI Chat..."}
+            disabled={disabled}
+            rows={1}
+            className="max-h-[200px] min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+          <div className="flex items-center justify-between px-3 pb-3">
+            <div className="flex items-center gap-1">
+              {onGenerateImage && (
                 <Button
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-5 w-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={disabled || selectedImages.length >= 4}
+                  className="h-8 w-8 rounded-full text-muted-foreground"
+                  onClick={() => setShowImagePrompt((v) => !v)}
+                  disabled={disabled || isGeneratingImage}
+                  title="Generate image"
                 >
-                  <Image className="w-3.5 h-3.5" />
+                  {isGeneratingImage ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
                 </Button>
               )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {onModelChange && (
-                <div className="flex-shrink-0">
-                  <ModelSelector
-                    selectedModel={selectedModel || "claude-sonnet-4"}
-                    onModelChange={onModelChange}
-                  />
-                </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 rounded-full text-muted-foreground"
+                onClick={toggleRecording}
+                disabled={disabled || recordingState === "transcribing"}
+                title={recordingState === "recording" ? "Stop recording" : "Voice input"}
+              >
+                {recordingState === "transcribing" ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+                ) : (
+                  <Mic className={"h-4 w-4" + (recordingState === "recording" ? " text-red-500 animate-pulse" : "")} />
+                )}
+              </Button>
+              {modelSupportsImages && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-full text-muted-foreground"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={disabled || selectedImages.length >= 4 || isProcessingImages}
+                  title="Attach images"
+                >
+                  {isProcessingImages ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <Image className="h-4 w-4" />
+                  )}
+                </Button>
               )}
+              {onModelChange && (
+                <ModelSelector
+                  selectedModel={selectedModel || "gpt-5.4-nano"}
+                  onModelChange={onModelChange}
+                />
+              )}
+            </div>
+            {disabled && onStop ? (
+              <Button
+                type="button"
+                size="icon"
+                onClick={onStop}
+                className="h-9 w-9 rounded-full"
+                title="Stop generating"
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
               <Button
                 type="submit"
                 size="icon"
                 disabled={(!input.trim() && selectedImages.length === 0) || disabled}
-                className="rounded-xl bg-primary hover:bg-primary/90 h-6 w-6 md:h-6 md:w-6 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 disabled:hover:scale-100"
+                className="h-9 w-9 rounded-full"
+                title="Send message"
               >
-                <Send className="w-3 h-3" />
+                <ArrowUp className="h-4 w-4" />
               </Button>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Hidden File Input */}
-        {isPerplexityModel && (
+        {modelSupportsImages && (
           <input
-            ref={fileInputRef}
+            ref={imageInputRef}
             type="file"
             accept="image/*"
             multiple
@@ -290,30 +426,9 @@ export const ChatInput = ({ onSend, disabled, selectedModel, onModelChange, curr
           />
         )}
 
-        {/* Hidden File Upload Input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileUpload}
-        />
-
-        <div className="text-xs text-center text-muted-foreground/80 mt-4 px-2 flex items-center justify-center gap-1">
-          {currentModelName && (
-            <span className="font-medium text-foreground/90">{currentModelName}:</span>
-          )}
-          <span>
-            {selectedModel?.startsWith("claude")
-              ? "Claude can make mistakes. Consider checking important information."
-              : selectedModel?.startsWith("mistral")
-              ? "Mistral AI can make mistakes. Consider checking important information."
-              : selectedModel?.startsWith("x-ai")
-              ? "Grok can make mistakes. Consider checking important information."
-              : "Perplexity AI provides research-oriented responses. Images supported for analysis."
-            }
-          </span>
-        </div>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          AI can make mistakes. Check important info.
+        </p>
       </form>
     </div>
   );
