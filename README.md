@@ -67,6 +67,18 @@ npm run preview    # serve the production build locally
 npm run lint
 ```
 
+### Tests
+```bash
+bun test         # 82 unit tests in tests/ (bun's test runner)
+```
+
+The suite covers the pure library modules with a mocked `puter` SDK and an
+in-memory `localStorage` shim (`tests/helpers.ts`): sync merge/tombstones/
+push behavior (`sync.test.ts`), markdown-to-speech and the TTS char limit
+(`tts.test.ts`), image generation + transcription (`media.test.ts`), the live
+model catalog (`models.test.ts`), credits/profile/OCR (`account.test.ts`),
+and Drive saves (`drive.test.ts`).
+
 ---
 
 ## Usage

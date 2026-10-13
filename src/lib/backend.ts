@@ -209,9 +209,7 @@ export async function getCurrentUser(): Promise<BackendUser | null> {
 export async function signIn(): Promise<SignInResult> {
   const sdk = getSDK();
   if (!sdk?.auth?.signIn) throw new Error("Sign-in is not available");
-  // Guest onboarding: Puter auto-creates a temporary user, no sign-up form.
-  // The user can convert to a full account later.
-  return sdk.auth.signIn({ attempt_temp_user_creation: true });
+  return sdk.auth.signIn();
 }
 
 /** Signs out. Per docs this returns nothing (fire-and-forget). */

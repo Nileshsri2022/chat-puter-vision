@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, Atom, ChevronDown } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown } from "lucide-react";
 import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,17 @@ interface ChatMessageProps {
 }
 
 const ALL_MODELS: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
+
+/** Sparkle-in-rounded-square glyph for the thinking section, DeepSeek-style. */
+const ThoughtIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="5.5" stroke="currentColor" strokeWidth="1.8" />
+    <path
+      d="M12 7.2l1.7 4.1 4.1 1.7-4.1 1.7-1.7 4.1-1.7-4.1-4.1-1.7 4.1-1.7z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete }: ChatMessageProps) => {
   const isUser = role === "user";
@@ -259,7 +270,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                   onClick={() => setShowThinking((v) => !v)}
                   className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <Atom className="h-4 w-4 text-blue-500" />
+                  <ThoughtIcon className="h-4 w-4 text-blue-500" />
                   {thinkingOpen
                     ? "Thinking…"
                     : thinkSecs !== null

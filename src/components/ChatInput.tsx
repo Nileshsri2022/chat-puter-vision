@@ -426,9 +426,6 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
           />
         )}
 
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          AI can make mistakes. Check important info.
-        </p>
       </form>
     </div>
   );
