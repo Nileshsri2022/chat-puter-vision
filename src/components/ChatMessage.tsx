@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
+import { modelDisplayName } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -32,7 +32,6 @@ interface ChatMessageProps {
   onRetry?: () => void;
 }
 
-const ALL_MODELS: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
 
 /** Sparkle-in-rounded-square glyph for the thinking section, DeepSeek-style. */
 const ThoughtIcon = ({ className }: { className?: string }) => (
@@ -130,12 +129,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     }
   };
 
-  const allModels: AIModel[] = ALL_MODELS;
-
-  const getModelDisplayName = (modelId?: string) => {
-    const foundModel = allModels.find(m => m.id === modelId);
-    return foundModel ? foundModel.name : "AI";
-  };
+  const getModelDisplayName = (modelId?: string) => modelDisplayName(modelId);
 
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a

@@ -22,13 +22,73 @@
   @apply h-3.5 w-3.5 shrink-0;
 }
 
-/* Dropdown menu */
-.ms-menu {
-  @apply w-80 max-w-[calc(100vw-2rem)] p-1;
+/* Modal window */
+.ms-modal-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4;
 }
 
+.ms-modal {
+  @apply flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl;
+}
+
+.ms-modal-header {
+  @apply flex items-center justify-between border-b px-4 py-3;
+}
+
+.ms-modal-title {
+  @apply text-sm font-semibold;
+}
+
+.ms-modal-close {
+  @apply rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground;
+}
+
+.ms-modal-close-icon {
+  @apply h-4 w-4;
+}
+
+/* Provider chips row */
+.ms-provider-row {
+  @apply flex gap-1.5 overflow-x-auto border-b px-3 py-2;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.ms-provider-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.ms-provider-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ms-provider-row::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-border;
+}
+
+.ms-provider-chip {
+  @apply flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground;
+}
+
+.ms-provider-chip .provider-icon {
+  @apply h-3.5 w-3.5;
+}
+
+.ms-provider-chip-active {
+  @apply border-transparent bg-secondary text-foreground;
+}
+
+.ms-provider-chip-label {
+  @apply whitespace-nowrap;
+}
+
+.ms-provider-count {
+  @apply rounded-full bg-muted px-1 text-[10px] text-muted-foreground;
+}
+
+/* Search */
 .ms-search-wrap {
-  @apply p-1;
+  @apply p-3 pb-1;
 }
 
 .ms-search-relative {
@@ -40,24 +100,25 @@
 }
 
 .ms-search-input {
-  @apply h-8 pl-8;
+  @apply h-9 pl-8;
 }
 
-.ms-list {
-  @apply max-h-[300px] overflow-x-hidden overflow-y-auto;
+/* Model list */
+.ms-modal-list {
+  @apply min-h-0 flex-1 overflow-y-auto p-1;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
 
-.ms-list::-webkit-scrollbar {
+.ms-modal-list::-webkit-scrollbar {
   width: 6px;
 }
 
-.ms-list::-webkit-scrollbar-track {
+.ms-modal-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ms-list::-webkit-scrollbar-thumb {
+.ms-modal-list::-webkit-scrollbar-thumb {
   @apply rounded-full bg-border;
 }
 
@@ -65,21 +126,33 @@
   @apply px-2 py-6 text-center text-sm text-muted-foreground;
 }
 
-.ms-group-label {
-  @apply flex items-center gap-2 px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground;
-}
-
 /* Model rows */
 .ms-item {
-  @apply flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-2;
+  @apply flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-2 py-2 text-left hover:bg-accent;
+}
+
+.ms-item-selected {
+  @apply bg-accent;
 }
 
 .ms-item-main {
   @apply flex min-w-0 items-center gap-2;
 }
 
+.ms-item-main .provider-icon {
+  @apply h-4 w-4 shrink-0 text-muted-foreground;
+}
+
+.ms-item-text {
+  @apply flex min-w-0 flex-col;
+}
+
 .ms-item-name {
   @apply truncate text-sm;
+}
+
+.ms-item-id {
+  @apply truncate font-mono text-[10px] text-muted-foreground;
 }
 
 .ms-item-side {

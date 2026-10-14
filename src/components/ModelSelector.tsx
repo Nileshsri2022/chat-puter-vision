@@ -1,17 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check } from "lucide-react";
-import { getModelCatalog, getModelProviders, isModelAvailable, liveProviderForModelId, type ModelCatalog } from "@/lib/models";
+import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, X } from "lucide-react";
+import { PUTER_MODELS_SNAPSHOT, type SnapshotModel } from "@/lib/puterModels.generated";
 import "./ModelSelector.css";
 
 export type ProviderId = "claude" | "mistral" | "perplexity" | "grok" | "openrouter" | "kimi" | "openai";
@@ -508,192 +500,223 @@ export const shortModelName = (name: string): string =>
     .replace(/^[^:]+:\s*/, "")
     .replace(/\s*\((Infron|OpenRouter)\)\s*$/i, "")
     .trim();
+// ---- Two-step model picker: pick a provider, then a model from that
+// provider's full list. Backed by the static snapshot of the live Puter
+// catalog (src/lib/puterModels.generated.ts) — the picker renders instantly,
+// no API call on open. Curated entries keep their badges.
+
+const CURATED: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
+
+const CURATED_BADGE_OF = new Map(CURATED.filter((m) => m.badge).map((m) => [m.id, m.badge as string]));
+const CURATED_NAME_OF = new Map(CURATED.map((m) => [m.id, m.name]));
+
+/** Display name for any model ID: curated short name, else snapshot short name, else "AI". */
+export function modelDisplayName(id?: string): string {
+  if (!id) return "AI";
+  const curated = CURATED_NAME_OF.get(id);
+  if (curated) return shortModelName(curated);
+  const snap = PUTER_MODELS_SNAPSHOT.find((m) => m.id === id);
+  return snap ? shortModelName(snap.name) : "AI";
+}
+
+// Brand labels for snapshot provider keys. Providers sharing a label merge
+// into one group. Unknown keys fall back to a capitalized label + generic icon.
+const LIVE_PROVIDER_BRANDS: Record<string, { label: string; icon: React.ReactNode }> = {
+  "claude": { label: "Claude", icon: <Brain className="provider-icon" /> },
+  "openai-completion": { label: "OpenAI", icon: <Brain className="provider-icon" /> },
+  "openai-responses": { label: "OpenAI", icon: <Brain className="provider-icon" /> },
+  "azure-openai": { label: "Azure OpenAI", icon: <Cpu className="provider-icon" /> },
+  "azure-openai-responses": { label: "Azure OpenAI", icon: <Cpu className="provider-icon" /> },
+  "xai": { label: "Grok", icon: <MessageSquare className="provider-icon" /> },
+  "mistral": { label: "Mistral", icon: <Wind className="provider-icon" /> },
+  "moonshotai": { label: "Kimi", icon: <Brain className="provider-icon" /> },
+  "gemini": { label: "Gemini", icon: <Sparkles className="provider-icon" /> },
+  "deepseek": { label: "DeepSeek", icon: <Brain className="provider-icon" /> },
+  "openrouter": { label: "OpenRouter", icon: <Globe className="provider-icon" /> },
+  "infron": { label: "Infron", icon: <Zap className="provider-icon" /> },
+  "alibaba": { label: "Alibaba", icon: <Bot className="provider-icon" /> },
+  "byteplus": { label: "BytePlus", icon: <Bot className="provider-icon" /> },
+  "minimax": { label: "MiniMax", icon: <Bot className="provider-icon" /> },
+  "together-ai": { label: "Together AI", icon: <Bot className="provider-icon" /> },
+  "zai": { label: "Z.AI", icon: <Bot className="provider-icon" /> },
+};
+
+const brandFor = (providerKey: string): { label: string; icon: React.ReactNode } =>
+  LIVE_PROVIDER_BRANDS[providerKey] ?? {
+    label: providerKey.charAt(0).toUpperCase() + providerKey.slice(1),
+    icon: <Bot className="provider-icon" />,
+  };
+
+interface BrandGroup {
+  label: string;
+  icon: React.ReactNode;
+  models: SnapshotModel[];
+}
+
+/** Snapshot models grouped by brand label: known brands first (in the order
+ *  above), then remaining providers by model count. */
+function brandGroups(): BrandGroup[] {
+  const known = new Map<string, BrandGroup>();
+  const knownOrder: string[] = [];
+  for (const key of Object.keys(LIVE_PROVIDER_BRANDS)) {
+    const b = LIVE_PROVIDER_BRANDS[key];
+    if (!known.has(b.label)) {
+      known.set(b.label, { label: b.label, icon: b.icon, models: [] });
+      knownOrder.push(b.label);
+    }
+  }
+  const extra = new Map<string, BrandGroup>();
+  for (const m of PUTER_MODELS_SNAPSHOT) {
+    const b = brandFor(m.provider);
+    const target = known.get(b.label) ?? (() => {
+      let g = extra.get(b.label);
+      if (!g) {
+        g = { label: b.label, icon: b.icon, models: [] };
+        extra.set(b.label, g);
+      }
+      return g;
+    })();
+    target.models.push(m);
+  }
+  const extras = [...extra.values()]
+    .filter((g) => g.models.length > 0)
+    .sort((a, b2) => b2.models.length - a.models.length);
+  return knownOrder
+    .map((label) => known.get(label)!)
+    .filter((g) => g.models.length > 0)
+    .concat(extras);
+}
 
 export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
-  const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
-  const [providers, setProviders] = useState<string[] | null>(null);
-  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [brand, setBrand] = useState("");
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const groups = useMemo(brandGroups, []);
 
-  // Live catalog: hide models that no longer resolve (IDs rot; the catalog is
-  // the documented source of truth). Offline/unavailable -> show everything.
-  useEffect(() => {
-    getModelCatalog().then((c) => { if (c) setCatalog(c); });
-    getModelProviders().then((p) => { if (p) setProviders(p); });
-  }, []);
-
-  const visible = (models: AIModel[]): AIModel[] => {
-    const q = query.trim().toLowerCase();
-    const byCatalog = catalog ? models.filter((m) => isModelAvailable(m.id, catalog)) : models;
-    return q
-      ? byCatalog.filter((m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
-      : byCatalog;
+  const brandOfModel = (id: string): string => {
+    const m = PUTER_MODELS_SNAPSHOT.find((s) => s.id === id);
+    return m ? brandFor(m.provider).label : "";
   };
 
-  const allModels = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
-  const currentModel = allModels.find((m) => m.id === selectedModel);
-
-  interface ProviderGroup {
-    id: string;
-    name: string;
-    icon: React.ReactNode;
-    models: AIModel[];
-  }
-
-  // Brand labels for live provider keys (verified against the real API
-  // 2026-10-13: gpt-* live under azure-openai(-responses)/openai-completion,
-  // grok-* under xai (some under azure-openai), infron:/openrouter: prefixes
-  // route through infron/openrouter). Variants sharing a label merge into one
-  // group. Unknown keys fall back to a capitalized label + generic icon.
-  const LIVE_PROVIDER_BRANDS: Record<string, { label: string; icon: React.ReactNode }> = {
-    "claude": { label: "Claude", icon: <Brain className="provider-icon" /> },
-    "openai-completion": { label: "OpenAI", icon: <Brain className="provider-icon" /> },
-    "openai-responses": { label: "OpenAI", icon: <Brain className="provider-icon" /> },
-    "azure-openai": { label: "Azure OpenAI", icon: <Cpu className="provider-icon" /> },
-    "azure-openai-responses": { label: "Azure OpenAI", icon: <Cpu className="provider-icon" /> },
-    "xai": { label: "Grok", icon: <MessageSquare className="provider-icon" /> },
-    "mistral": { label: "Mistral", icon: <Wind className="provider-icon" /> },
-    "moonshotai": { label: "Kimi", icon: <Brain className="provider-icon" /> },
-    "gemini": { label: "Gemini", icon: <Sparkles className="provider-icon" /> },
-    "deepseek": { label: "DeepSeek", icon: <Brain className="provider-icon" /> },
-    "openrouter": { label: "OpenRouter", icon: <Globe className="provider-icon" /> },
-    "infron": { label: "Infron", icon: <Zap className="provider-icon" /> },
-    "alibaba": { label: "Alibaba", icon: <Bot className="provider-icon" /> },
-    "byteplus": { label: "BytePlus", icon: <Bot className="provider-icon" /> },
-    "minimax": { label: "MiniMax", icon: <Bot className="provider-icon" /> },
-    "together-ai": { label: "Together AI", icon: <Bot className="provider-icon" /> },
-    "zai": { label: "Z.AI", icon: <Bot className="provider-icon" /> },
-  };
-
-  const brandFor = (liveKey: string): { label: string; icon: React.ReactNode } =>
-    LIVE_PROVIDER_BRANDS[liveKey] ?? {
-      label: liveKey.charAt(0).toUpperCase() + liveKey.slice(1),
-      icon: <Bot className="provider-icon" />,
-    };
-
-  // Live path: group the curated models by their real provider route,
-  // ordered by `puter.ai.listModelProviders()`. Dead IDs vanish via the
-  // providerOf lookup; providers with no curated models are hidden.
-  // Offline path: the hardcoded groups, unchanged behavior.
-  const buildGroups = (): ProviderGroup[] => {
-    if (providers && catalog) {
-      const liveSet = new Set(providers.map((p) => p.toLowerCase()));
-      const order: string[] = [];
-      const byBrand = new Map<string, { label: string; icon: React.ReactNode; models: AIModel[] }>();
-      for (const p of liveSet) {
-        const brand = brandFor(p);
-        if (!byBrand.has(brand.label)) {
-          byBrand.set(brand.label, { label: brand.label, icon: brand.icon, models: [] });
-          order.push(brand.label);
-        }
-      }
-      for (const m of allModels) {
-        const live = liveProviderForModelId(m.id, catalog)?.toLowerCase();
-        if (!live || !liveSet.has(live)) continue;
-        byBrand.get(brandFor(live).label)?.models.push(m);
-      }
-      return order
-        .map((label) => {
-          const b = byBrand.get(label)!;
-          return { id: label, name: b.label, icon: b.icon, models: visible(b.models) };
-        })
-        .filter((g) => g.models.length > 0);
-    }
-    return PROVIDERS.map((p) => ({
-      id: p.id,
-      name: p.name,
-      icon: p.icon,
-      models: visible(getModelsForProvider(p.id)),
-    })).filter((g) => g.models.length > 0);
-  };
-
-  const groups = buildGroups();
-
-  const handleSelect = (modelId: string) => {
-    onModelChange(modelId);
-    setOpen(false);
+  const openPicker = () => {
+    setBrand(brandOfModel(selectedModel) || groups[0]?.label || "");
     setQuery("");
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    searchRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const active = groups.find((g) => g.label === brand) ?? groups[0];
+  const q = query.trim().toLowerCase();
+  const models = active
+    ? q
+      ? active.models.filter((m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
+      : active.models
+    : [];
+
+  const handleSelect = (id: string) => {
+    onModelChange(id);
+    setOpen(false);
   };
 
   return (
-    <DropdownMenu open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery(""); }}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ms-trigger"
-          aria-label={`Selected model: ${currentModel?.name ?? "Select model"}`}
-        >
-          <span className="ms-trigger-label">{currentModel ? shortModelName(currentModel.name) : "Select model"}</span>
-          <ChevronDown className="ms-trigger-chevron" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="ms-menu">
-        <div className="ms-search-wrap">
-          <div className="ms-search-relative">
-            <Search className="ms-search-icon" aria-hidden="true" />
-            <Input
-              id="search-models"
-              name="search"
-              aria-label="Search models"
-              placeholder="Search models…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.stopPropagation()}
-              className="ms-search-input"
-            />
-          </div>
-        </div>
-        <div className="ms-list">
-          {groups.length === 0 && (
-            <div className="ms-empty">
-              No models found
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="ms-trigger"
+        onClick={openPicker}
+        aria-label={`Selected model: ${modelDisplayName(selectedModel)}`}
+        aria-haspopup="dialog"
+      >
+        <span className="ms-trigger-label">{modelDisplayName(selectedModel)}</span>
+        <ChevronDown className="ms-trigger-chevron" aria-hidden="true" />
+      </Button>
+      {open && active && (
+        <div className="ms-modal-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="ms-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Select model"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="ms-modal-header">
+              <span className="ms-modal-title">Select model</span>
+              <button type="button" className="ms-modal-close" onClick={() => setOpen(false)} aria-label="Close">
+                <X className="ms-modal-close-icon" aria-hidden="true" />
+              </button>
             </div>
-          )}
-          {groups.map((g) => (
-            <div key={g.id}>
-              <DropdownMenuLabel className="ms-group-label">
-                {g.icon}
-                {g.name}
-              </DropdownMenuLabel>
-              {g.models.map((model) => (
-                <DropdownMenuItem
-                  key={model.id}
-                  onSelect={() => handleSelect(model.id)}
-                  className="ms-item"
+            <div className="ms-search-wrap">
+              <div className="ms-search-relative">
+                <Search className="ms-search-icon" aria-hidden="true" />
+                <Input
+                  ref={searchRef}
+                  aria-label="Search models"
+                  placeholder={`Search ${active.label} models…`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="ms-search-input"
+                />
+              </div>
+            </div>
+            <div className="ms-provider-row" role="tablist" aria-label="Providers">
+              {groups.map((g) => (
+                <button
+                  key={g.label}
+                  type="button"
+                  role="tab"
+                  aria-selected={g.label === active.label}
+                  className={"ms-provider-chip" + (g.label === active.label ? " ms-provider-chip-active" : "")}
+                  onClick={() => setBrand(g.label)}
+                >
+                  {g.icon}
+                  <span className="ms-provider-chip-label">{g.label}</span>
+                  <span className="ms-provider-count">{g.models.length}</span>
+                </button>
+              ))}
+            </div>
+            <div className="ms-modal-list">
+              {models.length === 0 && (
+                <div className="ms-empty">No models found</div>
+              )}
+              {models.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
+                  onClick={() => handleSelect(m.id)}
                 >
                   <span className="ms-item-main">
-                    {model.icon}
-                    <span className="ms-item-name">{shortModelName(model.name)}</span>
+                    {active.icon}
+                    <span className="ms-item-text">
+                      <span className="ms-item-name">{shortModelName(m.name)}</span>
+                      <span className="ms-item-id">{m.id}</span>
+                    </span>
                   </span>
                   <span className="ms-item-side">
-                    {model.badge && (
+                    {CURATED_BADGE_OF.get(m.id) && (
                       <Badge variant="secondary" className="ms-item-badge">
-                        {model.badge}
+                        {CURATED_BADGE_OF.get(m.id)}
                       </Badge>
                     )}
-                    {model.id === selectedModel && <Check className="ms-item-check" />}
+                    {m.id === selectedModel && <Check className="ms-item-check" aria-hidden="true" />}
                   </span>
-                </DropdownMenuItem>
+                </button>
               ))}
-              <DropdownMenuSeparator />
             </div>
-          ))}
+          </div>
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      )}
+    </>
   );
 };
-
-function getModelsForProvider(provider: ProviderId): AIModel[] {
-  switch (provider) {
-    case "claude": return CLAUDE_MODELS;
-    case "mistral": return MISTRAL_MODELS;
-    case "perplexity": return PERPLEXITY_MODELS;
-    case "grok": return GROK_MODELS;
-    case "kimi": return KIMI_MODELS;
-    case "openai": return OPENAI_MODELS;
-    case "openrouter": return OPENROUTER_MODELS;
-    default: return CLAUDE_MODELS;
-  }
-}
