@@ -1,36 +1,85 @@
 /* Index page styles — extracted from Tailwind utilities. */
 
 .app-root {
-  @apply flex h-screen overflow-hidden bg-background;
+  @apply flex overflow-hidden bg-background;
+  /* 100vh is the viewport with mobile browser chrome *hidden*, so it overflows
+     by roughly the URL-bar height whenever that bar is visible. The dvh
+     declaration tracks the real visible viewport; the vh line is the fallback
+     for browsers without dynamic viewport units. */
+  height: 100vh;
+  height: 100dvh;
 }
 
 .app-main {
   @apply flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-in-out;
+  /* The shell draws edge to edge, so horizontal notch insets (landscape on
+     notched phones) are applied to the content column, not to <body>. */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
+/* The sidebar is docked only at `lg` and up. Between `md` and `lg` — small
+   tablets and landscape phones — a 260px rail would eat a third of the screen,
+   so it stays an overlay there and covers the chat instead of squeezing it. */
 .app-main-sidebar-open {
-  @apply md:ml-[260px];
+  @apply lg:ml-[var(--sidebar-w)];
 }
 
 .app-main-sidebar-closed {
-  @apply md:ml-0;
+  @apply lg:ml-0;
 }
 
 /* Header */
+/* A 3-column grid rather than justify-between: the centre title then occupies
+   the leftover 1fr and truncates, instead of being absolutely positioned and
+   overlapping the icon groups once the buttons plus credit pill exceed the
+   viewport width. */
 .app-header {
-  @apply relative flex h-14 shrink-0 items-center justify-between px-4;
+  @apply grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-4;
+  height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .app-header-title {
-  @apply absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate rounded-full px-3 py-1 text-[15px] font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  @apply min-w-0 truncate rounded-full px-1 py-1 text-center text-[15px] font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3;
 }
 
 .app-header-title-input {
-  @apply absolute left-1/2 w-64 max-w-[60%] -translate-x-1/2 rounded-full border border-blue-500 bg-background px-4 py-1 text-center text-[15px] font-medium outline-none;
+  @apply min-w-0 rounded-full border border-blue-500 bg-background px-4 py-1 text-center text-[15px] font-medium outline-none;
 }
 
 .app-header-group {
-  @apply flex items-center gap-1;
+  @apply flex min-w-0 items-center gap-1;
+}
+
+/* Explicit columns keep the left/right groups pinned to the edges even when the
+   centre title is not rendered (no conversation selected yet). */
+.app-header-group-start {
+  @apply justify-self-start;
+  grid-column: 1;
+}
+
+.app-header-group-end {
+  @apply justify-self-end;
+  grid-column: 3;
+}
+
+.app-header-title,
+.app-header-title-input {
+  grid-column: 2;
+}
+
+/* Export lives in the account menu on phones — see Index.tsx. */
+.app-header-export {
+  @apply hidden sm:inline-flex;
+}
+
+/* Below 360px the header row cannot hold the sidebar / search / new-chat trio
+   plus the credit pill and account controls. Search is the least urgent of the
+   four and is one tap away inside the sidebar itself, so it yields its slot
+   and the conversation title gets the pixels back. */
+.app-header-search-btn {
+  @apply hidden min-[360px]:inline-flex;
 }
 
 .app-header-pill {
@@ -39,7 +88,7 @@
 
 
 .app-icon-btn {
-  @apply size-8;
+  @apply size-8 tap-expand;
 }
 
 .app-header-icon {
@@ -47,7 +96,7 @@
 }
 
 .app-avatar-btn {
-  @apply size-8 rounded-full;
+  @apply size-8 rounded-full tap-expand;
 }
 
 .app-avatar-img {
@@ -67,16 +116,17 @@
 }
 
 /* Welcome / empty states */
+/* Both scroll: on short landscape viewports the card is taller than the pane. */
 .app-welcome {
-  @apply flex h-full items-center justify-center px-4;
+  @apply flex h-full items-center justify-center overflow-y-auto px-4;
 }
 
 .app-welcome-card {
-  @apply max-w-md flex flex-col items-center gap-6 text-center;
+  @apply mx-auto flex max-w-md flex-col items-center gap-6 text-center;
 }
 
 .app-hero-badge {
-  @apply mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground;
+  @apply mx-auto flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground;
 }
 
 .app-hero-icon {
@@ -84,19 +134,21 @@
 }
 
 .app-hero-title {
-  @apply text-3xl font-semibold text-foreground text-balance;
+  @apply font-semibold text-foreground text-balance;
+  font-size: clamp(1.5rem, 7vw, 1.875rem);
 }
 
 .app-welcome-sub {
-  @apply text-muted-foreground;
+  @apply text-muted-foreground text-pretty;
 }
 
 .app-empty {
-  @apply flex h-full flex-col items-center justify-center px-4 py-12;
+  @apply flex h-full flex-col items-center justify-center overflow-y-auto px-4 py-12;
 }
 
 .app-empty-title {
-  @apply mt-6 text-center text-3xl font-semibold text-foreground text-balance;
+  @apply mt-6 text-center font-semibold text-foreground text-balance;
+  font-size: clamp(1.375rem, 6vw, 1.875rem);
 }
 
 .app-suggestions {
@@ -104,12 +156,13 @@
 }
 
 .app-suggestion-btn {
-  @apply h-auto justify-start rounded-xl px-4 py-3 text-left text-sm font-normal;
+  @apply h-auto min-h-11 justify-start rounded-xl px-4 py-3 text-left text-sm font-normal;
 }
 
 /* Messages */
+
 .app-scroll {
-  @apply flex-1 bg-background;
+  @apply min-h-0 flex-1 bg-background;
 }
 
 .app-messages {
@@ -119,4 +172,30 @@
 /* Composer area */
 .app-composer-wrap {
   @apply shrink-0 bg-background pt-3;
+  /* Sits above the iOS home indicator. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Short viewports — landscape phones, split-screen windows. The default
+   vertical rhythm assumes a tall pane and pushes the composer off screen. */
+@media (max-height: 560px) {
+  .app-welcome-card {
+    @apply gap-3;
+  }
+
+  .app-hero-badge {
+    @apply size-10;
+  }
+
+  .app-hero-icon {
+    @apply size-5;
+  }
+
+  .app-suggestions {
+    @apply mt-4;
+  }
+
+  .app-empty {
+    @apply py-4;
+  }
 }

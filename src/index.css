@@ -45,6 +45,10 @@
     --sidebar-accent-foreground: 0 0% 9%;
     --sidebar-border: 0 0% 92%;
     --sidebar-ring: 0 0% 9%;
+
+    /* Single source of truth for the sidebar width. Both the fixed sidebar and
+       the main column's offset read this so they can never desync. */
+    --sidebar-w: 260px;
   }
 
   .dark {
@@ -92,7 +96,88 @@
     @apply border-border;
   }
 
+  /* The app is a fixed-height shell (sidebar + chat column) and both panes
+     scroll internally. Pinning the document to 100% and disabling overflow
+     stops mobile browsers from rubber-banding or pull-to-refreshing the page
+     behind the shell, which would expose a blank strip above the app. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    /* Stop iOS from auto-inflating text in landscape. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* iOS Safari and Chrome paint a grey flash box on every tappable element
+     otherwise, which is very visible on the dark chat background. */
+  button,
+  a,
+  [role="button"],
+  [role="tab"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Keyboard focus rings should not draw a hard black outline on iOS. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+@layer components {
+  /* Expands a control's hit area to at least --tap-size (44px, the iOS HIG
+     minimum) without changing its painted size. Needed because the icon-only
+     buttons in this app are 28–32px, which is below the threshold where touch
+     input starts aiming at the wrong control. Applied only on coarse pointers
+     so desktop keeps its compact density. */
+  .tap-expand {
+    position: relative;
+  }
+
+  @media (pointer: coarse) {
+    .tap-expand::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, var(--tap-size, 44px));
+      height: max(100%, var(--tap-size, 44px));
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbars are desktop affordances: on touch they cost 10px of an
+     already narrow column and cannot be dragged usefully anyway. */
+  @media (pointer: coarse) {
+    .scroll-area-bar {
+      display: none;
+    }
+  }
+
+  /* Safe-area helpers. The shell draws edge to edge, so notch and home-bar
+     insets have to be applied per region rather than once on <body>. */
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
   }
 }

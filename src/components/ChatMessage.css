@@ -10,7 +10,15 @@
 }
 
 .msg-user-bubble {
-  @apply max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed;
+  @apply whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed;
+  /* A near-full-width bubble reads better than an 85% one on a phone. */
+  max-width: 92%;
+}
+
+@media (min-width: 640px) {
+  .msg-user-bubble {
+    max-width: 85%;
+  }
 }
 
 .msg-user-actions {
@@ -30,15 +38,20 @@
 }
 
 .msg-image {
-  @apply mb-3 max-h-64 w-auto cursor-zoom-in rounded-xl border border-border object-cover transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  @apply mb-3 w-auto max-w-full cursor-zoom-in rounded-xl border border-border object-cover transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  /* Never taller than a fraction of the visible viewport. */
+  max-height: 16rem;
+  max-height: min(16rem, 40dvh);
 }
 
 .msg-lightbox {
   @apply fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4;
+  /* 90dvh, not 90vh: the vh unit measures the chrome-hidden viewport and would
+     push the top of the image under the browser UI. */
 }
 
 .msg-lightbox-img {
-  @apply max-h-[90vh] max-w-[90vw] cursor-default rounded-xl object-contain shadow-2xl;
+  @apply max-h-[90vh] max-h-[90dvh] max-w-[90vw] cursor-default rounded-xl object-contain shadow-2xl;
 }
 
 /* Thinking section */
@@ -86,11 +99,11 @@
 }
 
 .msg-action-btn {
-  @apply size-7 p-0 text-muted-foreground;
+  @apply size-7 p-0 text-muted-foreground tap-expand;
 }
 
 .msg-action-btn-danger {
-  @apply size-7 p-0 text-muted-foreground hover:text-destructive;
+  @apply size-7 p-0 text-muted-foreground tap-expand hover:text-destructive;
 }
 
 .msg-action-spinner {
@@ -110,8 +123,21 @@
   @apply overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm text-foreground;
 }
 
+/* Code copy is hover-only by default, which makes it unreachable on touch.
+   Visible everywhere; hover-reveal is re-applied for fine pointers only. */
 .msg-codeblock-copy {
-  @apply absolute right-2 top-2 size-7 opacity-0 transition-opacity group-hover/code:opacity-100;
+  @apply absolute right-2 top-2 size-7 opacity-100 transition-opacity tap-expand;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .msg-codeblock-copy {
+    opacity: 0;
+  }
+
+  .group\/code:hover .msg-codeblock-copy,
+  .msg-codeblock-copy:focus-visible {
+    opacity: 1;
+  }
 }
 
 .msg-codeblock-copy-icon {

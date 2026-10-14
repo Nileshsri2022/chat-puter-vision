@@ -5,7 +5,7 @@
 }
 
 .composer-form {
-  @apply flex flex-col gap-2;
+  @apply flex min-w-0 flex-col gap-2;
 }
 
 /* Image previews */
@@ -21,12 +21,34 @@
   @apply size-16 rounded-xl border border-border object-cover;
 }
 
+/* These two gate OCR and image removal. They were hover-only, which left no way
+   to remove an attachment or scan it on a touch device. Always visible there. */
+.composer-preview-ocr,
+.composer-preview-remove {
+  @apply absolute size-6 tap-expand transition-opacity;
+  --tap-size: 32px;
+}
+
 .composer-preview-ocr {
-  @apply absolute -left-2 -top-2 size-6 opacity-0 transition-opacity group-hover:opacity-100;
+  @apply -left-2 -top-2;
 }
 
 .composer-preview-remove {
-  @apply absolute -right-2 -top-2 size-6 opacity-0 transition-opacity group-hover:opacity-100;
+  @apply -right-2 -top-2;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .composer-preview-ocr,
+  .composer-preview-remove {
+    opacity: 0;
+  }
+
+  .group:hover .composer-preview-ocr,
+  .group:hover .composer-preview-remove,
+  .composer-preview-ocr:focus-visible,
+  .composer-preview-remove:focus-visible {
+    opacity: 1;
+  }
 }
 
 .composer-mini-spinner {
@@ -38,12 +60,13 @@
 }
 
 /* Image generation prompt row */
+/* Wraps rather than overflowing: input + Generate + Cancel exceed 320px. */
 .composer-imgprompt {
-  @apply flex items-center gap-2;
+  @apply flex flex-wrap items-center gap-2;
 }
 
 .composer-imgprompt-input {
-  @apply h-9;
+  @apply h-9 min-w-[7.5rem] flex-1;
 }
 
 .composer-shrink {
@@ -60,7 +83,21 @@
 }
 
 .composer-textarea {
-  @apply max-h-[200px] min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0;
+  @apply min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0;
+  /* 16px on phones. iOS Safari auto-zooms the page on focus for any field
+     under 16px and leaves it zoomed after blur. The desktop value is restored
+     at `sm` where the smaller type costs nothing. */
+  font-size: 1rem;
+  /* Capped against the *visible* viewport: a fixed 200px is over half of a
+     landscape phone's height and buries the conversation. */
+  max-height: 200px;
+  max-height: min(200px, 34dvh);
+}
+
+@media (min-width: 640px) {
+  .composer-textarea {
+    font-size: 15px;
+  }
 }
 
 /* Compact (inline edit) variant */
@@ -69,7 +106,9 @@
 }
 
 .composer-textarea-compact {
-  @apply max-h-[120px] min-h-[40px] pt-3;
+  @apply min-h-[40px] pt-3;
+  max-height: 120px;
+  max-height: min(120px, 24dvh);
 }
 
 .composer-cancel-btn {
@@ -77,19 +116,20 @@
 }
 
 .composer-toolbar {
-  @apply flex items-center justify-between px-3 pb-3;
+  @apply flex items-center justify-between gap-2 px-3 pb-3;
 }
 
 .composer-tools {
-  @apply flex items-center gap-1;
+  @apply flex min-w-0 items-center gap-1;
 }
 
+/* Never let the send/stop control get squeezed off the right edge. */
 .composer-send-group {
-  @apply flex items-center gap-1;
+  @apply flex shrink-0 items-center gap-1;
 }
 
 .composer-tool-btn {
-  @apply size-8 rounded-full text-muted-foreground;
+  @apply size-8 rounded-full text-muted-foreground tap-expand;
 }
 
 .composer-tool-icon {
@@ -101,7 +141,7 @@
 }
 
 .composer-send-btn {
-  @apply size-9 rounded-full;
+  @apply size-9 rounded-full tap-expand;
 }
 
 .composer-hidden-input {

@@ -40,7 +40,7 @@ export const CreditPill = () => {
       aria-label={`${formatCredits(balance.remaining)} of ${formatCredits(balance.allowance)} monthly credit remaining`}
     >
       <Zap className="credit-pill-icon" aria-hidden="true" />
-      {formatCredits(balance.remaining)}
+      <span className="credit-pill-value">{formatCredits(balance.remaining)}</span>
     </div>
   );
 };

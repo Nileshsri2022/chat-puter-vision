@@ -1,11 +1,25 @@
 /* ErrorBoundary styles — extracted from Tailwind utilities. */
 
 .error-fallback-page {
-  @apply min-h-screen flex items-center justify-center p-4 bg-background;
+  @apply flex items-center justify-center overflow-y-auto bg-background p-4;
+  /* dvh rather than vh so the card is never clipped by mobile browser UI, and
+     scrolling keeps a long stack trace reachable on a short screen. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 }
 
 .error-fallback-card {
-  @apply max-w-md w-full text-center flex flex-col items-center gap-6;
+  @apply mx-auto flex w-full max-w-md flex-col items-center gap-6 text-center;
+}
+
+.error-fallback-heading-group {
+  @apply flex flex-col gap-2;
+}
+
+.error-fallback-actions {
+  @apply flex flex-wrap justify-center gap-3;
 }
 
 .error-fallback-icon-wrap {
@@ -14,10 +28,6 @@
 
 .error-fallback-icon {
   @apply size-8;
-}
-
-.error-fallback-heading-group {
-  @apply flex flex-col gap-2;
 }
 
 .error-fallback-title {
@@ -37,11 +47,7 @@
 }
 
 .error-fallback-pre {
-  @apply text-xs text-muted-foreground overflow-auto;
-}
-
-.error-fallback-actions {
-  @apply flex gap-3 justify-center;
+  @apply overflow-auto text-xs text-muted-foreground;
 }
 
 .error-fallback-retry-icon {
