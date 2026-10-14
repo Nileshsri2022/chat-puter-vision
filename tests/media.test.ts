@@ -16,7 +16,8 @@ test("generateImage saves to a Puter path and resolves it", async () => {
     },
   });
   const path = await generateImage("a sunset");
-  expect(path).toMatch(/^~\/freetalk-[\w-]+\.png$/);
+  expect(path).toMatch(/^freetalk-[\w-]+\.png$/);
+  expect(path).not.toMatch(/^~/);
   expect(options?.puter_output_path).toBe(path);
 });
 
