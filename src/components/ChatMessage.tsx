@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Paperclip } from "lucide-react";
 import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +19,7 @@ interface ChatMessageProps {
   image?: string;
   onCopy?: (content: string) => void;
   onDelete?: () => void;
+  onEdit?: (content: string) => void;
 }
 
 const ALL_MODELS: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
@@ -34,9 +35,12 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState("");
+  const editFileRef = useRef<HTMLInputElement>(null);
   const [ttsState, setTtsState] = useState<"idle" | "loading" | "playing">("idle");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
@@ -108,6 +112,12 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     }
   }, [thinking, thinkingOpen]);
   const [showThinking, setShowThinking] = useState(true);
+
+  const submitEdit = () => {
+    const clean = editDraft.trim();
+    if (onEdit && clean) onEdit(clean);
+    setEditing(false);
+  };
 
   const handleCopy = async () => {
     if (onCopy) {
@@ -247,10 +257,110 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
   return (
     <>
       {isUser ? (
-        <div className="msg-user-row">
-          <div className="msg-user-bubble">
-            {content}
-          </div>
+        <div className="msg-user-col">
+          {editing ? (
+            <div className="msg-edit-wrap">
+              <textarea
+                className="msg-edit-input"
+                value={editDraft}
+                onChange={(e) => setEditDraft(e.target.value)}
+                rows={3}
+                autoFocus
+                aria-label="Edit message"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submitEdit();
+                  } else if (e.key === "Escape") {
+                    setEditing(false);
+                  }
+                }}
+              />
+              <div className="msg-edit-actions">
+                <input
+                  ref={editFileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onChange={(e) => {
+                    const n = e.target.files?.length ?? 0;
+                    if (n > 0) {
+                      setEditDraft((d) => `${d}${d ? "\n\n" : ""}[Images: ${n} attached]`);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="msg-action-btn"
+                  title="Attach images"
+                  aria-label="Attach images"
+                  onClick={() => editFileRef.current?.click()}
+                >
+                  <Paperclip className="msg-action-icon" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="msg-edit-cancel"
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="msg-edit-send"
+                  onClick={submitEdit}
+                  disabled={!editDraft.trim()}
+                >
+                  Send
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="msg-user-row">
+                <div className="msg-user-bubble">
+                  {content}
+                </div>
+              </div>
+              {(onCopy || onEdit) && (
+                <div className="msg-user-actions">
+                  {onCopy && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCopy}
+                      className="msg-action-btn"
+                      title="Copy message"
+                      aria-label="Copy message"
+                    >
+                      <Copy className="msg-action-icon" aria-hidden="true" />
+                    </Button>
+                  )}
+                  {onEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setEditDraft(content);
+                        setEditing(true);
+                      }}
+                      className="msg-action-btn"
+                      title="Edit message"
+                      aria-label="Edit message"
+                    >
+                      <Pencil className="msg-action-icon" aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       ) : (
         <div className="msg-row group">

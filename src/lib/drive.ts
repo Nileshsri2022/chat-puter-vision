@@ -1,11 +1,11 @@
 // Save conversations to the user's Drive via puter.fs.write.
 // Docs: https://docs.puter.com/FS/write/ (read 2026-10-13).
 //
-// Writes "<title>.md" into an "AI Chat Exports" folder. dedupeName keeps
+// Writes "<title>.md" into a "FreeTalk Exports" folder. dedupeName keeps
 // repeat saves instead of overwriting; createMissingParents creates the
 // folder on first use.
 
-const EXPORTS_DIR = "AI Chat Exports";
+const EXPORTS_DIR = "FreeTalk Exports";
 
 /** Filesystem-safe "<title>.md", matching the local-export naming. */
 export function sanitizeFilename(title: string): string {

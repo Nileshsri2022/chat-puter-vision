@@ -49,7 +49,7 @@
 }
 
 .sidebar-newchat-btn {
-  @apply w-full justify-start gap-2 rounded-lg h-10 font-medium;
+  @apply w-full justify-center gap-2 rounded-full h-11 font-medium bg-sidebar-accent hover:bg-sidebar-accent/70 text-sidebar-foreground border border-sidebar-border;
 }
 
 .sidebar-newchat-icon {
@@ -116,26 +116,88 @@
   @apply flex-1 min-w-0 flex items-center gap-2.5 text-left py-1 px-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
 }
 
-.conv-row-icon {
-  @apply w-4 h-4 shrink-0 opacity-60;
+.conv-row-selected {
+  @apply bg-sidebar-accent;
 }
 
 .conv-row-title {
   @apply truncate;
 }
 
-.conv-row-delete-wrap {
-  @apply shrink-0 ml-1;
+.conv-pin-icon {
+  @apply w-3.5 h-3.5 shrink-0 opacity-60;
 }
 
-.conv-row-confirm-btn {
-  @apply h-7 px-2 text-xs font-medium text-red-600 hover:text-red-600 focus-visible:ring-2;
+.conv-rename-input {
+  @apply min-w-0 flex-1 rounded-md border border-ring bg-background px-2 py-1 text-sm outline-none;
 }
 
-.conv-row-delete-btn {
-  @apply h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100;
+/* Row "..." menu */
+.conv-row-menu-wrap {
+  @apply relative shrink-0 ml-1;
 }
 
-.conv-row-delete-icon {
-  @apply w-3.5 h-3.5;
+.conv-row-menu-btn {
+  @apply h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100;
+}
+
+.conv-row-menu-icon {
+  @apply w-4 h-4;
+}
+
+.conv-menu-scrim {
+  @apply fixed inset-0 z-40;
+}
+
+.conv-menu {
+  @apply absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-popover p-1.5 shadow-xl;
+}
+
+.conv-menu-item {
+  @apply flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-popover-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.conv-menu-icon {
+  @apply w-4 h-4 shrink-0 opacity-70;
+}
+
+.conv-menu-item-danger {
+  @apply text-red-500 hover:text-red-500;
+}
+
+.conv-menu-item-confirm {
+  @apply text-red-500 hover:text-red-500 font-medium;
+}
+
+/* Multi-select mode */
+.conv-check {
+  @apply flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground;
+}
+
+.conv-check-on {
+  @apply border-primary bg-primary;
+}
+
+.sidebar-select-head {
+  @apply flex items-center justify-between px-4 py-3 border-b border-sidebar-border;
+}
+
+.sidebar-select-title {
+  @apply font-semibold text-sidebar-foreground;
+}
+
+.sidebar-select-bar {
+  @apply flex items-center justify-around border-t border-sidebar-border px-3 py-2;
+}
+
+.sidebar-select-action {
+  @apply flex-1 gap-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-40;
+}
+
+.sidebar-select-action-icon {
+  @apply w-4 h-4;
+}
+
+.sidebar-select-action-confirm {
+  @apply text-red-500 hover:text-red-500 font-medium;
 }

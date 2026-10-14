@@ -337,7 +337,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={modelSupportsImages ? "Message (images supported)…" : "Message AI Chat…"}
+            placeholder={modelSupportsImages ? "Message (images supported)…" : "Message FreeTalk…"}
             disabled={disabled}
             rows={1}
             className="composer-textarea"

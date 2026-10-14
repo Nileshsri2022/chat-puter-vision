@@ -1,12 +1,41 @@
 /* ChatMessage styles — extracted from Tailwind utilities. */
 
 /* Message layout */
+.msg-user-col {
+  @apply mx-auto w-full max-w-3xl px-4 py-2;
+}
+
 .msg-user-row {
-  @apply flex justify-end px-4 py-2;
+  @apply flex justify-end;
 }
 
 .msg-user-bubble {
   @apply max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed;
+}
+
+.msg-user-actions {
+  @apply mt-1 flex justify-end gap-1;
+}
+
+/* Inline edit box (DeepSeek-style) */
+.msg-edit-wrap {
+  @apply w-full rounded-2xl border border-border bg-background p-3;
+}
+
+.msg-edit-input {
+  @apply max-h-64 w-full resize-y bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground;
+}
+
+.msg-edit-actions {
+  @apply mt-2 flex items-center justify-end gap-2;
+}
+
+.msg-edit-cancel {
+  @apply rounded-full;
+}
+
+.msg-edit-send {
+  @apply rounded-full bg-blue-600 text-white hover:bg-blue-500;
 }
 
 .msg-row {

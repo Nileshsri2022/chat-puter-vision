@@ -23,7 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Download, LogOut, CircleUserRound } from "lucide-react";
+import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Download, LogOut, CircleUserRound, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -45,6 +45,8 @@ export interface Conversation {
   messages: Message[];
   /** Epoch ms of last local mutation. Powers KV last-writer-wins merge. */
   updatedAt?: number;
+  /** Pinned conversations sort above time groups in the sidebar. */
+  pinned?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -549,6 +551,63 @@ const Index = () => {
     }
   };
 
+  const handleRenameConversation = (id: string, title: string) => {
+    const clean = title.trim();
+    if (!clean) return;
+    setConversations((prev) =>
+      prev.map((conv) => (conv.id === id ? { ...conv, title: clean } : conv))
+    );
+  };
+
+  const handleTogglePin = (id: string) => {
+    setConversations((prev) =>
+      prev.map((conv) => (conv.id === id ? { ...conv, pinned: !conv.pinned } : conv))
+    );
+  };
+
+  const handleShareConversation = async (id: string) => {
+    const conv = conversationsRef.current.find((c) => c.id === id);
+    if (!conv) return;
+    try {
+      await copyToClipboard(exportAsMarkdown(conv));
+      toast({ title: "Conversation copied", description: "Markdown is on your clipboard.", duration: 3000 });
+    } catch {
+      toast({ title: "Could not copy conversation", variant: "destructive", duration: 3000 });
+    }
+  };
+
+  const handleDeleteConversations = (ids: string[]) => {
+    ids.forEach((id) => recordDelete(id));
+    const remaining = conversationsRef.current.filter((conv) => !ids.includes(conv.id));
+    if (remaining.length === 0) {
+      const newConv: Conversation = {
+        id: Date.now().toString(),
+        title: "New Conversation",
+        timestamp: new Date(),
+        messages: [],
+      };
+      setConversations([newConv]);
+      setCurrentConversationId(newConv.id);
+    } else {
+      setConversations(remaining);
+      if (currentConversationIdRef.current && ids.includes(currentConversationIdRef.current)) {
+        setCurrentConversationId(remaining[0].id);
+      }
+    }
+  };
+
+  const handleEditMessage = (messageIndex: number, newContent: string) => {
+    const clean = newContent.trim();
+    if (!clean) return;
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === currentConversationIdRef.current
+          ? { ...conv, messages: conv.messages.map((m, i) => (i === messageIndex ? { ...m, content: clean } : m)) }
+          : conv
+      )
+    );
+  };
+
   const handleNewConversation = () => {
     const newConv: Conversation = {
       id: Date.now().toString(),
@@ -650,6 +709,10 @@ const Index = () => {
         onSelectConversation={setCurrentConversationId}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
+        onDeleteConversations={handleDeleteConversations}
+        onRenameConversation={handleRenameConversation}
+        onTogglePin={handleTogglePin}
+        onShareConversation={handleShareConversation}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
@@ -660,16 +723,31 @@ const Index = () => {
         <header className="app-header">
           <div className="app-header-group">
             {!sidebarOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="app-icon-btn"
-                onClick={() => setSidebarOpen(true)}
-                title="Open sidebar"
-                aria-label="Open sidebar"
-              >
-                <PanelLeftOpen className="app-header-icon" aria-hidden="true" />
-              </Button>
+              <div className="app-header-pill">
+                <span className="app-header-pill-logo">
+                  <Sparkles className="app-header-pill-logo-icon" aria-hidden="true" />
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-icon-btn"
+                  onClick={() => setSidebarOpen(true)}
+                  title="Open sidebar"
+                  aria-label="Open sidebar"
+                >
+                  <PanelLeftOpen className="app-header-icon" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-icon-btn"
+                  onClick={handleNewConversation}
+                  title="New chat"
+                  aria-label="New chat"
+                >
+                  <Plus className="app-header-icon" aria-hidden="true" />
+                </Button>
+              </div>
             )}
             {isAuthenticated && (
               <DropdownMenu>
@@ -693,6 +771,11 @@ const Index = () => {
               </DropdownMenu>
             )}
           </div>
+          {currentConversation && (
+            <div className="app-header-title" title={currentConversation.title}>
+              {currentConversation.title}
+            </div>
+          )}
           <div className="app-header-group">
             {isAuthenticated && <CreditPill />}
             <ThemeToggle />
@@ -739,7 +822,7 @@ const Index = () => {
                 <Sparkles className="app-hero-icon" aria-hidden="true" />
               </div>
               <h1 className="app-hero-title">
-                Welcome to AI Chat
+                Welcome to FreeTalk
               </h1>
               <p className="app-welcome-sub">
                 Sign in to start chatting with AI models.
@@ -782,6 +865,7 @@ const Index = () => {
                       image={message.image}
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
+                      onEdit={message.role === "user" ? (content) => handleEditMessage(index, content) : undefined}
                     />
                   ))}
                   {isStreaming && (
