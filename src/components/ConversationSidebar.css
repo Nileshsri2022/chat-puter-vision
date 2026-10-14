@@ -182,6 +182,51 @@
   @apply text-red-500 hover:text-red-500 font-medium;
 }
 
+/* Account footer — last child of the flex column, so it stays pinned to the
+   bottom of the rail while the conversation list scrolls above it. */
+.sidebar-footer {
+  @apply shrink-0 border-t border-sidebar-border px-3 pt-3;
+  /* Clears the home indicator on phones. */
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+.sidebar-account-btn {
+  @apply flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring tap-expand;
+  --tap-size: 44px;
+}
+
+.sidebar-account-img {
+  @apply size-7 shrink-0 rounded-full object-cover;
+}
+
+.sidebar-account-avatar {
+  @apply flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-muted-foreground;
+}
+
+.sidebar-account-avatar-icon {
+  @apply size-4;
+}
+
+.sidebar-account-name {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.sidebar-account-chevron {
+  @apply size-4 shrink-0 text-muted-foreground;
+}
+
+.sidebar-account-menu {
+  @apply min-w-56;
+}
+
+.sidebar-account-label {
+  @apply max-w-56 truncate;
+}
+
+.sidebar-account-menu-icon {
+  @apply size-4;
+}
+
 /* Multi-select mode */
 .conv-check {
   @apply flex size-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground;

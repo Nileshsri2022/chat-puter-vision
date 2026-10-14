@@ -134,13 +134,43 @@ test("header uses a truncating grid instead of an absolutely centred title", () 
 
 test("the header sheds secondary actions before it can overflow", () => {
   const css = read("pages/Index.css");
-  // Export moves to the account menu, and search yields below 360px.
-  expect(css).toContain(".app-header-export");
+  // Search still yields below 360px...
   expect(css).toContain(".app-header-search-btn");
-  // ...and those actions must still exist somewhere on mobile.
+  // ...but export can no longer hide behind the account menu, which moved out
+  // of the header entirely — it must survive every width on its own.
+  const exportRule = /\.app-header-export\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(exportRule).toContain("inline-flex");
+  expect(exportRule).not.toContain("hidden");
+  expect(read("pages/Index.tsx")).toContain("Export as Markdown");
+});
+
+test("the account menu lives in the sidebar, not the header", () => {
   const page = read("pages/Index.tsx");
-  expect(page).toContain("sm:hidden");
-  expect(page).toContain("Export as Markdown");
+  // Sign-out is reachable only from the rail's footer now.
+  expect(page).not.toContain("Sign out");
+  expect(page).toContain("onSignOut={handleSignOut}");
+  const sidebar = read("components/ConversationSidebar.tsx");
+  expect(sidebar).toContain("Sign out");
+  expect(read("components/ConversationSidebar.css")).toContain(".sidebar-footer");
+});
+
+test("export offers Markdown only", () => {
+  for (const file of ["pages/Index.tsx", "components/ChatMessage.tsx"]) {
+    const src = read(file);
+    expect(src).toContain("Export as Markdown");
+    expect(src).not.toContain("Export as JSON");
+    expect(src).not.toContain("Save to Drive");
+  }
+});
+
+test("search targets the open conversation instead of the sidebar", () => {
+  const page = read("pages/Index.tsx");
+  // The header button opens an in-conversation finder...
+  expect(page).toContain("Search in this conversation");
+  // ...and must not be the thing that reveals the rail. (The rail keeps its
+  // own conversation search.)
+  expect(page).not.toContain("search-conversations");
+  expect(read("components/ConversationSidebar.tsx")).toContain("search-conversations");
 });
 
 test("credit pill collapses to its icon on narrow headers", () => {

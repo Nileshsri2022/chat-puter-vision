@@ -32,8 +32,7 @@
 /* Header */
 /* A 3-column grid rather than justify-between: the centre title then occupies
    the leftover 1fr and truncates, instead of being absolutely positioned and
-   overlapping the icon groups once the buttons plus credit pill exceed the
-   viewport width. */
+   overlapping the icon groups once the buttons exceed the viewport width. */
 .app-header {
   @apply grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-4;
   height: calc(3.5rem + env(safe-area-inset-top, 0px));
@@ -69,9 +68,10 @@
   grid-column: 2;
 }
 
-/* Export lives in the account menu on phones — see Index.tsx. */
+/* Export stays in the header at every width: the row carries no credit pill
+   or account menu any more, and this is the only export entry point left. */
 .app-header-export {
-  @apply hidden sm:inline-flex;
+  @apply inline-flex shrink-0;
 }
 
 /* Below 360px the header row cannot hold the sidebar / search / new-chat trio
@@ -82,6 +82,8 @@
   @apply hidden min-[360px]:inline-flex;
 }
 
+/* Groups the rail controls next to the find/search button. With the rail
+   docked it holds that one button, hence the plain `gap-0.5` spacing. */
 .app-header-pill {
   @apply flex items-center gap-0.5 rounded-full border border-border bg-muted/60 py-1 pl-1.5 pr-1;
 }
@@ -95,24 +97,43 @@
   @apply size-4;
 }
 
-.app-avatar-btn {
-  @apply size-8 rounded-full tap-expand;
+/* Find-in-conversation bar. Sits in the transcript column, directly under the
+   header, so results and the field are on screen together. */
+.app-chat-search {
+  @apply flex shrink-0 items-center gap-1 border-b border-border bg-background px-3 py-2 sm:px-4;
 }
 
-.app-avatar-img {
-  @apply size-8 rounded-full object-cover;
+.app-chat-search-icon {
+  @apply size-4 shrink-0 text-muted-foreground;
 }
 
-.app-avatar-fallback-icon {
-  @apply size-5;
+.app-chat-search-input {
+  @apply min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground;
+  /* 16px on phones: anything smaller and iOS zooms the page on focus. */
+  font-size: 1rem;
 }
 
-.app-account-label {
-  @apply max-w-[200px] truncate;
+@media (min-width: 640px) {
+  .app-chat-search-input {
+    font-size: 0.875rem;
+  }
 }
 
-.app-menu-icon {
-  @apply size-4;
+.app-chat-search-status {
+  @apply shrink-0 tabular-nums text-xs text-muted-foreground;
+}
+
+/* In-text hits, painted by the CSS Custom Highlight API (see
+   lib/utils/highlight.ts). Colors are literal: the registry paints outside the
+   cascade, so Tailwind tokens cannot reach it. The active hit registers after
+   the plain hits, so it wins where both apply. */
+::highlight(chat-search-hit) {
+  background-color: hsl(45 100% 55% / 0.45);
+}
+
+::highlight(chat-search-active) {
+  background-color: hsl(32 95% 52%);
+  color: hsl(0 0% 8%);
 }
 
 /* Welcome / empty states */
