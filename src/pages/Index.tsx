@@ -355,6 +355,9 @@ const Index = () => {
     prompt: string;
     modelId: string;
     imageBase64s?: string[];
+    /** When set, the finished answer replaces messages[replaceIndex] in place
+        instead of being appended (per-answer retry keeps later messages). */
+    replaceIndex?: number;
   }
 
   /** Shared streaming flow for new messages and regenerations. */
@@ -365,6 +368,7 @@ const Index = () => {
     prompt,
     modelId,
     imageBase64s,
+    replaceIndex,
   }: ReplyRunnerArgs) => {
     const controller = new AbortController();
     abortRef.current = controller;
@@ -384,10 +388,17 @@ const Index = () => {
           conv.id === currentConversationId
             ? {
               ...conv,
-              messages: [
-                ...baseMessages,
-                { role: "assistant", content: assistantContent, model: modelId },
-              ],
+              messages:
+                replaceIndex !== undefined
+                  ? conv.messages.map((m, i) =>
+                      i === replaceIndex
+                        ? { ...m, content: assistantContent, model: modelId }
+                        : m
+                    )
+                  : [
+                      ...baseMessages,
+                      { role: "assistant", content: assistantContent, model: modelId },
+                    ],
             }
             : conv
         )
@@ -460,21 +471,18 @@ const Index = () => {
     // Images aren't stored on messages, so regeneration is text-only; strip
     // the "[Images: N attached]" marker the send flow appends.
     const prompt = messages[questionIdx].content.replace(/\n\n\[Images: \d+ attached\]$/, "");
-    const trimmed = messages.slice(0, questionIdx + 1);
-    setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === currentConversationId ? { ...conv, messages: trimmed } : conv
-      )
-    );
+    // In-place retry: nothing is removed; the finished answer replaces the
+    // old one at aiIndex. History is the conversation up to the question.
     runAssistantReply({
-      baseMessages: trimmed,
-      rollbackMessages: trimmed,
-      history: trimmed
-        .slice(0, -1)
+      baseMessages: messages,
+      rollbackMessages: messages,
+      history: messages
+        .slice(0, questionIdx)
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
       prompt,
       modelId: selectedModel,
+      replaceIndex: aiIndex,
     });
   };
 
