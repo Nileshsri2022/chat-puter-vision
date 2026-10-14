@@ -2,11 +2,11 @@
 
 /* Data-section icons */
 .model-icon {
-  @apply w-4 h-4;
+  @apply size-4;
 }
 
 .provider-icon {
-  @apply w-5 h-5;
+  @apply size-5;
 }
 
 /* Trigger button */
@@ -19,7 +19,7 @@
 }
 
 .ms-trigger-chevron {
-  @apply h-3.5 w-3.5 shrink-0;
+  @apply size-3.5 shrink-0;
 }
 
 /* Modal window */
@@ -33,11 +33,11 @@
 
 /* Category filter dropdown */
 .ms-filter-btn {
-  @apply relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground;
+  @apply relative flex size-9 shrink-0 items-center justify-center rounded-md border border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground;
 }
 
 .ms-filter-icon {
-  @apply h-4 w-4;
+  @apply size-4;
 }
 
 .ms-filter-count {
@@ -54,7 +54,7 @@
 }
 
 .ms-cat-tag-icon {
-  @apply h-3.5 w-3.5;
+  @apply size-3.5;
 }
 
 .ms-cat-item {
@@ -62,7 +62,7 @@
 }
 
 .ms-cat-item-icon {
-  @apply h-4 w-4 shrink-0 text-muted-foreground;
+  @apply size-4 shrink-0 text-muted-foreground;
 }
 
 /* Picker body: provider sidebar + model list */
@@ -123,7 +123,7 @@
 }
 
 .ms-search-icon {
-  @apply absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground;
+  @apply absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground;
 }
 
 .ms-search-input {
@@ -175,5 +175,5 @@
 }
 
 .ms-item-check {
-  @apply h-3.5 w-3.5 text-primary;
+  @apply size-3.5 text-primary;
 }

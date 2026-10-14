@@ -1,4 +1,5 @@
 import { convertImagesToPNG, needsConversion } from "@/lib/utils/imageConversion";
+import { cn } from "@/lib/utils";
 import { modelSupportsVision, type ModelCatalog } from "@/lib/models";
 import { useState, useRef } from "react";
 import { ArrowUp, Paperclip, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
@@ -254,7 +255,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
 
   return (
-    <div className={"composer-wrap" + (compact ? " composer-wrap-compact" : "")}>
+    <div className={cn("composer-wrap", compact && "composer-wrap-compact")}>
       <form onSubmit={handleSubmit} className="composer-form">
         {/* Image previews */}
         {modelSupportsImages && imagePreviews.length > 0 && (
@@ -349,7 +350,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             disabled={disabled}
             rows={1}
             autoFocus={compact}
-            className={"composer-textarea" + (compact ? " composer-textarea-compact" : "")}
+            className={cn("composer-textarea", compact && "composer-textarea-compact")}
           />
           <div className="composer-toolbar">
             <div className="composer-tools">
@@ -384,7 +385,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 {recordingState === "transcribing" ? (
                   <div className="composer-spinner" aria-hidden="true" />
                 ) : (
-                  <Mic className={"composer-tool-icon" + (recordingState === "recording" ? " composer-mic-recording" : "")} aria-hidden="true" />
+                  <Mic className={cn("composer-tool-icon", recordingState === "recording" && "composer-mic-recording")} aria-hidden="true" />
                 )}
               </Button>
               {onModelChange && (

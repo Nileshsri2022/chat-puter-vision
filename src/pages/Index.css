@@ -39,23 +39,23 @@
 
 
 .app-icon-btn {
-  @apply h-8 w-8;
+  @apply size-8;
 }
 
 .app-header-icon {
-  @apply h-4 w-4;
+  @apply size-4;
 }
 
 .app-avatar-btn {
-  @apply h-8 w-8 rounded-full;
+  @apply size-8 rounded-full;
 }
 
 .app-avatar-img {
-  @apply h-8 w-8 rounded-full object-cover;
+  @apply size-8 rounded-full object-cover;
 }
 
 .app-avatar-fallback-icon {
-  @apply h-5 w-5;
+  @apply size-5;
 }
 
 .app-account-label {
@@ -63,7 +63,7 @@
 }
 
 .app-menu-icon {
-  @apply h-4 w-4;
+  @apply size-4;
 }
 
 /* Welcome / empty states */
@@ -76,11 +76,11 @@
 }
 
 .app-hero-badge {
-  @apply mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground;
+  @apply mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground;
 }
 
 .app-hero-icon {
-  @apply h-7 w-7;
+  @apply size-7;
 }
 
 .app-hero-title {

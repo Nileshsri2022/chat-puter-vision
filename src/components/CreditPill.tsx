@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { checkAuthStatus } from "@/lib/backend";
 import { getCreditBalance, formatCredits, type CreditBalance } from "@/lib/usage";
 import "./CreditPill.css";
@@ -34,7 +35,7 @@ export const CreditPill = () => {
   return (
     <div
       role="status"
-      className={`credit-pill ${low ? "credit-pill-low" : "credit-pill-normal"}`}
+      className={cn("credit-pill", low ? "credit-pill-low" : "credit-pill-normal")}
       title={`${formatCredits(balance.remaining)} of ${formatCredits(balance.allowance)} monthly credit remaining`}
       aria-label={`${formatCredits(balance.remaining)} of ${formatCredits(balance.allowance)} monthly credit remaining`}
     >

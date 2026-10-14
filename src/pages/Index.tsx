@@ -32,6 +32,7 @@ import { saveConversationToDrive } from "@/lib/drive";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -910,10 +911,12 @@ const Index = () => {
                     {profile?.name ?? "Account"}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
                   <DropdownMenuItem onClick={handleSignOut} className="gap-2">
                     <LogOut className="app-menu-icon" aria-hidden="true" />
                     Sign out
                   </DropdownMenuItem>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
