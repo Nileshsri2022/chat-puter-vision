@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, ListFilter, Eye, Braces, Mic, Video } from "lucide-react";
+import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, ListFilter, Eye, Braces, Mic, Video, PanelLeftOpen, PanelLeftClose } from "lucide-react";
 import { PUTER_MODELS_SNAPSHOT, CAT_VISION, CAT_REASONING, CAT_WEBSEARCH, CAT_FUNCTION_CALLING, CAT_AUDIO_IN, CAT_VIDEO_IN, type SnapshotModel } from "@/lib/puterModels.generated";
 import "./ModelSelector.css";
 
@@ -606,6 +606,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
   const [query, setQuery] = useState("");
   const [catMask, setCatMask] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const groups = useMemo(brandGroups, []);
 
@@ -690,6 +691,18 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
             onClick={(e) => e.stopPropagation()}
           >
             <div className="ms-topbar">
+              <button
+                type="button"
+                className="ms-filter-btn"
+                onClick={() => setSidebarOpen((v) => !v)}
+                aria-label={sidebarOpen ? "Hide providers" : "Show providers"}
+                aria-pressed={sidebarOpen}
+                title={sidebarOpen ? "Hide providers" : "Show providers"}
+              >
+                {sidebarOpen
+                  ? <PanelLeftClose className="ms-filter-icon" aria-hidden="true" />
+                  : <PanelLeftOpen className="ms-filter-icon" aria-hidden="true" />}
+              </button>
               <div className="ms-search-wrap">
                 <div className="ms-search-relative">
                   <Search className="ms-search-icon" aria-hidden="true" />
@@ -738,8 +751,9 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
               </DropdownMenu>
             </div>
             <div className="ms-picker-body">
-              <div className="ms-provider-sidebar">
-                <div className="ms-provider-list" role="tablist" aria-label="Providers">
+              {sidebarOpen && (
+                <div className="ms-provider-sidebar">
+                  <div className="ms-provider-list" role="tablist" aria-label="Providers">
                 {groups.map((g) => (
                   <button
                     key={g.label}
@@ -753,8 +767,9 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     <span className="ms-provider-count">{g.models.length}</span>
                   </button>
                 ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="ms-modal-list">
                 {models.length === 0 && (
                   <div className="ms-empty">No models found</div>
