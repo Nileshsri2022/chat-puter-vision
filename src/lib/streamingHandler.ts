@@ -5,8 +5,9 @@
 // js.puter.com/v2 bundle):
 // - Multi-turn: `chat(messages, false, options)` with {role, content} objects.
 // - Images: content blocks `{ type: "image_url", image_url: { url } }` where
-//   url is the SDK's base64 marker form "b<base64>" (exactly what the SDK
-//   produces internally for a File media arg).
+//   url is a data URI (`data:image/png;base64,...`) or an http(s) URL — the
+//   same form the SDK builds for a File media arg. A bare base64 payload is
+//   not a URL and is rejected upstream, so `toImageBlock` refuses it.
 // - Compaction: when enabled, a `compaction` stream chunk carries a summary of
 //   older turns. It is sent back as the first block of the assistant turn that
 //   produced it, and the turns before it are dropped.
@@ -25,6 +26,7 @@ import {
   estimateTokens,
   type ContextPlan,
 } from "./context";
+import { isImageUrl } from "./dataUrl";
 
 export interface StreamCallbacks {
   /** Called per text chunk with the new delta; the consumer appends it. */
@@ -89,9 +91,19 @@ export function toHistory(messages: Message[]): HistoryMessage[] {
   return history;
 }
 
-/** Convert raw base64 (no data: prefix) to the SDK's image wire form. */
-function toImageBlock(base64: string): ContentBlock {
-  return { type: "image_url", image_url: { url: `b${base64}` } };
+/**
+ * One attachment as a content block. `url` must be a data URI or an http(s)
+ * URL: those are the only image sources the chat API can resolve, and sending
+ * anything else (raw base64, a bare path) fails as an unloadable URL — see
+ * `src/lib/attachments.ts` for what the composer prepares.
+ */
+export function toImageBlock(url: string): ContentBlock {
+  if (!isImageUrl(url)) {
+    throw new Error(
+      "Attached images must be data: or https: URLs (see src/lib/attachments.ts)."
+    );
+  }
+  return { type: "image_url", image_url: { url } };
 }
 
 function historyTokens(m: HistoryMessage): number {
@@ -159,19 +171,20 @@ function toChatMessage(m: HistoryMessage): BackendChatMessage {
   return { role: m.role, content: blocks };
 }
 
-function buildMessages(
+/** History plus the current turn: text blocks, and image blocks with its images. */
+export function buildMessages(
   history: HistoryMessage[],
   prompt: string,
-  imageBase64s?: string[]
+  imageUrls?: string[]
 ): BackendChatMessage[] {
   const messages: BackendChatMessage[] = history.map(toChatMessage);
 
-  if (imageBase64s && imageBase64s.length > 0) {
+  if (imageUrls && imageUrls.length > 0) {
     messages.push({
       role: "user",
       content: [
         { type: "text", text: prompt },
-        ...imageBase64s.map(toImageBlock),
+        ...imageUrls.map(toImageBlock),
       ],
     });
   } else {
@@ -249,7 +262,7 @@ function isCompactionItem(part: StreamPart): part is StreamPart & CompactionItem
  * @param history  prior messages (text only; images are sent with the current turn)
  * @param prompt   the current user message
  * @param model    model ID (must resolve via puter.ai.listModels())
- * @param imageBase64s raw base64 image payloads (no data: prefix), up to a few
+ * @param imageUrls  data URIs (or http(s) URLs) for the current turn's images
  * @param signal   abort signal — checked per chunk; on abort the stream stops
  *                 and `onAbort` fires with the partial content (the SDK's
  *                 stream itself isn't cancellable, so we just stop consuming)
@@ -262,7 +275,7 @@ export async function streamAIResponse(
   prompt: string,
   model: string,
   callbacks: StreamCallbacks,
-  imageBase64s?: string[],
+  imageUrls?: string[],
   signal?: AbortSignal,
   context?: ContextPlan | null
 ): Promise<void> {
@@ -273,9 +286,9 @@ export async function streamAIResponse(
     if (!puter?.ai?.chat) throw new Error("AI is not available");
 
     const promptTokens =
-      estimateTokens(prompt) + (imageBase64s?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
+      estimateTokens(prompt) + (imageUrls?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
     const fitted = fitHistory(history, model, context ?? null, promptTokens);
-    const messages = buildMessages(fitted, prompt, imageBase64s);
+    const messages = buildMessages(fitted, prompt, imageUrls);
     // NOTE: testMode (2nd arg) must be passed explicitly; otherwise the
     // options object would bind to the testMode parameter.
     const response = (await puter.ai.chat(messages, false, {
