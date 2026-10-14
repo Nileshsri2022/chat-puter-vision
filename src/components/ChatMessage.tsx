@@ -4,9 +4,7 @@ import { ChatInput } from "./ChatInput";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { modelDisplayName } from "./ModelSelector";
@@ -27,10 +25,16 @@ interface ChatMessageProps {
   isStreaming?: boolean;
   model?: string;
   image?: string;
+  /** Position in the transcript; tags the node for in-conversation search. */
+  messageIndex?: number;
+  /** In-conversation search: this message contains the query. */
+  searchMatch?: boolean;
+  /** In-conversation search: this is the match the finder is sitting on. */
+  searchActive?: boolean;
   onCopy?: (content: string) => void;
   onDelete?: () => void;
   onEdit?: (content: string) => void;
-  onShareExchange?: (format: "md" | "json" | "drive") => void;
+  onShareExchange?: (format: "md") => void;
   onRetry?: () => void;
 }
 
@@ -46,7 +50,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -256,7 +260,14 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
   return (
     <>
       {isUser ? (
-        <div className="msg-user-col">
+        <div
+          className={cn(
+            "msg-user-col",
+            searchMatch && "msg-search-match",
+            searchActive && "msg-search-match-active"
+          )}
+          data-message-index={messageIndex}
+        >
           {editing ? (
             <ChatInput
               initialValue={content}
@@ -274,7 +285,9 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
           ) : (
             <>
               <div className="msg-user-row">
-                <div className="msg-user-bubble">
+                {/* `data-search-text` tags the regions in-conversation search
+                    scans — see lib/utils/highlight.ts. */}
+                <div className="msg-user-bubble" data-search-text>
                   {content}
                 </div>
               </div>
@@ -310,7 +323,14 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
           )}
         </div>
       ) : (
-        <div className="msg-row group">
+        <div
+          className={cn(
+            "msg-row group",
+            searchMatch && "msg-search-match",
+            searchActive && "msg-search-match-active"
+          )}
+          data-message-index={messageIndex}
+        >
           <div className="msg-inner">
             <div className="msg-model-label">
               {isStreaming ? "Thinking…" : getModelDisplayName(model)}
@@ -352,7 +372,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                   />
                 </button>
                 {showThinking && (
-                  <div className="msg-think-body">
+                  <div className="msg-think-body" data-search-text>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={markdownComponents}
@@ -363,7 +383,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                 )}
               </div>
             )}
-            <div className="msg-answer">
+            <div className="msg-answer" data-search-text>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={markdownComponents}
@@ -437,18 +457,9 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                      <DropdownMenuGroup>
                       <DropdownMenuItem onClick={() => onShareExchange("md")}>
                         Export as Markdown
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onShareExchange("json")}>
-                        Export as JSON
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => onShareExchange("drive")}>
-                        Save to Drive
-                      </DropdownMenuItem>
-                      </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}

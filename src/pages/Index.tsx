@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect, useCallback, type SetStateAction } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type SetStateAction } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { AuthButton } from "@/components/AuthButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { CreditPill } from "@/components/CreditPill";
 import { getProfileInfo, type ProfileInfo } from "@/lib/profile";
 import {
   Message,
@@ -24,19 +23,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
-import { Menu, X, Sparkles, PanelLeftOpen, Share2, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
+import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
-import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from "@/lib/utils/export";
-import { saveConversationToDrive } from "@/lib/drive";
+import { exportAsMarkdown, downloadFile, copyToClipboard } from "@/lib/utils/export";
+import { collectMatchRanges, paintSearchHighlights, clearSearchHighlights } from "@/lib/utils/highlight";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -183,6 +179,14 @@ const Index = () => {
   const abortRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
+  // In-conversation search ("find in chat"). Deliberately separate from the
+  // sidebar's conversation search: this one never touches the rail, it walks
+  // the transcript that is on screen.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchActiveMatch, setSearchActiveMatch] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
   const messages = currentConversation?.messages || [];
   useEffect(() => {
@@ -190,6 +194,92 @@ const Index = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, streamingContent]);
+
+  const searchTerm = searchQuery.trim().toLowerCase();
+
+  /** Indices of the messages that contain the query, in transcript order. */
+  const searchMatches = useMemo(() => {
+    if (!searchOpen || !searchTerm) return [];
+    const hits: number[] = [];
+    (currentConversation?.messages ?? []).forEach((m, i) => {
+      if (m.content.toLowerCase().includes(searchTerm)) hits.push(i);
+    });
+    return hits;
+    // `messages` is derived from the conversation on every render, so key the
+    // memo on the conversation itself.
+  }, [currentConversation, searchOpen, searchTerm]);
+
+  // Clamp rather than reset: deleting a message or narrowing the query should
+  // not silently jump the finder back to the first hit.
+  const activeMatch = searchMatches.length
+    ? Math.min(searchActiveMatch, searchMatches.length - 1)
+    : 0;
+
+  const stepMatch = useCallback((delta: number) => {
+    setSearchActiveMatch((prev) => {
+      const len = searchMatches.length;
+      if (len === 0) return 0;
+      return (Math.min(prev, len - 1) + delta + len) % len;
+    });
+  }, [searchMatches.length]);
+
+  const closeChatSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchActiveMatch(0);
+  }, []);
+
+  const openChatSearch = useCallback(() => {
+    setSearchOpen(true);
+    // The field mounts on this render, so focus on the next frame.
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, []);
+
+  // A new query starts from the top; a new conversation drops the finder
+  // entirely (its results point at messages that are no longer on screen).
+  useEffect(() => {
+    setSearchActiveMatch(0);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    closeChatSearch();
+  }, [currentConversationId, closeChatSearch]);
+
+  // Bring the active hit into view. `scrollIntoView` rather than scrollTop:
+  // the transcript scrolls inside the Radix viewport, not the element the ref
+  // is attached to.
+  useEffect(() => {
+    if (!searchOpen || searchMatches.length === 0) return;
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-message-index="${searchMatches[activeMatch]}"]`
+    );
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [searchOpen, searchMatches, activeMatch]);
+
+  // Paint the occurrences inside the rendered markdown. Rebuilt whenever a
+  // match or the active hit changes; a no-op on browsers without the CSS
+  // Custom Highlight API (the message-level styling above still applies).
+  useEffect(() => {
+    if (!searchOpen || !searchTerm || searchMatches.length === 0) {
+      clearSearchHighlights();
+      return;
+    }
+    const container = scrollRef.current;
+    if (!container) return;
+    const hits: Range[] = [];
+    const active: Range[] = [];
+    const activeMessage = searchMatches[activeMatch];
+    for (const messageIndex of searchMatches) {
+      const el = container.querySelector<HTMLElement>(`[data-message-index="${messageIndex}"]`);
+      if (!el) continue;
+      const ranges = collectMatchRanges(el, searchTerm);
+      hits.push(...ranges);
+      if (messageIndex === activeMessage) active.push(...ranges);
+    }
+    paintSearchHighlights(hits, active);
+  }, [searchOpen, searchTerm, searchMatches, activeMatch]);
+
+  useEffect(() => clearSearchHighlights, []);
 
   useEffect(() => {
     // Documented sign-in check: puter.auth.isSignedIn() (synchronous boolean).
@@ -640,13 +730,6 @@ const Index = () => {
     setEditingTitle(false);
   };
 
-  const openSearch = () => {
-    setSidebarOpen(true);
-    window.setTimeout(() => {
-      document.getElementById("search-conversations")?.focus();
-    }, 350);
-  };
-
   const handleNewConversation = () => {
     const newConv: Conversation = {
       id: Date.now().toString(),
@@ -661,6 +744,9 @@ const Index = () => {
   const handleSignOut = () => {
     signOut();
     setIsAuthenticated(false);
+    // The account menu lives in the rail now: on the overlay layout signing out
+    // would otherwise leave the rail covering the sign-in screen.
+    if (!isDesktop) setSidebarOpen(false);
     toast({
       title: "Signed out",
       duration: 2000,
@@ -695,7 +781,7 @@ const Index = () => {
     });
   };
 
-  const handleShareExchange = async (index: number, format: "md" | "json" | "drive") => {
+  const handleShareExchange = (index: number) => {
     const aiMsg = messages[index];
     if (!aiMsg || aiMsg.role !== "assistant") return;
     let question = "";
@@ -708,87 +794,23 @@ const Index = () => {
     const model = aiMsg.model ? ` (${aiMsg.model})` : "";
     const answer = stripThinkBlocks(aiMsg.content);
     const base = (question || answer).slice(0, 50).replace(/[^a-z0-9]/gi, "_") || "answer";
-    if (format === "json") {
-      downloadFile(
-        `${base}.json`,
-        JSON.stringify({ question, answer, model: aiMsg.model ?? null }, null, 2),
-        "application/json"
-      );
-      toast({ title: "Answer exported as JSON", duration: 2000 });
-      return;
-    }
     const md =
       (question ? `**You:**\n\n${question}\n\n---\n\n` : "") +
       `**AI${model}:**\n\n${answer}\n`;
-    if (format === "drive") {
-      if (!isAuthenticated) {
-        toast({
-          title: "Authentication Required",
-          description: "Please sign in to save to Drive.",
-          variant: "destructive",
-          duration: 5000,
-        });
-        return;
-      }
-      try {
-        const name = await saveConversationToDrive(question || base, md);
-        toast({ title: "Saved to Drive", description: name, duration: 3000 });
-      } catch (error) {
-        toast({
-          title: "Could not save to Drive",
-          description: error instanceof Error ? error.message : undefined,
-          variant: "destructive",
-          duration: 5000,
-        });
-      }
-      return;
-    }
     downloadFile(`${base}.md`, md);
     toast({ title: "Answer exported", duration: 2000 });
   };
 
-  const handleExport = (format: 'md' | 'json') => {
+  const handleExport = () => {
     if (!currentConversation) return;
 
-    const content = format === 'md'
-      ? exportAsMarkdown(currentConversation)
-      : exportAsJSON(currentConversation);
-
-    const ext = format === 'md' ? 'md' : 'json';
-    const filename = `${currentConversation.title.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
-    downloadFile(filename, content);
+    const filename = `${currentConversation.title.replace(/[^a-z0-9]/gi, '_')}.md`;
+    downloadFile(filename, exportAsMarkdown(currentConversation));
 
     toast({
-      title: `Exported as ${format.toUpperCase()}`,
+      title: "Exported as Markdown",
       duration: 2000,
     });
-  };
-
-  const handleSaveToDrive = async () => {
-    if (!currentConversation) return;
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to save to Drive.",
-        variant: "destructive",
-        duration: 5000,
-      });
-      return;
-    }
-    try {
-      const name = await saveConversationToDrive(
-        currentConversation.title,
-        exportAsMarkdown(currentConversation)
-      );
-      toast({ title: "Saved to Drive", description: name, duration: 3000 });
-    } catch (error) {
-      toast({
-        title: "Could not save to Drive",
-        description: error instanceof Error ? error.message : undefined,
-        variant: "destructive",
-        duration: 5000,
-      });
-    }
   };
 
   return (
@@ -803,6 +825,9 @@ const Index = () => {
         onRenameConversation={handleRenameConversation}
         onTogglePin={handleTogglePin}
         onShareConversation={handleShareConversation}
+        isAuthenticated={isAuthenticated}
+        profile={profile}
+        onSignOut={handleSignOut}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
@@ -812,8 +837,11 @@ const Index = () => {
       >
         <header className="app-header">
           <div className="app-header-group app-header-group-start">
-            {!sidebarOpen && (
-              <div className="app-header-pill">
+            {/* Search finds text in the conversation on screen — it never
+                opens the rail. Available docked or collapsed, hence the pill
+                only wrapping the rail's own controls. */}
+            <div className="app-header-pill">
+              {!sidebarOpen && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -824,16 +852,22 @@ const Index = () => {
                 >
                   <PanelLeftOpen className="app-header-icon" aria-hidden="true" />
                 </Button>
+              )}
+              {/* Nothing to search until the transcript exists. */}
+              {isAuthenticated && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="app-icon-btn app-header-search-btn"
-                  onClick={openSearch}
-                  title="Search conversations"
-                  aria-label="Search conversations"
+                  onClick={searchOpen ? closeChatSearch : openChatSearch}
+                  title="Search in this conversation"
+                  aria-label="Search in this conversation"
+                  aria-expanded={searchOpen}
                 >
                   <Search className="app-header-icon" aria-hidden="true" />
                 </Button>
+              )}
+              {!sidebarOpen && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -844,29 +878,8 @@ const Index = () => {
                 >
                   <Plus className="app-header-icon" aria-hidden="true" />
                 </Button>
-              </div>
-            )}
-            {isAuthenticated && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="app-icon-btn app-header-export" title="Export conversation" aria-label="Export conversation">
-                    <Share2 className="app-header-icon" aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => handleExport('md')}>
-                    Export as Markdown
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('json')}>
-                    Export as JSON
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSaveToDrive}>
-                    Save to Drive
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+              )}
+            </div>
           </div>
           {currentConversation &&
             (editingTitle ? (
@@ -897,58 +910,23 @@ const Index = () => {
               </button>
             ))}
           <div className="app-header-group app-header-group-end">
-            {isAuthenticated && <CreditPill />}
-            <ThemeToggle />
-            {isAuthenticated ? (
+            {/* Conversation-level actions: share/export and theme. The account
+                lives in the sidebar footer now. */}
+            {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="app-avatar-btn"
-                    title={profile?.name ?? "Account"}
-                    aria-label={profile?.name ?? "Account"}
-                  >
-                    {profile?.picture ? (
-                      <img
-                        src={profile.picture}
-                        alt=""
-                        className="app-avatar-img"
-                      />
-                    ) : (
-                      <CircleUserRound className="app-avatar-fallback-icon" aria-hidden="true" />
-                    )}
+                  <Button variant="ghost" size="icon" className="app-icon-btn app-header-export" title="Export conversation" aria-label="Export conversation">
+                    <Share2 className="app-header-icon" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel className="app-account-label">
-                    {profile?.name ?? "Account"}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {/* The header's export button is hidden below `sm`, where the
-                      header row has no width left for it. Mirror the same
-                      actions here so export stays reachable on a phone. */}
-                  <DropdownMenuGroup className="sm:hidden">
-                    <DropdownMenuItem onClick={() => handleExport("md")}>
-                      Export as Markdown
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport("json")}>
-                      Export as JSON
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleSaveToDrive}>
-                      Save to Drive
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator className="sm:hidden" />
-                  <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={handleSignOut} className="gap-2">
-                    <LogOut className="app-menu-icon" aria-hidden="true" />
-                    Sign out
+                  <DropdownMenuItem onClick={handleExport}>
+                    Export as Markdown
                   </DropdownMenuItem>
-                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : null}
+            )}
+            <ThemeToggle />
           </div>
         </header>
 
@@ -969,6 +947,72 @@ const Index = () => {
           </div>
         ) : (
           <>
+            {/* Find-in-conversation. Rendered in the transcript column, above
+                the messages it searches — not in the sidebar. */}
+            {searchOpen && (
+              <div className="app-chat-search" role="search">
+                <Search className="app-chat-search-icon" aria-hidden="true" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  name="chat-search"
+                  className="app-chat-search-input"
+                  placeholder="Search in this conversation…"
+                  aria-label="Search in this conversation"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      closeChatSearch();
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      stepMatch(e.shiftKey ? -1 : 1);
+                    }
+                  }}
+                />
+                <span className="app-chat-search-status" aria-live="polite">
+                  {searchTerm
+                    ? searchMatches.length > 0
+                      ? `${activeMatch + 1} / ${searchMatches.length}`
+                      : "No results"
+                    : ""}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-icon-btn"
+                  onClick={() => stepMatch(-1)}
+                  disabled={searchMatches.length === 0}
+                  title="Previous match"
+                  aria-label="Previous match"
+                >
+                  <ChevronUp className="app-header-icon" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-icon-btn"
+                  onClick={() => stepMatch(1)}
+                  disabled={searchMatches.length === 0}
+                  title="Next match"
+                  aria-label="Next match"
+                >
+                  <ChevronDown className="app-header-icon" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-icon-btn"
+                  onClick={closeChatSearch}
+                  title="Close search"
+                  aria-label="Close search"
+                >
+                  <X className="app-header-icon" aria-hidden="true" />
+                </Button>
+              </div>
+            )}
+
             <ScrollArea className="app-scroll" ref={scrollRef}>
               {messages.length === 0 && !isStreaming ? (
                 <div className="app-empty">
@@ -1000,12 +1044,15 @@ const Index = () => {
                       content={message.content}
                       model={message.model}
                       image={message.image}
+                      messageIndex={index}
+                      searchMatch={searchMatches.includes(index)}
+                      searchActive={searchMatches[activeMatch] === index}
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content) => handleEditMessage(index, content) : undefined}
                       onShareExchange={
                         message.role === "assistant"
-                          ? (format) => handleShareExchange(index, format)
+                          ? () => handleShareExchange(index)
                           : undefined
                       }
                       onRetry={message.role === "assistant" ? () => handleRetryMessage(index) : undefined}

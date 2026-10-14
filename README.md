@@ -12,7 +12,8 @@ A modern chat application that puts hundreds of AI models behind one clean inter
 - **Live model catalog** — providers and models are fetched from the backend at startup and grouped by provider (OpenAI, Claude, Mistral, Grok, OpenRouter, …). The catalog is never hardcoded, so new models appear automatically.
 - **Streaming responses** with a stop button, message regeneration, and per-message copy / delete.
 - **Rich rendering** — markdown, fenced code blocks, and inline images are formatted in chat bubbles.
-- **Conversation management** — sidebar with search, rename-on-first-message, two-step delete, and export to Markdown or JSON.
+- **Conversation management** — sidebar with search, rename-on-first-message, two-step delete, and export to Markdown.
+- **Find in chat** — the header search button walks the conversation on screen (match counter, prev/next, in-text highlighting) without touching the sidebar.
 
 ### Multimodal
 - **Image attachments** — attach up to 4 images (auto-converted to PNG when needed) and send them to any vision-capable model. Vision support is detected from each model's live capability data.
@@ -35,10 +36,7 @@ Conversations sync across your devices through secure cloud storage:
 
 ### Account
 - **Sign-in** via popup; auth state re-checks on mount and tab focus.
-- **Profile menu** — avatar and display name in the header, with sign-out.
-- **Credit pill** — remaining monthly credit shown in the header, turning amber under 10% of allowance.
-
-![Account menu with credit pill](docs/screenshots/account-menu.png)
+- **Profile menu** — avatar, display name and sign-out are pinned to the bottom of the sidebar.
 
 ![OCR on an attached image](docs/screenshots/ocr.png)
 
@@ -87,7 +85,7 @@ and Drive saves (`drive.test.ts`).
 2. **Pick a model** — the selector groups live models by provider; vision models accept image attachments.
 3. **Chat** — type, dictate with the mic, or attach images. Use the image button in the composer to generate images instead of chatting.
 4. **Sync** — once signed in, conversations sync automatically. Watch the status line in the sidebar.
-5. **Export** — the download menu in the header exports the active conversation as Markdown or JSON.
+5. **Export** — the download menu in the header exports the active conversation as Markdown.
 
 ---
 
@@ -152,5 +150,5 @@ src/
 
 ## Notes
 
-- All AI calls are billed against the signed-in user's account credits. The credit pill shows what's left.
+- All AI calls are billed against the signed-in user's account credits.
 - Real backend calls require interactive sign-in; the app degrades gracefully when signed out or offline.

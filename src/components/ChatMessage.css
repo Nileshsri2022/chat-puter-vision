@@ -29,6 +29,20 @@
   @apply px-4 py-2;
 }
 
+/* In-conversation search: messages holding a match get a tint, the one the
+   finder is sitting on gets a stronger one. The in-text paint comes from the
+   CSS Custom Highlight API — see lib/utils/highlight.ts. */
+.msg-search-match {
+  @apply bg-amber-500/[0.07];
+}
+
+.msg-search-match-active {
+  @apply bg-amber-500/[0.14];
+  /* A left rail reads as "current result" even where the tint is subtle, and
+     changes no layout: it is drawn inside the existing padding. */
+  box-shadow: inset 3px 0 0 0 hsl(32 95% 52%);
+}
+
 .msg-inner {
   @apply mx-auto max-w-3xl;
 }
