@@ -1,8 +1,17 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check } from "lucide-react";
+import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, ListFilter } from "lucide-react";
 import { PUTER_MODELS_SNAPSHOT, CAT_VISION, CAT_REASONING, CAT_WEBSEARCH, CAT_FUNCTION_CALLING, CAT_AUDIO_IN, CAT_VIDEO_IN, type SnapshotModel } from "@/lib/puterModels.generated";
 import "./ModelSelector.css";
 
@@ -587,11 +596,16 @@ const CATEGORIES = [
   { key: CAT_VIDEO_IN, label: "Video Input" },
 ];
 
+/** Category labels for a model, from its bitmask. */
+const catsOf = (m: SnapshotModel): string[] =>
+  CATEGORIES.filter((c) => (m.cats & c.key) !== 0).map((c) => c.label);
+
 export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
   const [query, setQuery] = useState("");
   const [catMask, setCatMask] = useState(0);
+  const [filterOpen, setFilterOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const groups = useMemo(brandGroups, []);
 
@@ -611,11 +625,12 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
     if (!open) return;
     searchRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      // Let the filter dropdown handle its own Escape first.
+      if (e.key === "Escape" && !filterOpen) setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, filterOpen]);
 
   // Category mode (multi-select): ignore the provider sidebar, show matching
   // models from all providers. Otherwise the active provider's models.
@@ -650,6 +665,8 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
     setBrand(label);
   };
 
+  const catCount = CATEGORIES.filter((c) => (catMask & c.key) !== 0).length;
+
   return (
     <>
       <Button
@@ -672,34 +689,52 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
             aria-label="Select model"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="ms-search-wrap">
-              <div className="ms-search-relative">
-                <Search className="ms-search-icon" aria-hidden="true" />
-                <Input
-                  ref={searchRef}
-                  aria-label="Search models"
-                  placeholder={inCategoryMode ? "Search all models…" : `Search ${active?.label ?? ""} models…`}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="ms-search-input"
-                />
+            <div className="ms-topbar">
+              <div className="ms-search-wrap">
+                <div className="ms-search-relative">
+                  <Search className="ms-search-icon" aria-hidden="true" />
+                  <Input
+                    ref={searchRef}
+                    aria-label="Search models"
+                    placeholder={inCategoryMode ? "Search all models…" : `Search ${active?.label ?? ""} models…`}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="ms-search-input"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="ms-cat-row" aria-label="Filter by category">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.label}
-                  type="button"
-                  aria-pressed={(catMask & c.key) !== 0}
-                  className={"ms-cat-chip" + ((catMask & c.key) !== 0 ? " ms-cat-chip-active" : "")}
-                  onClick={() => setCatMask((m) => m ^ c.key)}
-                >
-                  {c.label}
-                </button>
-              ))}
-              {inCategoryMode && (
-                <span className="ms-cat-count">{models.length} across all providers</span>
-              )}
+              <DropdownMenu onOpenChange={setFilterOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="ms-filter-btn" aria-label="Filter by category">
+                    <ListFilter className="ms-filter-icon" aria-hidden="true" />
+                    {catCount > 0 && (
+                      <span className="ms-filter-count">{catCount}</span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="ms-filter-menu">
+                  <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {CATEGORIES.map((c) => (
+                    <DropdownMenuCheckboxItem
+                      key={c.label}
+                      checked={(catMask & c.key) !== 0}
+                      onCheckedChange={() => setCatMask((m) => m ^ c.key)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {c.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  {catMask !== 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => setCatMask(0)}>
+                        Clear filters
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="ms-picker-body">
               <div className="ms-provider-sidebar">
@@ -723,24 +758,35 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                 {models.length === 0 && (
                   <div className="ms-empty">No models found</div>
                 )}
-                {models.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
-                    onClick={() => handleSelect(m.id)}
-                  >
-                    <span className="ms-item-name">{m.id}</span>
-                    <span className="ms-item-side">
-                      {CURATED_BADGE_OF.get(m.id) && (
-                        <Badge variant="secondary" className="ms-item-badge">
-                          {CURATED_BADGE_OF.get(m.id)}
-                        </Badge>
-                      )}
-                      {m.id === selectedModel && <Check className="ms-item-check" aria-hidden="true" />}
-                    </span>
-                  </button>
-                ))}
+                {models.map((m) => {
+                  const catLabels = catsOf(m);
+                  const curated = CURATED_BADGE_OF.get(m.id);
+                  // Skip a curated badge that duplicates a category tag.
+                  const showCurated = curated && !catLabels.includes(curated);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
+                      onClick={() => handleSelect(m.id)}
+                    >
+                      <span className="ms-item-name">{m.id}</span>
+                      <span className="ms-item-side">
+                        {catLabels.map((label) => (
+                          <span key={label} className="ms-cat-tag">
+                            {label}
+                          </span>
+                        ))}
+                        {showCurated && (
+                          <Badge variant="secondary" className="ms-item-badge">
+                            {curated}
+                          </Badge>
+                        )}
+                        {m.id === selectedModel && <Check className="ms-item-check" aria-hidden="true" />}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

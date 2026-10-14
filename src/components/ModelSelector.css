@@ -31,6 +31,28 @@
   @apply flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl;
 }
 
+/* Category filter dropdown */
+.ms-filter-btn {
+  @apply relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground;
+}
+
+.ms-filter-icon {
+  @apply h-4 w-4;
+}
+
+.ms-filter-count {
+  @apply absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground;
+}
+
+.ms-filter-menu {
+  @apply w-52;
+}
+
+/* Category tags on model rows */
+.ms-cat-tag {
+  @apply whitespace-nowrap rounded-full bg-muted px-1.5 py-0 text-[10px] text-muted-foreground;
+}
+
 /* Picker body: provider sidebar + model list */
 .ms-picker-body {
   @apply flex min-h-0 flex-1;
@@ -74,26 +96,14 @@
   @apply shrink-0 rounded-full bg-muted px-1 text-[10px] text-muted-foreground;
 }
 
+/* Top bar: search + category filter dropdown */
+.ms-topbar {
+  @apply flex items-center gap-2 p-3 pb-2;
+}
+
 /* Search */
 .ms-search-wrap {
-  @apply p-3 pb-2;
-}
-
-/* Category filter chips (multi-select) */
-.ms-cat-row {
-  @apply flex flex-wrap items-center gap-1.5 px-3 pb-2;
-}
-
-.ms-cat-chip {
-  @apply rounded-full border border-input bg-transparent px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground;
-}
-
-.ms-cat-chip-active {
-  @apply border-transparent bg-secondary text-foreground;
-}
-
-.ms-cat-count {
-  @apply ml-auto text-[11px] text-muted-foreground;
+  @apply min-w-0 flex-1;
 }
 
 .ms-search-relative {
