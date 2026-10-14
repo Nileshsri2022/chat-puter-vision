@@ -1,0 +1,51 @@
+name: Issue labels
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened]
+  push:
+    branches:
+      - main
+    paths:
+      - .github/labels/issue-label-map.json
+      - .github/labels/apply-labels.py
+      - .github/workflows/issue-labels.yml
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backfill:
+    name: Apply the label map
+    if: github.event_name != 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Label the issues listed in the map
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 .github/labels/apply-labels.py
+
+  new-issue:
+    name: Label a newly opened issue
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add the bug and priority labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          set -euo pipefail
+          labels="bug"
+          case "$ISSUE_TITLE" in
+            "[P1]"*) labels="$labels,P1" ;;
+            "[P2]"*) labels="$labels,P2" ;;
+            "[P3]"*) labels="$labels,P3" ;;
+          esac
+          gh issue edit "$ISSUE_NUMBER" --add-label "$labels"
