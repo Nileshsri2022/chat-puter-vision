@@ -1,0 +1,108 @@
+name: Build Android APK
+
+# Builds the Capacitor Android release APK. Runs on demand from the Actions tab
+# (or `gh workflow run android-apk.yml`). The APK is uploaded as a workflow
+# artifact; publishing a GitHub Release is done separately from the artifact.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Assemble release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync web assets into Android project
+        run: npx cap sync android
+
+      - name: Prepare release signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          KS="$RUNNER_TEMP/release.p12"
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$KS"
+            ALIAS="${KEY_ALIAS:-freetalk}"
+            PW="$KEYSTORE_PASSWORD"
+            echo "key_source=repository-secret" >> "$GITHUB_OUTPUT"
+          else
+            # No signing secrets configured: use a throwaway key for this run.
+            # Installs of this APK cannot upgrade builds signed with other keys.
+            PW="$(openssl rand -hex 16)"
+            ALIAS="freetalk"
+            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -alias "$ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PW" -keypass "$PW" -dname "CN=FreeTalk, O=Nileshsri2022"
+            echo "key_source=ephemeral-per-run" >> "$GITHUB_OUTPUT"
+          fi
+          echo "RELEASE_KEYSTORE=$KS" >> "$GITHUB_ENV"
+          echo "RELEASE_KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=$PW" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew --no-daemon assembleRelease
+
+      - name: Collect APK
+        id: apk
+        run: |
+          VERSION=$(grep -oP 'versionName "\K[^"]+' android/app/build.gradle)
+          SRC=android/app/build/outputs/apk/release/app-release.apk
+          mkdir -p dist-apk
+          cp "$SRC" "dist-apk/FreeTalk-v${VERSION}.apk"
+          sha256sum "dist-apk/FreeTalk-v${VERSION}.apk" > "dist-apk/FreeTalk-v${VERSION}.apk.sha256"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "### APK built" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: \`$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Signing key: \`${{ steps.signing.outputs.key_source }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SHA-256: \`$(cut -d' ' -f1 dist-apk/FreeTalk-v${VERSION}.apk.sha256)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs dist-apk/*.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeTalk-v${{ steps.apk.outputs.version }}
+          path: dist-apk/
+          if-no-files-found: error
+          retention-days: 30
