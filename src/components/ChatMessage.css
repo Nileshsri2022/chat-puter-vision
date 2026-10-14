@@ -51,7 +51,15 @@
 }
 
 .msg-image {
-  @apply mb-3 max-h-96 w-auto rounded-xl border border-border object-cover;
+  @apply mb-3 max-h-64 w-auto cursor-zoom-in rounded-xl border border-border object-cover transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.msg-lightbox {
+  @apply fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4;
+}
+
+.msg-lightbox-img {
+  @apply max-h-[90vh] max-w-[90vw] cursor-default rounded-xl object-contain shadow-2xl;
 }
 
 /* Thinking section */

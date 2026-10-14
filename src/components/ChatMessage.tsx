@@ -43,6 +43,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
   const [editDraft, setEditDraft] = useState("");
   const editFileRef = useRef<HTMLInputElement>(null);
   const [ttsState, setTtsState] = useState<"idle" | "loading" | "playing">("idle");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
@@ -375,6 +376,14 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                 alt="Generated image"
                 className="msg-image"
                 loading="lazy"
+                role="button"
+                tabIndex={0}
+                title="Open image preview"
+                aria-label="Open image preview"
+                onClick={() => setPreviewOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setPreviewOpen(true);
+                }}
               />
             )}
             {(thinking || thinkingOpen) && (
@@ -484,6 +493,27 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
               </div>
             )}
           </div>
+        </div>
+      )}
+      {previewOpen && image && (
+        <div
+          className="msg-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image preview"
+          onClick={() => setPreviewOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setPreviewOpen(false);
+          }}
+          tabIndex={-1}
+          autoFocus
+        >
+          <img
+            src={image}
+            alt="Image preview"
+            className="msg-lightbox-img"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </>

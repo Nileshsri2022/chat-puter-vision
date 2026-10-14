@@ -118,7 +118,7 @@
 
 /* Composer area */
 .app-composer-wrap {
-  @apply shrink-0 border-t bg-background pt-3;
+  @apply shrink-0 bg-background pt-3;
 }
 
 .app-regen-wrap {
