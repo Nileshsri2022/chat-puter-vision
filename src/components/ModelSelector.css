@@ -48,9 +48,17 @@
   @apply w-52;
 }
 
-/* Category tags on model rows */
+/* Category tags on model rows (icon only; label in tooltip) */
 .ms-cat-tag {
-  @apply whitespace-nowrap rounded-full bg-muted px-1.5 py-0 text-[10px] text-muted-foreground;
+  @apply inline-flex shrink-0 items-center text-muted-foreground;
+}
+
+.ms-cat-tag-icon {
+  @apply h-3.5 w-3.5;
+}
+
+.ms-cat-item-icon {
+  @apply mr-1 h-4 w-4 text-muted-foreground;
 }
 
 /* Picker body: provider sidebar + model list */

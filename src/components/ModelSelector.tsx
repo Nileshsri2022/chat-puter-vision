@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, ListFilter } from "lucide-react";
+import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, ListFilter, Eye, Braces, Mic, Video } from "lucide-react";
 import { PUTER_MODELS_SNAPSHOT, CAT_VISION, CAT_REASONING, CAT_WEBSEARCH, CAT_FUNCTION_CALLING, CAT_AUDIO_IN, CAT_VIDEO_IN, type SnapshotModel } from "@/lib/puterModels.generated";
 import "./ModelSelector.css";
 
@@ -586,19 +586,19 @@ function brandGroups(): BrandGroup[] {
     .concat(extras);
 }
 
-/** Category filter chips (multi-select). Matches a model having ANY selected category. */
+/** Category filters (multi-select). A model must have ALL selected categories. */
 const CATEGORIES = [
-  { key: CAT_VISION, label: "Vision" },
-  { key: CAT_REASONING, label: "Reasoning" },
-  { key: CAT_WEBSEARCH, label: "Web Search" },
-  { key: CAT_FUNCTION_CALLING, label: "Function Calling" },
-  { key: CAT_AUDIO_IN, label: "Audio Input" },
-  { key: CAT_VIDEO_IN, label: "Video Input" },
+  { key: CAT_VISION, label: "Vision", icon: Eye },
+  { key: CAT_REASONING, label: "Reasoning", icon: Brain },
+  { key: CAT_WEBSEARCH, label: "Web Search", icon: Globe },
+  { key: CAT_FUNCTION_CALLING, label: "Function Calling", icon: Braces },
+  { key: CAT_AUDIO_IN, label: "Audio Input", icon: Mic },
+  { key: CAT_VIDEO_IN, label: "Video Input", icon: Video },
 ];
 
-/** Category labels for a model, from its bitmask. */
-const catsOf = (m: SnapshotModel): string[] =>
-  CATEGORIES.filter((c) => (m.cats & c.key) !== 0).map((c) => c.label);
+/** Category entries for a model, from its bitmask. */
+const catsOf = (m: SnapshotModel): typeof CATEGORIES =>
+  CATEGORIES.filter((c) => (m.cats & c.key) !== 0);
 
 export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
   const [open, setOpen] = useState(false);
@@ -632,8 +632,8 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
     return () => window.removeEventListener("keydown", onKey);
   }, [open, filterOpen]);
 
-  // Category mode (multi-select): ignore the provider sidebar, show matching
-  // models from all providers. Otherwise the active provider's models.
+  // Category mode (multi-select): ignore the provider sidebar, show models
+  // having ALL selected categories, from all providers.
   const inCategoryMode = catMask !== 0;
   const active = inCategoryMode ? undefined : (groups.find((g) => g.label === brand) ?? groups[0]);
   const allModels = useMemo(() => {
@@ -648,7 +648,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
     return out;
   }, [groups]);
   const base = inCategoryMode
-    ? allModels.filter((m) => (m.cats & catMask) !== 0)
+    ? allModels.filter((m) => (m.cats & catMask) === catMask)
     : (active?.models ?? []);
   const q = query.trim().toLowerCase();
   const models = q
@@ -722,6 +722,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                       onCheckedChange={() => setCatMask((m) => m ^ c.key)}
                       onSelect={(e) => e.preventDefault()}
                     >
+                      <c.icon className="ms-cat-item-icon" aria-hidden="true" />
                       {c.label}
                     </DropdownMenuCheckboxItem>
                   ))}
@@ -759,7 +760,8 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                   <div className="ms-empty">No models found</div>
                 )}
                 {models.map((m) => {
-                  const catLabels = catsOf(m);
+                  const cats = catsOf(m);
+                  const catLabels = cats.map((c) => c.label);
                   const curated = CURATED_BADGE_OF.get(m.id);
                   // Skip a curated badge that duplicates a category tag.
                   const showCurated = curated && !catLabels.includes(curated);
@@ -772,9 +774,9 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     >
                       <span className="ms-item-name">{m.id}</span>
                       <span className="ms-item-side">
-                        {catLabels.map((label) => (
-                          <span key={label} className="ms-cat-tag">
-                            {label}
+                        {cats.map((c) => (
+                          <span key={c.label} className="ms-cat-tag" title={c.label}>
+                            <c.icon className="ms-cat-tag-icon" aria-hidden="true" />
                           </span>
                         ))}
                         {showCurated && (
