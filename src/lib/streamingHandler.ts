@@ -14,6 +14,7 @@
 import type {
   BackendChatMessage,
   ContentBlock,
+  Message,
   StreamPart,
 } from "./backend";
 
@@ -33,6 +34,30 @@ export interface HistoryMessage {
 
 /** Keep history bounded so long conversations don't blow the context window. */
 const MAX_HISTORY_MESSAGES = 20;
+
+/** Stand-in text for an assistant turn that only holds a generated image. */
+export const IMAGE_HISTORY_PLACEHOLDER = "[Generated an image for this prompt.]";
+
+/**
+ * Turn the transcript into chat history the model can accept.
+ *
+ * Generated-image replies are stored with `content: ""` and the picture in
+ * `image`. Sending that empty string back as history makes strict providers
+ * reject every later request, so those turns become a short text placeholder
+ * instead. Any other message with no text is dropped for the same reason.
+ */
+export function toHistory(messages: Message[]): HistoryMessage[] {
+  const history: HistoryMessage[] = [];
+  for (const m of messages) {
+    if (m.role !== "user" && m.role !== "assistant") continue;
+    if (m.content.trim()) {
+      history.push({ role: m.role, content: m.content });
+    } else if (m.role === "assistant" && m.image) {
+      history.push({ role: "assistant", content: IMAGE_HISTORY_PLACEHOLDER });
+    }
+  }
+  return history;
+}
 
 /** Convert raw base64 (no data: prefix) to the SDK's image wire form. */
 function toImageBlock(base64: string): ContentBlock {

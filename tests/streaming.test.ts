@@ -4,7 +4,10 @@ import {
   stripThinkBlocks,
   splitThinkBlocks,
   streamAIResponse,
+  toHistory,
+  IMAGE_HISTORY_PLACEHOLDER,
 } from "../src/lib/streamingHandler";
+import type { Message } from "../src/lib/backend";
 
 // ---- stripThinkBlocks ----
 
@@ -122,4 +125,75 @@ test("onAbort keeps the raw partial text", async () => {
     },
   }, undefined, controller.signal);
   expect(aborted).toBe("Partial <think>unfinished");
+});
+
+// ---- generated-image turns in chat history ----
+
+test("an image-only assistant turn reaches the API as placeholder text", async () => {
+  // Mirrors the transcript Index.tsx holds after handleGenerateImage succeeds.
+  const transcript: Message[] = [
+    { role: "user", content: "draw a cat" },
+    { role: "assistant", content: "", image: "data:image/png;base64,AAAA" },
+  ];
+  let sent: { role: string; content: unknown }[] = [];
+  mockPuter({
+    ai: {
+      chat: async (msgs: { role: string; content: unknown }[]) => {
+        sent = msgs;
+        return (async function* () {
+          yield { type: "text", text: "ok" };
+        })();
+      },
+    },
+  });
+  await streamAIResponse(toHistory(transcript), "what is in it?", "gpt-5.4-nano", {
+    onChunk: () => {},
+    onComplete: () => {},
+    onError: (e) => {
+      throw e;
+    },
+  });
+  const empty = sent.filter((m) => typeof m.content === "string" && m.content.trim() === "");
+  expect(empty.length).toBe(0);
+  expect(sent[1]).toEqual({ role: "assistant", content: IMAGE_HISTORY_PLACEHOLDER });
+  // The image payload itself never leaves the browser inside history.
+  expect(JSON.stringify(sent)).not.toContain("data:image");
+});
+
+test("toHistory keeps text turns unchanged", () => {
+  expect(
+    toHistory([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello", model: "m" },
+    ])
+  ).toEqual([
+    { role: "user", content: "hi" },
+    { role: "assistant", content: "hello" },
+  ]);
+});
+
+test("toHistory drops empty and whitespace-only turns without an image", () => {
+  expect(
+    toHistory([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "   " },
+      { role: "user", content: "again" },
+    ])
+  ).toEqual([
+    { role: "user", content: "hi" },
+    { role: "user", content: "again" },
+  ]);
+});
+
+test("toHistory maps an image reply to the placeholder and keeps its prompt", () => {
+  const history = toHistory([
+    { role: "user", content: "draw a cat" },
+    { role: "assistant", content: "", image: "https://img/cat.png" },
+    { role: "user", content: "make it red" },
+  ]);
+  expect(history.map((h) => h.content)).toEqual([
+    "draw a cat",
+    IMAGE_HISTORY_PLACEHOLDER,
+    "make it red",
+  ]);
 });

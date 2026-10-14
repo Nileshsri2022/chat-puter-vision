@@ -10,7 +10,7 @@ import {
   checkAuthStatus,
   signOut
 } from "@/lib/backend";
-import { streamAIResponse, stripThinkBlocks } from "@/lib/streamingHandler";
+import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
 import { generateImage } from "@/lib/images";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
@@ -441,9 +441,7 @@ const Index = () => {
     runAssistantReply({
       baseMessages: updatedMessages,
       rollbackMessages: messages,
-      history: messages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      history: toHistory(messages),
       prompt: content,
       modelId: selectedModelId,
       imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
@@ -578,10 +576,7 @@ const Index = () => {
     runAssistantReply({
       baseMessages: messages,
       rollbackMessages: messages,
-      history: messages
-        .slice(0, questionIdx)
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      history: toHistory(messages.slice(0, questionIdx)),
       prompt,
       modelId: selectedModel,
       replaceIndex: aiIndex,
@@ -781,9 +776,7 @@ const Index = () => {
     await runAssistantReply({
       baseMessages: updatedMessages,
       rollbackMessages: messages,
-      history: priorMessages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      history: toHistory(priorMessages),
       prompt: clean,
       modelId: selectedModel,
       imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
