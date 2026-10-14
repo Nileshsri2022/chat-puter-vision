@@ -23,7 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Download, LogOut, CircleUserRound, Plus } from "lucide-react";
+import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Download, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -91,7 +91,7 @@ const Index = () => {
     });
   }, []);
 
-  const [syncStatus, setSyncStatus] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const [, setSyncStatus] = useState<"local" | "syncing" | "synced" | "error">("local");
   const syncInflight = useRef(false);
   const syncTimer = useRef<number | null>(null);
 
@@ -157,6 +157,8 @@ const Index = () => {
   useEffect(() => {
     localStorage.setItem("sidebar_open", String(sidebarOpen));
   }, [sidebarOpen]);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
@@ -608,6 +610,21 @@ const Index = () => {
     );
   };
 
+  const commitTitle = () => {
+    const clean = titleDraft.trim();
+    if (clean && currentConversationIdRef.current) {
+      handleRenameConversation(currentConversationIdRef.current, clean);
+    }
+    setEditingTitle(false);
+  };
+
+  const openSearch = () => {
+    setSidebarOpen(true);
+    window.setTimeout(() => {
+      document.getElementById("search-conversations")?.focus();
+    }, 350);
+  };
+
   const handleNewConversation = () => {
     const newConv: Conversation = {
       id: Date.now().toString(),
@@ -703,7 +720,6 @@ const Index = () => {
   return (
     <div className="app-root">
       <ConversationSidebar
-        syncStatus={syncStatus}
         conversations={conversations}
         currentConversationId={currentConversationId}
         onSelectConversation={setCurrentConversationId}
@@ -724,9 +740,6 @@ const Index = () => {
           <div className="app-header-group">
             {!sidebarOpen && (
               <div className="app-header-pill">
-                <span className="app-header-pill-logo">
-                  <Sparkles className="app-header-pill-logo-icon" aria-hidden="true" />
-                </span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -736,6 +749,16 @@ const Index = () => {
                   aria-label="Open sidebar"
                 >
                   <PanelLeftOpen className="app-header-icon" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-icon-btn"
+                  onClick={openSearch}
+                  title="Search conversations"
+                  aria-label="Search conversations"
+                >
+                  <Search className="app-header-icon" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -771,11 +794,34 @@ const Index = () => {
               </DropdownMenu>
             )}
           </div>
-          {currentConversation && (
-            <div className="app-header-title" title={currentConversation.title}>
-              {currentConversation.title}
-            </div>
-          )}
+          {currentConversation &&
+            (editingTitle ? (
+              <input
+                className="app-header-title-input"
+                value={titleDraft}
+                autoFocus
+                aria-label="Rename conversation"
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitTitle();
+                  else if (e.key === "Escape") setEditingTitle(false);
+                }}
+                onBlur={commitTitle}
+              />
+            ) : (
+              <button
+                type="button"
+                className="app-header-title"
+                title={`${currentConversation.title} (click to rename)`}
+                onClick={() => {
+                  setTitleDraft(currentConversation.title);
+                  setEditingTitle(true);
+                }}
+              >
+                {currentConversation.title}
+              </button>
+            ))}
           <div className="app-header-group">
             {isAuthenticated && <CreditPill />}
             <ThemeToggle />

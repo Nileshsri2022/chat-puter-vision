@@ -1,4 +1,4 @@
-import { Plus, PanelLeftClose, Trash2, Search, Sparkles, Cloud, CloudOff, Loader2, MoreHorizontal, Pencil, Pin, Share2, ListChecks, X } from "lucide-react";
+import { Plus, PanelLeftClose, Trash2, Search, Sparkles, MoreHorizontal, Pencil, Pin, Share2, ListChecks, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,6 @@ interface ConversationSidebarProps {
   onShareConversation: (id: string) => void;
   isOpen: boolean;
   onToggle: () => void;
-  syncStatus?: "local" | "syncing" | "synced" | "error";
 }
 
 const DAY_MS = 86400000;
@@ -43,14 +42,7 @@ export const ConversationSidebar = ({
   onRenameConversation,
   onTogglePin,
   onShareConversation,
-  syncStatus = "local",
 }: ConversationSidebarProps) => {
-  const syncMeta = {
-    local: { icon: <CloudOff className="sidebar-sync-icon" />, label: "Local only" },
-    syncing: { icon: <Loader2 className="sidebar-sync-icon-spin" />, label: "Syncing\u2026" },
-    synced: { icon: <Cloud className="sidebar-sync-icon" />, label: "Synced" },
-    error: { icon: <CloudOff className="sidebar-sync-icon" />, label: "Sync failed" },
-  }[syncStatus];
   const [searchQuery, setSearchQuery] = useState("");
 
   // Row "..." menu
@@ -383,12 +375,6 @@ export const ConversationSidebar = ({
             </div>
           </>
         )}
-
-        {/* Sync status */}
-        <div className="sidebar-sync">
-          {syncMeta.icon}
-          <span>{syncMeta.label}</span>
-        </div>
 
         {/* Conversations list */}
         <ScrollArea className="sidebar-scroll">

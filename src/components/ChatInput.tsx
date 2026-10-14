@@ -378,6 +378,14 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   <Mic className={"composer-tool-icon" + (recordingState === "recording" ? " composer-mic-recording" : "")} aria-hidden="true" />
                 )}
               </Button>
+              {onModelChange && (
+                <ModelSelector
+                  selectedModel={selectedModel || "gpt-5.4-nano"}
+                  onModelChange={onModelChange}
+                />
+              )}
+            </div>
+            <div className="composer-send-group">
               {modelSupportsImages && (
                 <Button
                   type="button"
@@ -396,36 +404,30 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   )}
                 </Button>
               )}
-              {onModelChange && (
-                <ModelSelector
-                  selectedModel={selectedModel || "gpt-5.4-nano"}
-                  onModelChange={onModelChange}
-                />
+              {disabled && onStop ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={onStop}
+                  className="composer-send-btn"
+                  title="Stop generating"
+                  aria-label="Stop generating"
+                >
+                  <Square className="composer-tool-icon" aria-hidden="true" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={(!input.trim() && selectedImages.length === 0) || disabled}
+                  className="composer-send-btn"
+                  title="Send message"
+                  aria-label="Send message"
+                >
+                  <ArrowUp className="composer-tool-icon" aria-hidden="true" />
+                </Button>
               )}
             </div>
-            {disabled && onStop ? (
-              <Button
-                type="button"
-                size="icon"
-                onClick={onStop}
-                className="composer-send-btn"
-                title="Stop generating"
-                aria-label="Stop generating"
-              >
-                <Square className="composer-tool-icon" aria-hidden="true" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="icon"
-                disabled={(!input.trim() && selectedImages.length === 0) || disabled}
-                className="composer-send-btn"
-                title="Send message"
-                aria-label="Send message"
-              >
-                <ArrowUp className="composer-tool-icon" aria-hidden="true" />
-              </Button>
-            )}
           </div>
         </div>
 

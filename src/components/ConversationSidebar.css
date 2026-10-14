@@ -72,18 +72,6 @@
   @apply pl-9 h-9 bg-sidebar-accent/50 border-sidebar-border;
 }
 
-.sidebar-sync {
-  @apply flex items-center gap-1.5 px-6 pb-2 text-[11px] text-muted-foreground;
-}
-
-.sidebar-sync-icon {
-  @apply h-3 w-3;
-}
-
-.sidebar-sync-icon-spin {
-  @apply h-3 w-3 animate-spin;
-}
-
 .sidebar-scroll {
   @apply flex-1;
 }

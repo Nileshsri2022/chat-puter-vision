@@ -67,6 +67,10 @@
   @apply flex items-center gap-1;
 }
 
+.composer-send-group {
+  @apply flex items-center gap-1;
+}
+
 .composer-tool-btn {
   @apply h-8 w-8 rounded-full text-muted-foreground;
 }

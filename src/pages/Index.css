@@ -18,11 +18,15 @@
 
 /* Header */
 .app-header {
-  @apply relative flex h-14 shrink-0 items-center justify-between border-b px-4;
+  @apply relative flex h-14 shrink-0 items-center justify-between px-4;
 }
 
 .app-header-title {
-  @apply pointer-events-none absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate text-[15px] font-medium;
+  @apply absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate rounded-full px-3 py-1 text-[15px] font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.app-header-title-input {
+  @apply absolute left-1/2 w-64 max-w-[60%] -translate-x-1/2 rounded-full border border-blue-500 bg-background px-4 py-1 text-center text-[15px] font-medium outline-none;
 }
 
 .app-header-group {
@@ -33,13 +37,6 @@
   @apply flex items-center gap-0.5 rounded-full border border-border bg-muted/60 py-1 pl-1.5 pr-1;
 }
 
-.app-header-pill-logo {
-  @apply flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground mr-0.5;
-}
-
-.app-header-pill-logo-icon {
-  @apply h-3.5 w-3.5;
-}
 
 .app-icon-btn {
   @apply h-8 w-8;
