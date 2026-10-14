@@ -1,9 +1,9 @@
 // Image generation via puter.ai.txt2img.
 // Docs: https://docs.puter.com/AI/txt2img/ (read 2026-10-13).
 //
-// Resolves to one HTMLImageElement in browsers; `image.src` is the image URL
-// or data URI. Hosted URLs are temporary — the src is persisted as-is, so a
-// data URI survives but a hosted URL may expire.
+// Each image is saved to the user's Puter storage through `puter_output_path`,
+// so the chat keeps only a small file path instead of a temporary hosted URL or
+// a large data URI. The file is read back with `puter.fs.read` when displayed.
 
 interface Txt2ImgErrorBody {
   message?: unknown;
@@ -36,20 +36,44 @@ function friendlyImageError(error: unknown): Error {
 }
 
 /**
- * Generate an image from a text prompt.
- * Resolves to the image src (URL or data URI). Uses the default provider.
+ * A new file path in the user's home folder. A `~/` path is sent to the API
+ * as-is (docs: absolute and home-relative paths are not rebased).
+ */
+export function newImagePath(): string {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `~/freetalk-${id}.png`;
+}
+
+/**
+ * Generate an image and save it to Puter storage.
+ * Resolves to the Puter path of the saved file.
  */
 export async function generateImage(prompt: string): Promise<string> {
   try {
     const puter = window.puter;
     if (!puter?.ai?.txt2img)
       throw new Error("Image generation is not available.");
-    const image = await puter.ai.txt2img(prompt);
-    if (!image || typeof image.src !== "string" || !image.src) {
-      throw new Error("Image generation returned no image.");
-    }
-    return image.src;
+    const path = newImagePath();
+    const image = await puter.ai.txt2img(prompt, { puter_output_path: path });
+    if (!image) throw new Error("Image generation returned no image.");
+    return path;
   } catch (error) {
     throw friendlyImageError(error);
   }
+}
+
+// Object URLs for saved images, keyed by path. A failed read is evicted so a
+// later render can retry it.
+const imageUrlCache = new Map<string, Promise<string>>();
+
+/** Resolves to a displayable blob: URL for a Puter file (cached per path). */
+export function loadImageUrl(path: string): Promise<string> {
+  const cached = imageUrlCache.get(path);
+  if (cached) return cached;
+  const fs = window.puter?.fs;
+  if (!fs?.read) return Promise.reject(new Error("Image storage is not available."));
+  const pending = fs.read(path).then((blob) => URL.createObjectURL(blob));
+  imageUrlCache.set(path, pending);
+  pending.catch(() => imageUrlCache.delete(path));
+  return pending;
 }

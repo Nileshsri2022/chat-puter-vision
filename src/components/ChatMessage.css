@@ -58,6 +58,10 @@
   max-height: min(16rem, 40dvh);
 }
 
+.msg-image-status {
+  @apply mb-3 text-sm text-muted-foreground;
+}
+
 .msg-lightbox {
   @apply fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4;
   /* 90dvh, not 90vh: the vh unit measures the chrome-hidden viewport and would

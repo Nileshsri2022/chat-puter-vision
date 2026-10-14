@@ -185,6 +185,15 @@ test("toHistory drops empty and whitespace-only turns without an image", () => {
   ]);
 });
 
+test("toHistory treats a Puter-saved image reply like a legacy one", () => {
+  expect(
+    toHistory([
+      { role: "user", content: "draw a cat" },
+      { role: "assistant", content: "", imagePath: "~/freetalk-x.png" },
+    ]).map((h) => h.content)
+  ).toEqual(["draw a cat", IMAGE_HISTORY_PLACEHOLDER]);
+});
+
 test("toHistory maps an image reply to the placeholder and keeps its prompt", () => {
   const history = toHistory([
     { role: "user", content: "draw a cat" },

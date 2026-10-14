@@ -52,7 +52,7 @@ export function toHistory(messages: Message[]): HistoryMessage[] {
     if (m.role !== "user" && m.role !== "assistant") continue;
     if (m.content.trim()) {
       history.push({ role: m.role, content: m.content });
-    } else if (m.role === "assistant" && m.image) {
+    } else if (m.role === "assistant" && (m.image || m.imagePath)) {
       history.push({ role: "assistant", content: IMAGE_HISTORY_PLACEHOLDER });
     }
   }

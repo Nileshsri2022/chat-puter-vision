@@ -609,8 +609,8 @@ const Index = () => {
     );
     setIsGeneratingImage(true);
     try {
-      const src = await generateImage(prompt);
-      const assistantMessage: Message = { role: "assistant", content: "", image: src };
+      const path = await generateImage(prompt);
+      const assistantMessage: Message = { role: "assistant", content: "", imagePath: path };
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === currentConversationId
@@ -1106,6 +1106,7 @@ const Index = () => {
                       content={message.content}
                       model={message.model}
                       image={message.image}
+                      imagePath={message.imagePath}
                       messageIndex={index}
                       searchMatch={searchMatches.includes(index)}
                       searchActive={searchMatches[activeMatch] === index}

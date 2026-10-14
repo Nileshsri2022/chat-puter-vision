@@ -16,6 +16,7 @@ import { copyToClipboard } from "@/lib/utils/export";
 import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { usePuterImage } from "@/hooks/usePuterImage";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import "./ChatMessage.css";
 
@@ -25,6 +26,8 @@ interface ChatMessageProps {
   isStreaming?: boolean;
   model?: string;
   image?: string;
+  /** Puter path of a generated image; loaded from Puter storage for display. */
+  imagePath?: string;
   /** Position in the transcript; tags the node for in-conversation search. */
   messageIndex?: number;
   /** In-conversation search: this message contains the query. */
@@ -50,7 +53,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -58,6 +61,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
   const [previewOpen, setPreviewOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const { src: imageSrc, failed: imageFailed } = usePuterImage(imagePath, image);
 
   const speakable = !isUser && stripMarkdownForSpeech(content).trim().length > 0;
 
@@ -333,9 +337,14 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
             <div className="msg-model-label">
               {isStreaming ? "Thinking…" : getModelDisplayName(model)}
             </div>
-            {image && (
+            {(imagePath || image) && !imageSrc && (
+              <div className="msg-image-status" role="status">
+                {imageFailed ? "Image unavailable." : "Loading image…"}
+              </div>
+            )}
+            {imageSrc && (
               <img
-                src={image}
+                src={imageSrc}
                 alt="Generated image"
                 className="msg-image"
                 loading="lazy"
@@ -478,7 +487,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
           </div>
         </div>
       )}
-      {previewOpen && image && (
+      {previewOpen && imageSrc && (
         <div
           className="msg-lightbox"
           role="dialog"
@@ -492,7 +501,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
           autoFocus
         >
           <img
-            src={image}
+            src={imageSrc}
             alt="Image preview"
             className="msg-lightbox-img"
             onClick={(e) => e.stopPropagation()}

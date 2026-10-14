@@ -225,6 +225,8 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
-  /** Image src (URL or data URI) for generated-image assistant messages. */
+  /** Legacy: image src (URL or data URI) from before images were saved to Puter. */
   image?: string;
+  /** Puter Drive path of a generated image (saved via `puter_output_path`). */
+  imagePath?: string;
 }
