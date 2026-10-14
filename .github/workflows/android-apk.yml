@@ -1,10 +1,13 @@
 name: Build Android APK
 
-# Builds the Capacitor Android release APK. Runs on demand from the Actions tab
-# (or `gh workflow run android-apk.yml`). The APK is uploaded as a workflow
+# Builds the Capacitor Android release APK. Runs when a `v*` tag is pushed, or on
+# demand from the Actions tab (workflow_dispatch needs this file on the default branch). The APK is uploaded as a workflow
 # artifact; publishing a GitHub Release is done separately from the artifact.
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
