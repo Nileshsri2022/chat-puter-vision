@@ -292,6 +292,72 @@ test("a failed read is evicted so the next render can retry", async () => {
   expect(reads).toBe(2);
 });
 
+// ---- reads versus background writes ----
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("a read waits out an in-flight write instead of racing it", async () => {
+  // The panel is open when the message is sent, so its tile reads a path whose
+  // upload has not landed yet. Racing it would 404 and stick the tile on
+  // "unavailable" for good: nothing re-runs the read after the write succeeds.
+  const written: string[] = [];
+  mockPuter({
+    fs: {
+      write: async (path: string) => {
+        await delay(20);
+        written.push(path);
+        return { name: path };
+      },
+      read: async (path: string) => {
+        if (!written.includes(path)) throw new Error("not_found");
+        return BLOB;
+      },
+    },
+  });
+  const writing = persistAttachment(BLOB, "race.png");
+  const blob = await loadImageBlob("race.png");
+  expect(blob).toBe(BLOB);
+  expect(await writing).toBe(true);
+});
+
+test("a write that failed reports storage, and issues no doomed read", async () => {
+  let reads = 0;
+  mockPuter({
+    fs: {
+      write: async () => {
+        throw { code: "storage_limit_reached" };
+      },
+      read: async () => {
+        reads += 1;
+        return BLOB;
+      },
+    },
+  });
+  const writing = persistAttachment(BLOB, "failed-write.png");
+  await expect(loadImageBlob("failed-write.png")).rejects.toThrow(
+    "could not be saved"
+  );
+  expect(reads).toBe(0);
+  expect(await writing).toBe(false);
+});
+
+test("a settled write is forgotten, so later reads go to Drive", async () => {
+  let reads = 0;
+  mockPuter({
+    fs: {
+      write: async () => ({ name: "settled.png" }),
+      read: async () => {
+        reads += 1;
+        return BLOB;
+      },
+    },
+  });
+  await persistAttachment(BLOB, "settled.png");
+  expect(await loadImageBlob("settled.png")).toBe(BLOB);
+  expect(await loadImageBlob("settled.png")).toBe(BLOB);
+  expect(reads).toBe(1); // cached, and no longer blocked on the write
+});
+
 // ---- sync round-trip ----
 
 interface TestConv {

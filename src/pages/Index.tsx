@@ -66,11 +66,14 @@ const SUGGESTIONS = [
  *
  * The write is backgrounded on purpose: paths are minted locally, so the
  * message can carry them immediately, and a Drive failure must never cost the
- * user their message. The tile then shows the same "unavailable" state a
- * generated image shows when its read fails.
+ * user their message. Reads wait that write out (see loadImageBlob), so an
+ * open panel does not race the upload; `onStoreFailed` is how a write that
+ * genuinely failed reaches the user instead of leaving a tile stuck on
+ * "unavailable" with no reason.
  */
 async function prepareAndStoreAttachments(
-  images: File[]
+  images: File[],
+  onStoreFailed?: (name: string) => void
 ): Promise<{ dataUrls: string[]; refs: AttachmentRef[] }> {
   const prepared = await prepareImageAttachments(images);
   const refs: AttachmentRef[] = prepared.map((attachment) => ({
@@ -80,7 +83,9 @@ async function prepareAndStoreAttachments(
     bytes: attachment.bytes,
   }));
   prepared.forEach((attachment, i) => {
-    void persistAttachment(attachment.file, refs[i].path);
+    void persistAttachment(attachment.file, refs[i].path).then((stored) => {
+      if (!stored) onStoreFailed?.(attachment.file.name || "That image");
+    });
   });
   return {
     dataUrls: prepared.map((attachment) => attachment.dataUrl),
@@ -497,7 +502,7 @@ const Index = () => {
     if (images && images.length > 0) {
       try {
         ({ dataUrls: imageUrls, refs: attachmentRefs } =
-          await prepareAndStoreAttachments(images));
+          await prepareAndStoreAttachments(images, notifyStoreFailed));
       } catch (error) {
         toast({
           title: "Image processing failed",
@@ -856,7 +861,7 @@ const Index = () => {
     if (images && images.length > 0) {
       try {
         ({ dataUrls: imageUrls, refs: attachmentRefs } =
-          await prepareAndStoreAttachments(images));
+          await prepareAndStoreAttachments(images, notifyStoreFailed));
       } catch (error) {
         toast({
           title: "Image processing failed",
@@ -938,6 +943,19 @@ const Index = () => {
       duration: 2000,
     });
   };
+
+  /**
+   * An attachment that reached the model but could not be stored: the send
+   * still succeeded, so this is a warning rather than an error, but staying
+   * quiet would leave the images panel short of an image with no explanation.
+   */
+  const notifyStoreFailed = useCallback((name: string) => {
+    toast({
+      title: "Image not saved to your library",
+      description: `${name} was sent, but could not be stored, so it will not appear in the images panel.`,
+      duration: 6000,
+    });
+  }, [toast]);
 
   const handleCopyMessage = async (content: string) => {
     const success = await copyToClipboard(content);

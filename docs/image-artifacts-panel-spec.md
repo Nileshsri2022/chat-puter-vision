@@ -161,8 +161,10 @@ export function loadImageBlob(path: string): Promise<Blob>;
   fallback container.
 - `loadImageUrl` is refactored to build on `loadImageBlob` so path → blob stays
   **one** cache; copy and download need the blob, display needs the URL.
+- `loadImageBlob` awaits any in-flight write for the path first (§6.1).
 - `persistAttachment` returns a boolean instead of throwing: a Drive failure must
-  never fail a send.
+  never fail a send. It registers that promise in `pendingWrites` synchronously
+  so `loadImageBlob` can await it rather than race it (§6.1).
 
 ### 6.1 Optimistic write, non-blocking send
 
@@ -184,9 +186,23 @@ refs.forEach((ref, i) => { void persistAttachment(prepared[i].file, ref.path); }
 ```
 
 Paths are minted client-side, so the message can carry them before the write
-lands. If a write fails, the tile renders the same "Image unavailable" state a
-generated image already renders when its Drive read fails (`usePuterImage`'s
-`failed` flag) — no new failure UI, and no lost message.
+lands.
+
+**Reads wait out writes.** The panel is often open at the moment a message is
+sent, so its tile would read a path whose upload has not landed yet. That read
+404s, and because `usePuterImage` only re-runs when its `path` prop changes, the
+tile would sit on "unavailable" *permanently* — the upload succeeding a second
+later changes nothing. So `persistAttachment` registers its promise in a
+`pendingWrites` map (synchronously, before its first await) and `loadImageBlob`
+awaits any in-flight write for that path before reading. The entry is dropped
+once settled, so later reads go straight to Drive.
+
+**A failed write is reported, not guessed at.** When the awaited write resolves
+`false`, `loadImageBlob` throws "The image could not be saved to storage"
+instead of issuing a read that cannot succeed, and the send path toasts
+*"Image not saved to your library — <name> was sent, but could not be stored"*.
+The send itself still succeeded: this is a warning, not an error, and it is what
+stops a silently missing image from looking like a panel bug.
 
 ## 7. Layout
 
@@ -420,8 +436,10 @@ sign out and confirm the toggle is gone.
 
 | Risk | Mitigation |
 | --- | --- |
-| Drive storage grows with every attachment | Normalized ≤1.2 MB files, same folder as generated images which already behave this way; Phase 2 adds cleanup |
-| A background write fails silently | Tile shows the existing "Image unavailable" state; the send itself is unaffected |
+| Drive storage grows with every attachment | Normalized ≤1.2 MB files, same folder as generated images which already behave this way; Phase 2 adds cleanup. Deleting a message, editing one, or deleting a conversation orphans its files — nothing reclaims them today, and `BackendFS` types only `write`/`read` |
+| Uploads now land in the user's Drive | New behaviour: an attachment used to be ephemeral. It is the account's own storage, the same place generated images already go, and it is what makes attachments survive a reload and follow the user to another device — but it is a change worth announcing in release notes |
+| A background write fails silently | It does not: reads wait the write out, a failed write throws a storage error rather than 404ing, and the send path toasts (§6.1) |
+| A tile reads before the upload lands | `pendingWrites` makes the read wait instead of racing (§6.1) |
 | Both panels open squeeze the transcript | Panel docks only ≥1280px; below that it is an overlay |
 | KV/localStorage growth | Paths only (~40 bytes per attachment) |
 | Index-keyed messages make stored pointers stale | Artifacts are derived per render, never stored (§5) |

@@ -86,12 +86,24 @@ export async function generateImage(prompt: string): Promise<string> {
 const imageBlobCache = new Map<string, Promise<Blob>>();
 const imageUrlCache = new Map<string, Promise<string>>();
 
+// Writes we started ourselves, keyed by path. Attachments upload in the
+// background of a send, so a read issued while that upload is still in flight
+// would 404 — and because a failed read sticks the tile on "unavailable" until
+// it remounts, the image would stay missing even after the write succeeded.
+const pendingWrites = new Map<string, Promise<boolean>>();
+
 /** Resolves to the stored Blob for a Puter file (cached per path). */
-export function loadImageBlob(path: string): Promise<Blob> {
+export async function loadImageBlob(path: string): Promise<Blob> {
+  // Wait out our own write before reading. A write that failed is reported as
+  // such instead of issuing a read that cannot succeed.
+  const inflight = pendingWrites.get(path);
+  if (inflight && !(await inflight)) {
+    throw new Error("The image could not be saved to storage.");
+  }
   const cached = imageBlobCache.get(path);
   if (cached) return cached;
   const fs = window.puter?.fs;
-  if (!fs?.read) return Promise.reject(new Error("Image storage is not available."));
+  if (!fs?.read) throw new Error("Image storage is not available.");
   const pending = fs.read(path);
   imageBlobCache.set(path, pending);
   pending.catch(() => imageBlobCache.delete(path));
@@ -113,16 +125,27 @@ export function loadImageUrl(path: string): Promise<string> {
  *
  * Best-effort by design: this runs in the background of a send, and a Drive
  * failure must never lose the user's message. Resolves false when the file
- * could not be written — the panel then shows the same "unavailable" state a
- * generated image shows when its read fails.
+ * could not be written — the caller says so, and `loadImageBlob` reports it
+ * instead of leaving the panel to guess why a tile cannot resolve.
+ *
+ * The write registers itself synchronously, so a read that starts in the same
+ * tick as the send still sees it as in flight rather than racing it.
  */
-export async function persistAttachment(blob: Blob, path: string): Promise<boolean> {
-  try {
-    const fs = window.puter?.fs;
-    if (!fs?.write) return false;
-    await fs.write(path, blob, { dedupeName: false, overwrite: true });
-    return true;
-  } catch {
-    return false;
-  }
+export function persistAttachment(blob: Blob, path: string): Promise<boolean> {
+  const done = (async () => {
+    try {
+      const fs = window.puter?.fs;
+      if (!fs?.write) return false;
+      await fs.write(path, blob, { dedupeName: false, overwrite: true });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  pendingWrites.set(path, done);
+  // Once settled the entry is dead weight; a later read goes to Drive directly.
+  void done.then(() => {
+    if (pendingWrites.get(path) === done) pendingWrites.delete(path);
+  });
+  return done;
 }
