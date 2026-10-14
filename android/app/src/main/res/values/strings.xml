@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FreeTalk</string>
+    <string name="title_activity_main">FreeTalk</string>
+    <string name="package_name">com.nileshsri.freetalk</string>
+    <string name="custom_url_scheme">com.nileshsri.freetalk</string>
+</resources>
