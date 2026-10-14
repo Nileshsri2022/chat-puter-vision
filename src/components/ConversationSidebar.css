@@ -29,11 +29,11 @@
 }
 
 .sidebar-close-btn {
-  @apply h-8 w-8 text-muted-foreground hover:text-foreground;
+  @apply size-8 text-muted-foreground hover:text-foreground;
 }
 
 .sidebar-close-icon {
-  @apply w-4 h-4;
+  @apply size-4;
 }
 
 .sidebar-newchat-wrap {
@@ -45,7 +45,7 @@
 }
 
 .sidebar-newchat-icon {
-  @apply w-4 h-4;
+  @apply size-4;
 }
 
 .sidebar-search-wrap {
@@ -57,7 +57,7 @@
 }
 
 .sidebar-search-icon {
-  @apply absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground;
+  @apply absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground;
 }
 
 .sidebar-search-input {
@@ -105,7 +105,7 @@
 }
 
 .conv-pin-icon {
-  @apply w-3.5 h-3.5 shrink-0 opacity-60;
+  @apply size-3.5 shrink-0 opacity-60;
 }
 
 .conv-rename-input {
@@ -118,11 +118,11 @@
 }
 
 .conv-row-menu-btn {
-  @apply h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100;
+  @apply size-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100;
 }
 
 .conv-row-menu-icon {
-  @apply w-4 h-4;
+  @apply size-4;
 }
 
 .conv-menu-scrim {
@@ -138,7 +138,7 @@
 }
 
 .conv-menu-icon {
-  @apply w-4 h-4 shrink-0 opacity-70;
+  @apply size-4 shrink-0 opacity-70;
 }
 
 .conv-menu-item-danger {
@@ -151,7 +151,7 @@
 
 /* Multi-select mode */
 .conv-check {
-  @apply flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground;
+  @apply flex size-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground;
 }
 
 .conv-check-on {
@@ -175,7 +175,7 @@
 }
 
 .sidebar-select-action-icon {
-  @apply w-4 h-4;
+  @apply size-4;
 }
 
 .sidebar-select-action-confirm {

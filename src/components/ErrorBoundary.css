@@ -9,11 +9,11 @@
 }
 
 .error-fallback-icon-wrap {
-  @apply inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive;
+  @apply inline-flex items-center justify-center size-16 rounded-full bg-destructive/10 text-destructive;
 }
 
 .error-fallback-icon {
-  @apply w-8 h-8;
+  @apply size-8;
 }
 
 .error-fallback-heading-group {
@@ -45,5 +45,5 @@
 }
 
 .error-fallback-retry-icon {
-  @apply w-4 h-4;
+  @apply size-4;
 }

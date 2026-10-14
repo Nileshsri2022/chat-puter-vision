@@ -18,23 +18,23 @@
 }
 
 .composer-preview-img {
-  @apply h-16 w-16 rounded-xl border border-border object-cover;
+  @apply size-16 rounded-xl border border-border object-cover;
 }
 
 .composer-preview-ocr {
-  @apply absolute -left-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100;
+  @apply absolute -left-2 -top-2 size-6 opacity-0 transition-opacity group-hover:opacity-100;
 }
 
 .composer-preview-remove {
-  @apply absolute -right-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100;
+  @apply absolute -right-2 -top-2 size-6 opacity-0 transition-opacity group-hover:opacity-100;
 }
 
 .composer-mini-spinner {
-  @apply h-3 w-3 animate-spin rounded-full border border-current border-t-transparent;
+  @apply size-3 animate-spin rounded-full border border-current border-t-transparent;
 }
 
 .composer-mini-icon {
-  @apply h-3 w-3;
+  @apply size-3;
 }
 
 /* Image generation prompt row */
@@ -51,7 +51,7 @@
 }
 
 .composer-spinner {
-  @apply h-4 w-4 animate-spin rounded-full border border-current border-t-transparent;
+  @apply size-4 animate-spin rounded-full border border-current border-t-transparent;
 }
 
 /* Composer box */
@@ -89,11 +89,11 @@
 }
 
 .composer-tool-btn {
-  @apply h-8 w-8 rounded-full text-muted-foreground;
+  @apply size-8 rounded-full text-muted-foreground;
 }
 
 .composer-tool-icon {
-  @apply h-4 w-4;
+  @apply size-4;
 }
 
 .composer-mic-recording {
@@ -101,7 +101,7 @@
 }
 
 .composer-send-btn {
-  @apply h-9 w-9 rounded-full;
+  @apply size-9 rounded-full;
 }
 
 .composer-hidden-input {

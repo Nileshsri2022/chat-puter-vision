@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -728,6 +730,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                 <DropdownMenuContent align="end" className="ms-filter-menu">
                   <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
                   {CATEGORIES.map((c) => (
                     <DropdownMenuCheckboxItem
                       key={c.label}
@@ -741,12 +744,15 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     </span>
                     </DropdownMenuCheckboxItem>
                   ))}
+                  </DropdownMenuGroup>
                   {catMask !== 0 && (
                     <>
                       <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
                       <DropdownMenuItem onSelect={() => setCatMask(0)}>
                         Clear filters
                       </DropdownMenuItem>
+                      </DropdownMenuGroup>
                     </>
                   )}
                 </DropdownMenuContent>
@@ -762,7 +768,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     type="button"
                     role="tab"
                     aria-selected={!inCategoryMode && g.label === active?.label}
-                    className={"ms-provider-item" + (!inCategoryMode && g.label === active?.label ? " ms-provider-item-active" : "")}
+                    className={cn("ms-provider-item", !inCategoryMode && g.label === active?.label && "ms-provider-item-active")}
                     onClick={() => selectProvider(g.label)}
                   >
                     <span className="ms-provider-item-label">{g.label}</span>
@@ -786,7 +792,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     <button
                       key={m.id}
                       type="button"
-                      className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
+                      className={cn("ms-item", m.id === selectedModel && "ms-item-selected")}
                       onClick={() => handleSelect(m.id)}
                     >
                       <span className="ms-item-name">{m.id}</span>

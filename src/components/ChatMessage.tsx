@@ -1,8 +1,10 @@
 import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -345,7 +347,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                       ? `Thought for ${thinkSecs} second${thinkSecs === 1 ? "" : "s"}`
                       : "Thought process"}
                   <ChevronDown
-                    className={`msg-think-chevron ${showThinking ? "" : "msg-think-chevron-collapsed"}`}
+                    className={cn("msg-think-chevron", !showThinking && "msg-think-chevron-collapsed")}
                     aria-hidden="true"
                   />
                 </button>
@@ -435,6 +437,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
+                      <DropdownMenuGroup>
                       <DropdownMenuItem onClick={() => onShareExchange("md")}>
                         Export as Markdown
                       </DropdownMenuItem>
@@ -445,6 +448,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                       <DropdownMenuItem onClick={() => onShareExchange("drive")}>
                         Save to Drive
                       </DropdownMenuItem>
+                      </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
