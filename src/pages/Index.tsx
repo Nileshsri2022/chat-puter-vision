@@ -710,16 +710,84 @@ const Index = () => {
     }
   };
 
-  const handleEditMessage = (messageIndex: number, newContent: string) => {
-    const clean = newContent.trim();
-    if (!clean) return;
+  const handleEditMessage = async (messageIndex: number, newContent: string, images?: File[]) => {
+    if (isStreaming || !currentConversation) return;
+
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to use AI models.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+
+    const clean = newContent.replace(/\n\n\[Images: \d+ attached\]$/, "").trim();
+    if (!clean && (!images || images.length === 0)) return;
+
+    let imageBase64s: string[] = [];
+    if (images && images.length > 0) {
+      try {
+        imageBase64s = await Promise.all(
+          images.map(
+            (file) =>
+              new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    const comma = reader.result.indexOf(",");
+                    resolve(comma >= 0 ? reader.result.slice(comma + 1) : reader.result);
+                  } else {
+                    reject(new Error(`Failed to convert ${file.name} to string`));
+                  }
+                };
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(file);
+              })
+          )
+        );
+      } catch {
+        toast({
+          title: "Image processing failed",
+          description: "Failed to process images. Please try again.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
+    let messageContent = clean;
+    if (imageBase64s.length > 0) {
+      messageContent = `${clean}${clean ? "\n\n" : ""}[Images: ${imageBase64s.length} attached]`;
+    }
+
+    const priorMessages = messages.slice(0, messageIndex);
+    const updatedMessages: Message[] = [...priorMessages, { role: "user", content: messageContent }];
+
     setConversations((prev) =>
       prev.map((conv) =>
         conv.id === currentConversationIdRef.current
-          ? { ...conv, messages: conv.messages.map((m, i) => (i === messageIndex ? { ...m, content: clean } : m)) }
+          ? {
+              ...conv,
+              messages: updatedMessages,
+              title: messageIndex === 0 ? truncateTitle(clean) : conv.title,
+            }
           : conv
       )
     );
+
+    await runAssistantReply({
+      baseMessages: updatedMessages,
+      rollbackMessages: messages,
+      history: priorMessages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      prompt: clean,
+      modelId: selectedModel,
+      imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
+    });
   };
 
   const commitTitle = () => {
@@ -886,6 +954,7 @@ const Index = () => {
               <input
                 className="app-header-title-input"
                 value={titleDraft}
+                size={Math.min(Math.max(1, titleDraft.length), 32)}
                 autoFocus
                 aria-label="Rename conversation"
                 onFocus={(e) => e.target.select()}
@@ -1049,7 +1118,7 @@ const Index = () => {
                       searchActive={searchMatches[activeMatch] === index}
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
-                      onEdit={message.role === "user" ? (content) => handleEditMessage(index, content) : undefined}
+                      onEdit={message.role === "user" ? (content, images) => handleEditMessage(index, content, images) : undefined}
                       onShareExchange={
                         message.role === "assistant"
                           ? () => handleShareExchange(index)

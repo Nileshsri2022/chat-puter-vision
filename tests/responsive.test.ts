@@ -130,6 +130,18 @@ test("header uses a truncating grid instead of an absolutely centred title", () 
   expect(css).not.toMatch(/\.app-header-title\s*\{[^}]*absolute/);
   // The icon groups must not be squeezed out of existence.
   expect(css).toMatch(/\.app-header-group\s*\{[^}]*min-w-0/);
+  // Title button and editable input must hug the text (justify-self-center) and
+  // cap at a fixed max width with ellipsis, rather than stretching across the
+  // entire 1fr track.
+  const titleRule = /\.app-header-title\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(titleRule).toContain("justify-self-center");
+  expect(titleRule).toContain("truncate");
+  expect(titleRule).toMatch(/max-w-/);
+  const inputRule = /\.app-header-title-input\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(inputRule).toContain("justify-self-center");
+  expect(inputRule).toContain("truncate");
+  expect(inputRule).toMatch(/max-w-/);
+  expect(inputRule).toContain("field-sizing: content");
 });
 
 test("the header sheds secondary actions before it can overflow", () => {
@@ -191,6 +203,19 @@ test("composer text is at least 16px on phones to prevent iOS zoom", () => {
   expect(css).toMatch(/@media \(min-width: 640px\)\s*\{\s*\.composer-textarea\s*\{\s*font-size:\s*15px/);
 });
 
+test("inline message edit sizes to content and resends the edited prompt", () => {
+  const css = read("components/ChatInput.css");
+  const wrapRule = /\.composer-wrap-compact\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(wrapRule).toContain("w-fit");
+  expect(wrapRule).toContain("ml-auto");
+  const textareaRule = /\.composer-textarea-compact\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(textareaRule).toContain("field-sizing: content");
+
+  const page = read("pages/Index.tsx");
+  const editFn = /const handleEditMessage[\s\S]*?^\s{2}\};/m.exec(page)?.[0] ?? "";
+  expect(editFn).toContain("runAssistantReply(");
+});
+
 // ---- sidebar ----
 
 test("sidebar width has a single source of truth and cannot exceed the viewport", () => {
@@ -200,6 +225,22 @@ test("sidebar width has a single source of truth and cannot exceed the viewport"
   expect(read("components/ConversationSidebar.css")).toMatch(
     /width:\s*min\(var\(--sidebar-w\),\s*\d+vw\)/
   );
+});
+
+test("sidebar conversation rows stay fixed width and truncate overflowing titles", () => {
+  const scrollArea = read("components/ui/scroll-area.tsx");
+  // Radix's inner `display: table` wrapper expands to fit nowrap text unless
+  // forced to block layout.
+  expect(scrollArea).toContain("[&>div]:!block");
+  const sidebarCss = read("components/ConversationSidebar.css");
+  expect(sidebarCss).toMatch(
+    /\.sidebar-scroll\s+\[data-radix-scroll-area-viewport\]\s*>\s*div\s*\{[^}]*display:\s*block\s*!important/
+  );
+  const rowRule = /\.conv-row\s*\{([^}]*)\}/.exec(sidebarCss)?.[1] ?? "";
+  expect(rowRule).toContain("min-w-0");
+  expect(rowRule).toContain("max-w-full");
+  const titleRule = /\.conv-row-title\s*\{([^}]*)\}/.exec(sidebarCss)?.[1] ?? "";
+  expect(titleRule).toContain("truncate");
 });
 
 test("sidebar docking and its overlay share one breakpoint", () => {

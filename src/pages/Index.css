@@ -40,11 +40,12 @@
 }
 
 .app-header-title {
-  @apply min-w-0 truncate rounded-full px-1 py-1 text-center text-[15px] font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3;
+  @apply min-w-0 max-w-[min(100%,18rem)] justify-self-center truncate rounded-full px-1 py-1 text-center text-[15px] font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3;
 }
 
 .app-header-title-input {
-  @apply min-w-0 rounded-full border border-blue-500 bg-background px-4 py-1 text-center text-[15px] font-medium outline-none;
+  @apply min-w-[4ch] max-w-[min(100%,18rem)] justify-self-center truncate rounded-full border border-blue-500 bg-background px-3 py-1 text-center text-[15px] font-medium outline-none;
+  field-sizing: content;
 }
 
 .app-header-group {

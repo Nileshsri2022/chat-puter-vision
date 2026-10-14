@@ -78,13 +78,34 @@
 }
 
 .sidebar-scroll {
-  @apply flex-1;
+  @apply w-full max-w-full min-w-0 flex-1 overflow-hidden;
+}
+
+/* Radix ScrollArea wraps viewport children in an inline `display: table` div,
+   which expands horizontally to fit `white-space: nowrap` titles instead of
+   letting them truncate. Force block layout so rows stay fixed to the rail. */
+.sidebar-scroll [data-radix-scroll-area-viewport] {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+.sidebar-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 .sidebar-list {
-  @apply flex flex-col gap-1 px-2 pb-2;
+  @apply flex w-full max-w-full min-w-0 flex-col gap-1 px-2 pb-2 overflow-hidden;
   /* Keeps the last conversation clear of the home indicator. */
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.sidebar-group {
+  @apply min-w-0 w-full max-w-full overflow-hidden;
 }
 
 .sidebar-list-heading {
@@ -96,7 +117,7 @@
 }
 
 .conv-row {
-  @apply flex w-full items-center justify-between gap-1 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-sidebar-accent;
+  @apply flex w-full max-w-full min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-sidebar-accent;
   /* Comfortable row height for touch without inflating the desktop density. */
   min-height: 2.5rem;
 }
@@ -110,7 +131,7 @@
 }
 
 .conv-row-btn {
-  @apply flex-1 min-w-0 flex items-center gap-2.5 text-left py-1 px-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  @apply flex-1 min-w-0 overflow-hidden flex items-center gap-2.5 text-left py-1 px-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
 }
 
 .conv-row-selected {
@@ -118,7 +139,7 @@
 }
 
 .conv-row-title {
-  @apply truncate;
+  @apply block min-w-0 flex-1 truncate;
 }
 
 .conv-pin-icon {

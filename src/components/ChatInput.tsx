@@ -340,7 +340,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
 
         <div className="composer-box">
           <Textarea
-            id="chat-message-input"
+            id={compact ? undefined : "chat-message-input"}
             name="message"
             aria-label="Message"
             value={input}

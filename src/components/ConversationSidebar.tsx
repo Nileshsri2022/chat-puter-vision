@@ -402,7 +402,7 @@ export const ConversationSidebar = ({
               </div>
             ) : (
               groups.map((group) => (
-                <div key={group.label}>
+                <div key={group.label} className="sidebar-group">
                   <div className="sidebar-list-heading">
                     {group.label}
                   </div>

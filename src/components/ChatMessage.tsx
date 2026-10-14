@@ -33,7 +33,7 @@ interface ChatMessageProps {
   searchActive?: boolean;
   onCopy?: (content: string) => void;
   onDelete?: () => void;
-  onEdit?: (content: string) => void;
+  onEdit?: (content: string, images?: File[]) => void;
   onShareExchange?: (format: "md") => void;
   onRetry?: () => void;
 }
@@ -270,15 +270,13 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
         >
           {editing ? (
             <ChatInput
-              initialValue={content}
+              initialValue={content.replace(/\n\n\[Images: \d+ attached\]$/, "")}
               compact
+              disabled={isStreaming}
+              selectedModel={model}
               onCancel={() => setEditing(false)}
               onSend={(text, _model, images) => {
-                const marker =
-                  images && images.length > 0
-                    ? `${text ? "\n\n" : ""}[Images: ${images.length} attached]`
-                    : "";
-                if (onEdit) onEdit(text + marker);
+                if (onEdit) onEdit(text, images);
                 setEditing(false);
               }}
             />
