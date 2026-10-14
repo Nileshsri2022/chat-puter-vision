@@ -1,0 +1,278 @@
+{
+  "7": [
+    "P1",
+    "bug",
+    "area: cloud-sync",
+    "area: persistence"
+  ],
+  "8": [
+    "P1",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "9": [
+    "P1",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "10": [
+    "P1",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "11": [
+    "P1",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "12": [
+    "P1",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "13": [
+    "P1",
+    "bug",
+    "area: persistence"
+  ],
+  "14": [
+    "P1",
+    "bug",
+    "area: images",
+    "area: chat"
+  ],
+  "15": [
+    "P1",
+    "bug",
+    "area: images"
+  ],
+  "16": [
+    "P1",
+    "bug",
+    "area: chat"
+  ],
+  "17": [
+    "P1",
+    "bug",
+    "area: chat",
+    "area: models"
+  ],
+  "18": [
+    "P1",
+    "bug",
+    "area: images"
+  ],
+  "19": [
+    "P1",
+    "bug",
+    "area: voice",
+    "area: chat"
+  ],
+  "20": [
+    "P2",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "21": [
+    "P2",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "22": [
+    "P2",
+    "bug",
+    "area: cloud-sync"
+  ],
+  "23": [
+    "P2",
+    "bug",
+    "area: auth"
+  ],
+  "24": [
+    "P2",
+    "bug",
+    "area: persistence"
+  ],
+  "25": [
+    "P2",
+    "bug",
+    "area: persistence"
+  ],
+  "26": [
+    "P2",
+    "bug",
+    "area: chat"
+  ],
+  "27": [
+    "P2",
+    "bug",
+    "area: chat"
+  ],
+  "28": [
+    "P2",
+    "bug",
+    "area: chat"
+  ],
+  "29": [
+    "P2",
+    "bug",
+    "area: chat"
+  ],
+  "30": [
+    "P2",
+    "bug",
+    "area: images",
+    "area: models"
+  ],
+  "31": [
+    "P2",
+    "bug",
+    "area: images",
+    "area: models"
+  ],
+  "32": [
+    "P2",
+    "bug",
+    "area: images",
+    "area: chat"
+  ],
+  "33": [
+    "P2",
+    "bug",
+    "area: images"
+  ],
+  "34": [
+    "P2",
+    "bug",
+    "area: ui",
+    "area: chat"
+  ],
+  "35": [
+    "P2",
+    "bug",
+    "area: chat"
+  ],
+  "36": [
+    "P2",
+    "bug",
+    "area: export"
+  ],
+  "37": [
+    "P2",
+    "bug",
+    "area: voice"
+  ],
+  "38": [
+    "P2",
+    "bug",
+    "area: voice"
+  ],
+  "39": [
+    "P2",
+    "bug",
+    "area: voice",
+    "area: chat"
+  ],
+  "40": [
+    "P2",
+    "bug",
+    "area: search"
+  ],
+  "41": [
+    "P2",
+    "bug",
+    "area: search"
+  ],
+  "42": [
+    "P2",
+    "bug",
+    "area: models"
+  ],
+  "43": [
+    "P2",
+    "bug",
+    "area: models",
+    "area: images"
+  ],
+  "44": [
+    "P2",
+    "bug",
+    "area: models"
+  ],
+  "45": [
+    "P2",
+    "bug",
+    "area: export"
+  ],
+  "46": [
+    "P2",
+    "bug",
+    "area: export",
+    "area: images"
+  ],
+  "47": [
+    "P2",
+    "bug",
+    "a11y",
+    "area: ui"
+  ],
+  "48": [
+    "P2",
+    "bug",
+    "a11y",
+    "area: images"
+  ],
+  "49": [
+    "P2",
+    "bug",
+    "area: images"
+  ],
+  "50": [
+    "P3",
+    "bug",
+    "area: voice",
+    "good first issue"
+  ],
+  "51": [
+    "P3",
+    "bug",
+    "area: chat",
+    "good first issue"
+  ],
+  "52": [
+    "P3",
+    "bug",
+    "area: models"
+  ],
+  "53": [
+    "P2",
+    "bug",
+    "area: android",
+    "area: voice"
+  ],
+  "54": [
+    "P3",
+    "bug",
+    "area: android",
+    "testing",
+    "good first issue"
+  ],
+  "55": [
+    "P3",
+    "bug",
+    "testing",
+    "area: export"
+  ],
+  "56": [
+    "P3",
+    "bug",
+    "area: build",
+    "testing"
+  ],
+  "57": [
+    "P2",
+    "bug",
+    "security",
+    "dependencies"
+  ]
+}
