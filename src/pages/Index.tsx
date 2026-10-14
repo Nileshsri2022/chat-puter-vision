@@ -11,7 +11,7 @@ import {
   checkAuthStatus,
   signOut
 } from "@/lib/backend";
-import { streamAIResponse } from "@/lib/streamingHandler";
+import { streamAIResponse, stripThinkBlocks } from "@/lib/streamingHandler";
 import { generateImage } from "@/lib/images";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
@@ -673,6 +673,25 @@ const Index = () => {
     });
   };
 
+  const handleShareExchange = (index: number) => {
+    const aiMsg = messages[index];
+    if (!aiMsg || aiMsg.role !== "assistant") return;
+    let question = "";
+    for (let i = index - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        question = messages[i].content;
+        break;
+      }
+    }
+    const model = aiMsg.model ? ` (${aiMsg.model})` : "";
+    const md =
+      (question ? `**You:**\n\n${question}\n\n---\n\n` : "") +
+      `**AI${model}:**\n\n${stripThinkBlocks(aiMsg.content)}\n`;
+    const base = (question || aiMsg.content).slice(0, 50).replace(/[^a-z0-9]/gi, "_") || "answer";
+    downloadFile(`${base}.md`, md);
+    toast({ title: "Answer exported", duration: 2000 });
+  };
+
   const handleExport = (format: 'md' | 'json') => {
     if (!currentConversation) return;
 
@@ -912,6 +931,7 @@ const Index = () => {
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content) => handleEditMessage(index, content) : undefined}
+                      onShare={message.role === "assistant" ? () => handleShareExchange(index) : undefined}
                     />
                   ))}
                   {isStreaming && (

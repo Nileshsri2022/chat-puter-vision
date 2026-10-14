@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Paperclip } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Paperclip, Share2 } from "lucide-react";
 import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,7 @@ interface ChatMessageProps {
   onCopy?: (content: string) => void;
   onDelete?: () => void;
   onEdit?: (content: string) => void;
+  onShare?: () => void;
 }
 
 const ALL_MODELS: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
@@ -35,7 +36,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit, onShare }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -423,7 +424,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                 <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {!isStreaming && (speakable || onCopy || onDelete) && (
+            {!isStreaming && (speakable || onCopy || onDelete || onShare) && (
               <div className="msg-actions">
                 {speakable && (
                   <Button
@@ -454,6 +455,18 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     aria-label={copied ? "Copied" : "Copy message"}
                   >
                     {copied ? <Check className="msg-action-icon" aria-hidden="true" /> : <Copy className="msg-action-icon" aria-hidden="true" />}
+                  </Button>
+                )}
+                {onShare && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onShare}
+                    className="msg-action-btn"
+                    title="Share this answer"
+                    aria-label="Share this answer"
+                  >
+                    <Share2 className="msg-action-icon" aria-hidden="true" />
                   </Button>
                 )}
                 {onDelete && (
