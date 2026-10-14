@@ -910,7 +910,7 @@ const Index = () => {
                     {profile?.name ?? "Account"}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
+                  <DropdownMenuItem onClick={handleSignOut} className="gap-2">
                     <LogOut className="app-menu-icon" aria-hidden="true" />
                     Sign out
                   </DropdownMenuItem>

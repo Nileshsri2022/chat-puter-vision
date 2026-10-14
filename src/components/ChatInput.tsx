@@ -255,7 +255,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
 
   return (
     <div className={"composer-wrap" + (compact ? " composer-wrap-compact" : "")}>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="composer-form">
         {/* Image previews */}
         {modelSupportsImages && imagePreviews.length > 0 && (
           <div className="composer-previews">

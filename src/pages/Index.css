@@ -63,7 +63,7 @@
 }
 
 .app-menu-icon {
-  @apply mr-2 h-4 w-4;
+  @apply h-4 w-4;
 }
 
 /* Welcome / empty states */
@@ -72,7 +72,7 @@
 }
 
 .app-welcome-card {
-  @apply max-w-md space-y-6 text-center;
+  @apply max-w-md flex flex-col items-center gap-6 text-center;
 }
 
 .app-hero-badge {

@@ -5,7 +5,7 @@
 }
 
 .error-fallback-card {
-  @apply max-w-md w-full text-center space-y-6;
+  @apply max-w-md w-full text-center flex flex-col items-center gap-6;
 }
 
 .error-fallback-icon-wrap {
@@ -17,7 +17,7 @@
 }
 
 .error-fallback-heading-group {
-  @apply space-y-2;
+  @apply flex flex-col gap-2;
 }
 
 .error-fallback-title {
@@ -29,7 +29,7 @@
 }
 
 .error-fallback-details {
-  @apply text-left bg-muted/50 p-3 rounded-lg text-sm;
+  @apply text-left bg-muted/50 p-3 rounded-lg text-sm w-full flex flex-col gap-2;
 }
 
 .error-fallback-summary {
@@ -37,7 +37,7 @@
 }
 
 .error-fallback-pre {
-  @apply mt-2 text-xs text-muted-foreground overflow-auto;
+  @apply text-xs text-muted-foreground overflow-auto;
 }
 
 .error-fallback-actions {
@@ -45,5 +45,5 @@
 }
 
 .error-fallback-retry-icon {
-  @apply w-4 h-4 mr-2;
+  @apply w-4 h-4;
 }

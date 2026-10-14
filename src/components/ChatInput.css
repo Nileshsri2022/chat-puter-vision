@@ -4,9 +4,13 @@
   @apply mx-auto w-full max-w-3xl px-4 pb-2;
 }
 
+.composer-form {
+  @apply flex flex-col gap-2;
+}
+
 /* Image previews */
 .composer-previews {
-  @apply mb-2 flex flex-wrap gap-2;
+  @apply flex flex-wrap gap-2;
 }
 
 .composer-preview {
@@ -35,7 +39,7 @@
 
 /* Image generation prompt row */
 .composer-imgprompt {
-  @apply mb-2 flex items-center gap-2;
+  @apply flex items-center gap-2;
 }
 
 .composer-imgprompt-input {
