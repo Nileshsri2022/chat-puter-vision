@@ -175,16 +175,18 @@
   }
 }
 
+/* Keep the trigger visible while its menu is open, even off-hover. */
+.conv-row-menu-btn[aria-expanded="true"] {
+  opacity: 1;
+}
+
 .conv-row-menu-icon {
   @apply size-4;
 }
 
-.conv-menu-scrim {
-  @apply fixed inset-0 z-40;
-}
-
 .conv-menu {
-  @apply absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-popover p-1.5 shadow-xl;
+  /* Portalled to <body> and positioned by Radix; keep it above the sidebar (z-40). */
+  @apply z-50 w-44 rounded-xl border border-border bg-popover p-1.5 shadow-xl;
 }
 
 .conv-menu-item {
