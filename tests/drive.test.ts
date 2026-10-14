@@ -29,7 +29,7 @@ test("saveConversationToDrive writes to the exports folder", async () => {
   });
   const name = await saveConversationToDrive("My Chat!", "# hello");
   expect(name).toBe("My_Chat_.md");
-  expect(seen!.path).toBe("AI Chat Exports/My_Chat_.md");
+  expect(seen!.path).toBe("FreeTalk Exports/My_Chat_.md");
   expect(seen!.data).toBe("# hello");
   expect(seen!.opts).toEqual({
     createMissingParents: true,

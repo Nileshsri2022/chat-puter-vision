@@ -38,6 +38,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Voice input (hold-to-dictate mic button) -->
+    <!-- Voice input (hold-to-dictate mic button). RECORD_AUDIO gates the
+         capture itself; MODIFY_AUDIO_SETTINGS is what the WebView's audio
+         session needs to configure the recorder on Android. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>

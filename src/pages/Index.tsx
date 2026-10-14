@@ -13,6 +13,7 @@ import {
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
 import { generateImage } from "@/lib/images";
+import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
   getModelCatalog,
@@ -384,32 +385,21 @@ const Index = () => {
     // Use provided model or fallback to selected model
     const selectedModelId = model || selectedModel;
 
-    // Convert images to raw base64 (no data: prefix). The streaming layer
-    // wraps them in the SDK's image_url wire form ("b" + base64).
-    let imageBase64s: string[] = [];
+    // Prepare the attachments: converted and shrunk where needed, then
+    // encoded as the data URLs the image_url blocks carry.
+    let imageUrls: string[] = [];
     if (images && images.length > 0) {
       try {
-        const conversionPromises = images.map(file => {
-          return new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              if (typeof reader.result === 'string') {
-                const comma = reader.result.indexOf(',');
-                resolve(comma >= 0 ? reader.result.slice(comma + 1) : reader.result);
-              } else {
-                reject(new Error(`Failed to convert ${file.name} to string`));
-              }
-            };
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(file);
-          });
-        });
-
-        imageBase64s = await Promise.all(conversionPromises);
+        imageUrls = (await prepareImageAttachments(images)).map(
+          (attachment) => attachment.dataUrl
+        );
       } catch (error) {
         toast({
           title: "Image processing failed",
-          description: "Failed to process images. Please try again.",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to process images. Please try again.",
           variant: "destructive",
           duration: 5000,
         });
@@ -419,8 +409,8 @@ const Index = () => {
 
     // Create user message with content and image info if present
     let messageContent = content;
-    if (imageBase64s.length > 0) {
-      messageContent = `${content}${content ? '\n\n' : ''}[Images: ${imageBase64s.length} attached]`;
+    if (imageUrls.length > 0) {
+      messageContent = appendImageMarker(content, imageUrls.length);
     }
 
     const userMessage: Message = { role: "user", content: messageContent };
@@ -446,7 +436,7 @@ const Index = () => {
       history: toHistory(messages),
       prompt: content,
       modelId: selectedModelId,
-      imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
   };
 
@@ -456,7 +446,7 @@ const Index = () => {
     history: { role: "user" | "assistant"; content: string }[];
     prompt: string;
     modelId: string;
-    imageBase64s?: string[];
+    imageUrls?: string[];
     /** When set, the finished answer replaces messages[replaceIndex] in place
         instead of being appended (per-answer retry keeps later messages). */
     replaceIndex?: number;
@@ -469,7 +459,7 @@ const Index = () => {
     history,
     prompt,
     modelId,
-    imageBase64s,
+    imageUrls,
     replaceIndex,
   }: ReplyRunnerArgs) => {
     const controller = new AbortController();
@@ -559,7 +549,7 @@ const Index = () => {
         onComplete,
         onError,
         onAbort,
-      }, imageBase64s, controller.signal, contextPlanFor(modelCatalog, modelId));
+      }, imageUrls, controller.signal, contextPlanFor(modelCatalog, modelId));
     } catch (error) {
       onError(error instanceof Error ? error : new Error(`AI request failed: ${(error as Error)?.message || 'Unknown error'}`));
     }
@@ -580,7 +570,28 @@ const Index = () => {
     if (questionIdx < 0) return;
     // Images aren't stored on messages, so regeneration is text-only; strip
     // the "[Images: N attached]" marker the send flow appends.
-    const prompt = messages[questionIdx].content.replace(/\n\n\[Images: \d+ attached\]$/, "");
+    const rawPrompt = messages[questionIdx].content;
+    const hadImages = hasImageMarker(rawPrompt);
+    const prompt = stripImageMarker(rawPrompt).trim();
+    if (!prompt) {
+      // The question *was* the image; retrying would send an empty prompt.
+      toast({
+        title: "Cannot retry this message",
+        description:
+          "It was about an attached image, and attachments are not kept in the conversation. Attach the image again and resend.",
+        variant: "destructive",
+        duration: 6000,
+      });
+      return;
+    }
+    if (hadImages) {
+      toast({
+        title: "Retrying without the image",
+        description:
+          "Attachments are not kept in the conversation, so this retry sends the text only.",
+        duration: 5000,
+      });
+    }
     // In-place retry: nothing is removed; the finished answer replaces the
     // old one at aiIndex. History is the conversation up to the question.
     runAssistantReply({
@@ -728,34 +739,22 @@ const Index = () => {
       return;
     }
 
-    const clean = newContent.replace(/\n\n\[Images: \d+ attached\]$/, "").trim();
+    const clean = stripImageMarker(newContent).trim();
     if (!clean && (!images || images.length === 0)) return;
 
-    let imageBase64s: string[] = [];
+    let imageUrls: string[] = [];
     if (images && images.length > 0) {
       try {
-        imageBase64s = await Promise.all(
-          images.map(
-            (file) =>
-              new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  if (typeof reader.result === "string") {
-                    const comma = reader.result.indexOf(",");
-                    resolve(comma >= 0 ? reader.result.slice(comma + 1) : reader.result);
-                  } else {
-                    reject(new Error(`Failed to convert ${file.name} to string`));
-                  }
-                };
-                reader.onerror = () => reject(reader.error);
-                reader.readAsDataURL(file);
-              })
-          )
+        imageUrls = (await prepareImageAttachments(images)).map(
+          (attachment) => attachment.dataUrl
         );
-      } catch {
+      } catch (error) {
         toast({
           title: "Image processing failed",
-          description: "Failed to process images. Please try again.",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to process images. Please try again.",
           variant: "destructive",
           duration: 5000,
         });
@@ -764,8 +763,8 @@ const Index = () => {
     }
 
     let messageContent = clean;
-    if (imageBase64s.length > 0) {
-      messageContent = `${clean}${clean ? "\n\n" : ""}[Images: ${imageBase64s.length} attached]`;
+    if (imageUrls.length > 0) {
+      messageContent = appendImageMarker(clean, imageUrls.length);
     }
 
     const priorMessages = messages.slice(0, messageIndex);
@@ -789,7 +788,7 @@ const Index = () => {
       history: toHistory(priorMessages),
       prompt: clean,
       modelId: model || selectedModel,
-      imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
   };
 

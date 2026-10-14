@@ -19,6 +19,7 @@ import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import type { ModelCatalog } from "@/lib/models";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
+import { stripImageMarker } from "@/lib/attachments";
 import "./ChatMessage.css";
 
 interface ChatMessageProps {
@@ -281,7 +282,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
         >
           {editing ? (
             <ChatInput
-              initialValue={content.replace(/\n\n\[Images: \d+ attached\]$/, "")}
+              initialValue={stripImageMarker(content)}
               compact
               disabled={isStreaming}
               selectedModel={selectedModel}

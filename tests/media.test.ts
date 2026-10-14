@@ -131,19 +131,25 @@ test("loadImageUrl without Puter storage", async () => {
 
 // ---- transcribeAudio ----
 
+/** A minimal, non-empty recording. */
+const recording = () =>
+  new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 1, 2, 3])], {
+    type: "audio/webm",
+  });
+
 test("transcribeAudio accepts a plain string result", async () => {
   mockPuter({ ai: { speech2txt: async () => "  hello world  " } });
-  expect(await transcribeAudio(new Blob())).toBe("hello world");
+  expect(await transcribeAudio(recording())).toBe("hello world");
 });
 
 test("transcribeAudio accepts an object result", async () => {
   mockPuter({ ai: { speech2txt: async () => ({ text: "hi there" }) } });
-  expect(await transcribeAudio(new Blob())).toBe("hi there");
+  expect(await transcribeAudio(recording())).toBe("hi there");
 });
 
 test("transcribeAudio rejects empty transcripts", async () => {
   mockPuter({ ai: { speech2txt: async () => ({ text: "   " }) } });
-  expect(await throwsMsg(() => transcribeAudio(new Blob()))).toContain(
+  expect(await throwsMsg(() => transcribeAudio(recording()))).toContain(
     "no text"
   );
 });
@@ -156,12 +162,105 @@ test("transcribeAudio maps bad_request with message", async () => {
       },
     },
   });
-  expect(await throwsMsg(() => transcribeAudio(new Blob()))).toBe("too long");
+  expect(await throwsMsg(() => transcribeAudio(recording()))).toBe("too long");
 });
 
 test("transcribeAudio without the SDK", async () => {
   mockPuter({ ai: {} });
-  expect(await throwsMsg(() => transcribeAudio(new Blob()))).toContain(
+  expect(await throwsMsg(() => transcribeAudio(recording()))).toContain(
     "not available"
   );
+});
+
+// ---- transcription payloads ----
+//
+// The bug these pin: the recorder's media type was passed through verbatim, so
+// Chrome's `audio/webm;codecs=opus` (and an empty `mimeType` on other
+// browsers) reached the provider as a data URL it could not decode. Recordings
+// are now re-encoded to PCM WAV, and the container is sniffed when the
+// recorder reports none.
+
+test("prepareAudioForTranscription keeps the raw container when decoding is unavailable", async () => {
+  const { prepareAudioForTranscription } = await import("../src/lib/speech");
+  const recording = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4])], {
+    type: "audio/webm;codecs=opus",
+  });
+  const payload = await prepareAudioForTranscription(recording);
+  expect(payload.mimeType).toBe("audio/webm");
+  expect(payload.dataUrl.startsWith("data:audio/webm;base64,")).toBe(true);
+  expect(payload.dataUrl).not.toContain("codecs");
+  expect(payload.transcoded).toBe(false);
+});
+
+test("prepareAudioForTranscription sniffs a container when the recorder reports none", async () => {
+  const { prepareAudioForTranscription } = await import("../src/lib/speech");
+  const recording = new Blob([new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0])]);
+  const payload = await prepareAudioForTranscription(recording);
+  expect(payload.mimeType).toBe("audio/ogg");
+});
+
+test("transcribeAudio sends a data URL, never a bare blob or base64", async () => {
+  let received: unknown;
+  mockPuter({
+    ai: {
+      speech2txt: async (source: unknown) => {
+        received = source;
+        return { text: "hello" };
+      },
+    },
+  });
+  const recording = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2])], {
+    type: "audio/webm",
+  });
+  expect(await transcribeAudio(recording)).toBe("hello");
+  expect(typeof received).toBe("string");
+  expect(String(received).startsWith("data:audio/webm;base64,")).toBe(true);
+});
+
+test("transcribeAudio reports an empty recording instead of calling the API", async () => {
+  let called = false;
+  mockPuter({
+    ai: {
+      speech2txt: async () => {
+        called = true;
+        return { text: "should not happen" };
+      },
+    },
+  });
+  expect(await throwsMsg(() => transcribeAudio(new Blob()))).toContain(
+    "No audio was captured"
+  );
+  expect(called).toBe(false);
+});
+
+test("transcribeAudio refuses a recording over the 25 MB input cap", async () => {
+  mockPuter({ ai: { speech2txt: async () => ({ text: "nope" }) } });
+  const huge = new Blob([new Uint8Array(25 * 1024 * 1024 + 1)], {
+    type: "audio/webm",
+  });
+  expect(await throwsMsg(() => transcribeAudio(huge))).toContain("25 MB");
+});
+
+test("transcribeAudio maps input_too_large from the API", async () => {
+  mockPuter({
+    ai: {
+      speech2txt: async () => {
+        throw { code: "input_too_large", message: "Input size cannot be larger than 25 MB" };
+      },
+    },
+  });
+  const audio = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])], { type: "audio/webm" });
+  expect(await throwsMsg(() => transcribeAudio(audio))).toContain("25 MB");
+});
+
+test("transcribeAudio maps a missing auth token", async () => {
+  mockPuter({
+    ai: {
+      speech2txt: async () => {
+        throw { code: "unauthorized", message: "Authentication required" };
+      },
+    },
+  });
+  const audio = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])], { type: "audio/webm" });
+  expect(await throwsMsg(() => transcribeAudio(audio))).toContain("sign in");
 });

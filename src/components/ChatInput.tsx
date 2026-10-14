@@ -1,17 +1,29 @@
 import { convertImagesToPNG, needsConversion } from "@/lib/utils/imageConversion";
+import { MAX_ATTACHMENTS } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import { modelSupportsVision, type ModelCatalog } from "@/lib/models";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ArrowUp, Paperclip, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModelSelector } from "./ModelSelector";
 import { useToast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/lib/speech";
+import {
+  MAX_RECORDING_SECONDS,
+  formatDuration,
+  pickRecorderMimeType,
+} from "@/lib/audio";
 import { extractText } from "@/lib/ocr";
 import { checkAuthStatus } from "@/lib/backend";
 import "./ChatInput.css";
 
+
+interface PendingImage {
+  file: File;
+  /** Object URL for the preview; revoked when the attachment is dropped. */
+  previewUrl: string;
+}
 
 interface ChatInputProps {
   onSend: (message: string, model?: string, images?: File[]) => void;
@@ -30,19 +42,45 @@ interface ChatInputProps {
   onCancel?: () => void;
 }
 
+/** Turn a getUserMedia/MediaRecorder failure into something actionable. */
+function microphoneErrorMessage(error: unknown): string {
+  const name = (error as { name?: string } | null)?.name;
+  if (name === "NotAllowedError" || name === "SecurityError")
+    return "Microphone access was blocked. Allow it in your browser's site settings and try again.";
+  if (name === "NotFoundError" || name === "OverconstrainedError")
+    return "No microphone was found. Connect one and try again.";
+  if (name === "NotReadableError" || name === "AbortError")
+    return "The microphone is already in use by another app.";
+  if (name === "NotSupportedError")
+    return "This browser cannot record audio.";
+  return error instanceof Error && error.message
+    ? error.message
+    : "Allow microphone access to use voice input.";
+}
+
 export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, initialValue, compact, onCancel }: ChatInputProps) => {
   const [input, setInput] = useState(initialValue ?? "");
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  // Attachments live in one array so the preview at index N is always the file
+  // at index N — the OCR button and the remove button act on what they show.
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);  // For attaching images to messages
   const [imageGenerationMode, setImageGenerationMode] = useState(false);
   const [recordingState, setRecordingState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const [ocrIndex, setOcrIndex] = useState<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const discardRecordingRef = useRef(false);
+  const pendingImagesRef = useRef<PendingImage[]>([]);
   const { toast } = useToast();
+
+  // Vision support comes from the live model catalog (modalities data);
+  // keyword matching is only the offline fallback inside modelSupportsVision.
+  const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,8 +95,13 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
       return;
     }
 
-    if (message || selectedImages.length > 0) {
-      onSend(message, selectedModel, selectedImages);
+    // A text-only model can't carry attachments: never send what the composer
+    // isn't showing (the API rejects image parts for those models anyway).
+    const images = modelSupportsImages
+      ? pendingImages.map((image) => image.file)
+      : [];
+    if (message || images.length > 0) {
+      onSend(message, selectedModel, images.length > 0 ? images : undefined);
       setInput("");
       clearImages();
     }
@@ -77,6 +120,17 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
     const files = Array.from(e.target.files || []);
 
     if (files.length > 0) {
+      const capacity = MAX_ATTACHMENTS - pendingImages.length;
+      if (capacity <= 0) {
+        toast({
+          title: "Attachment limit reached",
+          description: `A message can carry up to ${MAX_ATTACHMENTS} images.`,
+          duration: 3000,
+        });
+        if (imageInputRef.current) imageInputRef.current.value = "";
+        return;
+      }
+
       setIsProcessingImages(true);
       const validFiles = files.filter(file => file.type.startsWith('image/'));
 
@@ -122,29 +176,24 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
         }
       }
 
-      setSelectedImages(prev => [...prev, ...filesToUse].slice(0, 4)); // Max 4 images
-
-      let processedCount = 0;
-      filesToUse.forEach((file, index) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          setImagePreviews(prev => [...prev, result].slice(0, 4));
-          processedCount++;
-
-          if (processedCount === validFiles.length) {
-            setIsProcessingImages(false);
-          }
-        };
-        reader.onerror = () => {
-          processedCount++;
-
-          if (processedCount === validFiles.length) {
-            setIsProcessingImages(false);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+      const accepted = filesToUse.slice(0, capacity);
+      if (accepted.length < filesToUse.length) {
+        toast({
+          title: "Some images were not added",
+          description: `A message can carry up to ${MAX_ATTACHMENTS} images.`,
+          duration: 3000,
+        });
+      }
+      // Previews are object URLs built in file order, so preview[i] is
+      // accepted[i] no matter which file the browser read first.
+      setPendingImages((prev) => [
+        ...prev,
+        ...accepted.map((file) => ({
+          file,
+          previewUrl: URL.createObjectURL(file),
+        })),
+      ]);
+      setIsProcessingImages(false);
     }
 
     // Reset image input
@@ -154,15 +203,27 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   };
 
   const clearImages = () => {
-    setSelectedImages([]);
-    setImagePreviews([]);
+    pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    setPendingImages([]);
   };
 
-
-
   const removeImage = (index: number) => {
-    setSelectedImages(prev => prev.filter((_, i) => i !== index));
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    const removed = pendingImages[index];
+    if (removed) URL.revokeObjectURL(removed.previewUrl);
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearRecordTimer = () => {
+    if (recordTimerRef.current !== null) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+  };
+
+  /** Release the microphone, whether or not a recording is in flight. */
+  const releaseStream = () => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
   };
 
   const transcribeRecording = async (blob: Blob) => {
@@ -188,10 +249,19 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
       return;
     }
     if (recordingState !== "idle") return;
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!checkAuthStatus()) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to use voice input.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       toast({
         title: "Voice input unavailable",
-        description: "Microphone access needs a secure context (localhost or HTTPS).",
+        description: "This browser cannot record audio. Microphone access also needs a secure context (localhost or HTTPS).",
         variant: "destructive",
         duration: 5000,
       });
@@ -199,30 +269,110 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Ask for a container we know the transcription APIs accept; without an
+      // explicit type some browsers report an empty `mimeType`, which would
+      // upload the audio as application/octet-stream.
+      const mimeType = pickRecorderMimeType();
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined
+      );
       audioChunksRef.current = [];
+      discardRecordingRef.current = false;
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        void transcribeRecording(new Blob(audioChunksRef.current, { type: recorder.mimeType }));
+        clearRecordTimer();
+        releaseStream();
+        mediaRecorderRef.current = null;
+        const chunks = audioChunksRef.current;
+        audioChunksRef.current = [];
+        if (discardRecordingRef.current) return;
+        void transcribeRecording(
+          new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" })
+        );
       };
-      recorder.start();
+      // A timeslice keeps the chunks flowing so a long recording is still
+      // captured if the tab is backgrounded mid-sentence.
+      recorder.start(1000);
       mediaRecorderRef.current = recorder;
+      mediaStreamRef.current = stream;
+      setRecordSeconds(0);
       setRecordingState("recording");
-    } catch {
+      clearRecordTimer();
+      recordTimerRef.current = setInterval(() => {
+        setRecordSeconds((seconds) => {
+          const next = seconds + 1;
+          if (next >= MAX_RECORDING_SECONDS) {
+            // Long recordings cost credits per second and grow past the
+            // provider's input cap; stop on our own and say so.
+            toast({
+              title: "Recording stopped",
+              description: `Voice input stops automatically after ${Math.round(
+                MAX_RECORDING_SECONDS / 60
+              )} minutes.`,
+              duration: 4000,
+            });
+            mediaRecorderRef.current?.stop();
+          }
+          return next;
+        });
+      }, 1000);
+    } catch (error) {
+      clearRecordTimer();
+      releaseStream();
+      mediaRecorderRef.current = null;
       toast({
-        title: "Microphone access denied",
-        description: "Allow microphone access to use voice input.",
+        title: "Microphone unavailable",
+        description: microphoneErrorMessage(error),
         variant: "destructive",
         duration: 5000,
       });
     }
   };
 
+  // Stop the microphone when the composer goes away (conversation switch,
+  // closing the inline editor) instead of leaving a live capture behind.
+  useEffect(() => {
+    return () => {
+      discardRecordingRef.current = true;
+      try {
+        mediaRecorderRef.current?.stop();
+      } catch {
+        // Already stopped.
+      }
+      clearRecordTimer();
+      releaseStream();
+      // The ref is read at unmount so previews added since mount are freed too.
+      pendingImagesRef.current.forEach((image) =>
+        URL.revokeObjectURL(image.previewUrl)
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    pendingImagesRef.current = pendingImages;
+  }, [pendingImages]);
+
+  // Switching to a text-only model hides the previews, so the attachments are
+  // dropped here rather than lingering invisibly until the next send.
+  useEffect(() => {
+    if (modelSupportsImages || pendingImagesRef.current.length === 0) return;
+    pendingImagesRef.current.forEach((image) =>
+      URL.revokeObjectURL(image.previewUrl)
+    );
+    pendingImagesRef.current = [];
+    setPendingImages([]);
+    toast({
+      title: "Images removed",
+      description: "The selected model cannot read images.",
+      duration: 4000,
+    });
+  }, [modelSupportsImages, toast]);
+
   const extractFromImage = async (index: number) => {
-    const file = selectedImages[index];
+    const file = pendingImages[index]?.file;
     if (!file || ocrIndex !== null) return;
     if (!checkAuthStatus()) {
       toast({
@@ -250,24 +400,21 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
     }
   };
 
-  // Vision support comes from the live model catalog (modalities data);
-  // keyword matching is only the offline fallback inside modelSupportsVision.
-  const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
   const hasMessage = input.trim().length > 0;
   const canSubmit = imageGenerationMode
     ? hasMessage && Boolean(onGenerateImage)
-    : hasMessage || selectedImages.length > 0;
+    : hasMessage || (modelSupportsImages && pendingImages.length > 0);
 
   return (
     <div className={cn("composer-wrap", compact && "composer-wrap-compact")}>
       <form onSubmit={handleSubmit} className="composer-form">
         {/* Image previews */}
-        {modelSupportsImages && imagePreviews.length > 0 && (
+        {modelSupportsImages && pendingImages.length > 0 && (
           <div className="composer-previews">
-            {imagePreviews.map((preview, index) => (
+            {pendingImages.map((image, index) => (
               <div key={index} className="composer-preview group">
                 <img
-                  src={preview}
+                  src={image.previewUrl}
                   alt={`Upload ${index + 1}`}
                   className="composer-preview-img"
                 />
@@ -350,9 +497,21 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 variant="ghost"
                 className="composer-tool-btn"
                 onClick={toggleRecording}
-                disabled={disabled || recordingState === "transcribing"}
-                title={recordingState === "recording" ? "Stop recording" : "Voice input"}
-                aria-label={recordingState === "recording" ? "Stop recording" : "Voice input"}
+                // A live recording must stay stoppable — including while a
+                // reply is streaming, when the composer is otherwise disabled.
+                disabled={
+                  recordingState === "transcribing" ||
+                  (recordingState === "idle" &&
+                    (disabled || isGeneratingImage))
+                }
+                title={
+                  recordingState === "recording"
+                    ? `Stop recording (${formatDuration(recordSeconds)})`
+                    : "Voice input"
+                }
+                aria-label={
+                  recordingState === "recording" ? "Stop recording" : "Voice input"
+                }
               >
                 {recordingState === "transcribing" ? (
                   <div className="composer-spinner" aria-hidden="true" />
@@ -360,6 +519,11 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   <Mic className={cn("composer-tool-icon", recordingState === "recording" && "composer-mic-recording")} aria-hidden="true" />
                 )}
               </Button>
+              {recordingState === "recording" && (
+                <span className="composer-recording-time" aria-live="polite">
+                  {formatDuration(recordSeconds)}
+                </span>
+              )}
               {onModelChange && (
                 <ModelSelector
                   selectedModel={selectedModel || "gpt-5.4-nano"}
@@ -375,7 +539,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   variant="ghost"
                   className="composer-tool-btn"
                   onClick={() => imageInputRef.current?.click()}
-                  disabled={disabled || selectedImages.length >= 4 || isProcessingImages}
+                  disabled={disabled || pendingImages.length >= MAX_ATTACHMENTS || isProcessingImages}
                   title="Attach images"
                   aria-label="Attach images"
                 >

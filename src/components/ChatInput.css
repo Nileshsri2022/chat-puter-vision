@@ -132,3 +132,8 @@
 .composer-hidden-input {
   @apply hidden;
 }
+
+/* Elapsed time next to the microphone while recording. */
+.composer-recording-time {
+  @apply text-xs tabular-nums text-red-500;
+}
