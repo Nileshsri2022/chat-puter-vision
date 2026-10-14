@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, PanelLeftClose, Download, LogOut, CircleUserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
 import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from "@/lib/utils/export";
 import { saveConversationToDrive } from "@/lib/drive";
@@ -641,7 +642,7 @@ const Index = () => {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="app-root">
       <ConversationSidebar
         syncStatus={syncStatus}
         conversations={conversations}
@@ -654,32 +655,29 @@ const Index = () => {
       />
 
       <main
-        className={cn(
-          "flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-in-out",
-          sidebarOpen ? "md:ml-[260px]" : "md:ml-0"
-        )}
+        className={cn("app-main", sidebarOpen ? "app-main-sidebar-open" : "app-main-sidebar-closed")}
       >
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-          <div className="flex items-center gap-1">
+        <header className="app-header">
+          <div className="app-header-group">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="app-icon-btn"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
               aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
             >
               {sidebarOpen ? (
-                <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+                <PanelLeftClose className="app-header-icon" aria-hidden="true" />
               ) : (
-                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+                <PanelLeftOpen className="app-header-icon" aria-hidden="true" />
               )}
             </Button>
             {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Export conversation" aria-label="Export conversation">
-                    <Download className="h-4 w-4" aria-hidden="true" />
+                  <Button variant="ghost" size="icon" className="app-icon-btn" title="Export conversation" aria-label="Export conversation">
+                    <Download className="app-header-icon" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -697,7 +695,7 @@ const Index = () => {
               </DropdownMenu>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="app-header-group">
             {isAuthenticated && <CreditPill />}
             <ThemeToggle />
             {isAuthenticated ? (
@@ -706,7 +704,7 @@ const Index = () => {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-full"
+                    className="app-avatar-btn"
                     title={profile?.name ?? "Account"}
                     aria-label={profile?.name ?? "Account"}
                   >
@@ -714,20 +712,20 @@ const Index = () => {
                       <img
                         src={profile.picture}
                         alt=""
-                        className="h-8 w-8 rounded-full object-cover"
+                        className="app-avatar-img"
                       />
                     ) : (
-                      <CircleUserRound className="h-5 w-5" aria-hidden="true" />
+                      <CircleUserRound className="app-avatar-fallback-icon" aria-hidden="true" />
                     )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel className="max-w-[200px] truncate">
+                  <DropdownMenuLabel className="app-account-label">
                     {profile?.name ?? "Account"}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+                    <LogOut className="app-menu-icon" aria-hidden="true" />
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -737,15 +735,15 @@ const Index = () => {
         </header>
 
         {!isAuthenticated ? (
-          <div className="flex h-full items-center justify-center px-4">
-            <div className="max-w-md space-y-6 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                <Sparkles className="h-7 w-7" aria-hidden="true" />
+          <div className="app-welcome">
+            <div className="app-welcome-card">
+              <div className="app-hero-badge">
+                <Sparkles className="app-hero-icon" aria-hidden="true" />
               </div>
-              <h1 className="text-3xl font-semibold text-foreground text-balance">
+              <h1 className="app-hero-title">
                 Welcome to AI Chat
               </h1>
-              <p className="text-muted-foreground">
+              <p className="app-welcome-sub">
                 Sign in to start chatting with AI models.
               </p>
               <AuthButton onAuthChange={setIsAuthenticated} />
@@ -753,21 +751,21 @@ const Index = () => {
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 bg-background" ref={scrollRef}>
+            <ScrollArea className="app-scroll" ref={scrollRef}>
               {messages.length === 0 && !isStreaming ? (
-                <div className="flex h-full flex-col items-center justify-center px-4 py-12">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                    <Sparkles className="h-7 w-7" aria-hidden="true" />
+                <div className="app-empty">
+                  <div className="app-hero-badge">
+                    <Sparkles className="app-hero-icon" aria-hidden="true" />
                   </div>
-                  <h1 className="mt-6 text-center text-3xl font-semibold text-foreground text-balance">
+                  <h1 className="app-empty-title">
                     How can I help you today?
                   </h1>
-                  <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="app-suggestions">
                     {SUGGESTIONS.map((s) => (
                       <Button
                         key={s}
                         variant="outline"
-                        className="h-auto justify-start rounded-xl px-4 py-3 text-left text-sm font-normal"
+                        className="app-suggestion-btn"
                         onClick={() => handleSendMessage(s)}
                       >
                         {s}
@@ -776,7 +774,7 @@ const Index = () => {
                   </div>
                 </div>
               ) : (
-                <div className="py-4">
+                <div className="app-messages">
                   {messages.map((message, index) => (
                     <ChatMessage
                       key={index}
@@ -800,16 +798,16 @@ const Index = () => {
               )}
             </ScrollArea>
 
-            <div className="shrink-0 border-t bg-background pt-3">
+            <div className="app-composer-wrap">
               {canRegenerate && (
-                <div className="flex justify-center pb-1">
+                <div className="app-regen-wrap">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleRegenerate}
-                    className="gap-2 rounded-full"
+                    className="app-regen-btn"
                   >
-                    <RotateCcw className="h-3.5 w-3.5" />
+                    <RotateCcw className="app-regen-icon" />
                     Regenerate
                   </Button>
                 </div>
