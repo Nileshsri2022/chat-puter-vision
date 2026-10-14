@@ -493,13 +493,10 @@ export const OPENROUTER_MODELS: AIModel[] = [
     type: "openrouter"
   },
 ];
-/** Short display name: drops the redundant "Provider: " prefix and the
- *  " (Infron)"/" (OpenRouter)" suffix — the group header already shows it. */
-export const shortModelName = (name: string): string =>
-  name
-    .replace(/^[^:]+:\s*/, "")
-    .replace(/\s*\((Infron|OpenRouter)\)\s*$/i, "")
-    .trim();
+/** Display label for a model ID: the ID itself (unambiguous). */
+export function modelDisplayName(id?: string): string {
+  return id || "AI";
+}
 // ---- Two-step model picker: pick a provider, then a model from that
 // provider's full list. Backed by the static snapshot of the live Puter
 // catalog (src/lib/puterModels.generated.ts) — the picker renders instantly,
@@ -508,16 +505,6 @@ export const shortModelName = (name: string): string =>
 const CURATED: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
 
 const CURATED_BADGE_OF = new Map(CURATED.filter((m) => m.badge).map((m) => [m.id, m.badge as string]));
-const CURATED_NAME_OF = new Map(CURATED.map((m) => [m.id, m.name]));
-
-/** Display name for any model ID: curated short name, else snapshot short name, else "AI". */
-export function modelDisplayName(id?: string): string {
-  if (!id) return "AI";
-  const curated = CURATED_NAME_OF.get(id);
-  if (curated) return shortModelName(curated);
-  const snap = PUTER_MODELS_SNAPSHOT.find((m) => m.id === id);
-  return snap ? shortModelName(snap.name) : "AI";
-}
 
 // Brand labels for snapshot provider keys. Providers sharing a label merge
 // into one group. Unknown keys fall back to a capitalized label + generic icon.
@@ -567,6 +554,9 @@ function brandGroups(): BrandGroup[] {
   }
   const extra = new Map<string, BrandGroup>();
   for (const m of PUTER_MODELS_SNAPSHOT) {
+    // ":batch" variants only work with Puter's Batch API, never with ai.chat —
+    // listing them would let users pick a model that always fails with a 404.
+    if (m.id.endsWith(":batch")) continue;
     const b = brandFor(m.provider);
     const target = known.get(b.label) ?? (() => {
       let g = extra.get(b.label);
@@ -696,7 +686,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
                     onClick={() => handleSelect(m.id)}
                   >
-                    <span className="ms-item-name">{shortModelName(m.name)}</span>
+                    <span className="ms-item-name">{m.id}</span>
                     <span className="ms-item-side">
                       {CURATED_BADGE_OF.get(m.id) && (
                         <Badge variant="secondary" className="ms-item-badge">

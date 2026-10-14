@@ -185,7 +185,9 @@ const Index = () => {
       if (!catalog) return;
       setModelCatalog(catalog);
       setSelectedModel((prev) =>
-        prev && catalog.ids.has(prev) ? prev : resolveDefaultModel(catalog)
+        prev && catalog.ids.has(prev) && !prev.endsWith(":batch")
+          ? prev
+          : resolveDefaultModel(catalog)
       );
     });
   }, []);
