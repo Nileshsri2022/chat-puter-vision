@@ -1,7 +1,7 @@
 import { convertImagesToPNG, needsConversion } from "@/lib/utils/imageConversion";
 import { modelSupportsVision, type ModelCatalog } from "@/lib/models";
 import { useState, useRef } from "react";
-import { ArrowUp, Image, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
+import { ArrowUp, Paperclip, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -400,7 +400,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   {isProcessingImages ? (
                     <div className="composer-spinner" aria-hidden="true" />
                   ) : (
-                    <Image className="composer-tool-icon" aria-hidden="true" />
+                    <Paperclip className="composer-tool-icon" aria-hidden="true" />
                   )}
                 </Button>
               )}
