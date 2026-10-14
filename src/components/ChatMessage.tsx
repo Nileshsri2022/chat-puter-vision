@@ -17,6 +17,7 @@ import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { usePuterImage } from "@/hooks/usePuterImage";
+import type { ModelCatalog } from "@/lib/models";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import "./ChatMessage.css";
 
@@ -36,7 +37,11 @@ interface ChatMessageProps {
   searchActive?: boolean;
   onCopy?: (content: string) => void;
   onDelete?: () => void;
-  onEdit?: (content: string, images?: File[]) => void;
+  onEdit?: (content: string, images?: File[], model?: string) => void;
+  /** Model state shared with the bottom composer, so edit uses the same selector. */
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
+  modelCatalog?: ModelCatalog | null;
   onShareExchange?: (format: "md") => void;
   onRetry?: () => void;
 }
@@ -53,7 +58,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -277,10 +282,12 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
               initialValue={content.replace(/\n\n\[Images: \d+ attached\]$/, "")}
               compact
               disabled={isStreaming}
-              selectedModel={model}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+              modelCatalog={modelCatalog}
               onCancel={() => setEditing(false)}
-              onSend={(text, _model, images) => {
-                if (onEdit) onEdit(text, images);
+              onSend={(text, sendModel, images) => {
+                if (onEdit) onEdit(text, images, sendModel);
                 setEditing(false);
               }}
             />

@@ -705,7 +705,7 @@ const Index = () => {
     }
   };
 
-  const handleEditMessage = async (messageIndex: number, newContent: string, images?: File[]) => {
+  const handleEditMessage = async (messageIndex: number, newContent: string, images?: File[], model?: string) => {
     if (isStreaming || !currentConversation) return;
 
     if (!isAuthenticated) {
@@ -778,7 +778,7 @@ const Index = () => {
       rollbackMessages: messages,
       history: toHistory(priorMessages),
       prompt: clean,
-      modelId: selectedModel,
+      modelId: model || selectedModel,
       imageBase64s: imageBase64s.length > 0 ? imageBase64s : undefined,
     });
   };
@@ -1112,7 +1112,10 @@ const Index = () => {
                       searchActive={searchMatches[activeMatch] === index}
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
-                      onEdit={message.role === "user" ? (content, images) => handleEditMessage(index, content, images) : undefined}
+                      onEdit={message.role === "user" ? (content, images, model) => handleEditMessage(index, content, images, model) : undefined}
+                      selectedModel={selectedModel}
+                      onModelChange={setSelectedModel}
+                      modelCatalog={modelCatalog}
                       onShareExchange={
                         message.role === "assistant"
                           ? () => handleShareExchange(index)
