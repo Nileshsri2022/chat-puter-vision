@@ -23,11 +23,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw } from "lucide-react";
+import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, PanelLeftClose, Download, LogOut, CircleUserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
 import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from "@/lib/utils/export";
 import { saveConversationToDrive } from "@/lib/drive";
-import { Download, LogOut, CircleUserRound } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,7 +142,19 @@ const Index = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sidebar_open");
+      if (saved !== null) return saved === "true";
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("sidebar_open", String(sidebarOpen));
+  }, [sidebarOpen]);
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
@@ -512,7 +524,7 @@ const Index = () => {
   };
 
   const truncateTitle = (text: string): string =>
-    text.length > 30 ? text.slice(0, 30) + "..." : text || "New Conversation";
+    text.length > 30 ? text.slice(0, 30) + "…" : text || "New Conversation";
 
   const handleDeleteConversation = (id: string) => {
     recordDelete(id);
@@ -641,22 +653,33 @@ const Index = () => {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col md:ml-64">
-        {isAuthenticated && (
-          <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 md:hidden"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-              </Button>
+      <main
+        className={cn(
+          "flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-in-out",
+          sidebarOpen ? "md:ml-[260px]" : "md:ml-0"
+        )}
+      >
+        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            >
+              {sidebarOpen ? (
+                <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+            {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Export conversation">
-                    <Download className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Export conversation" aria-label="Export conversation">
+                    <Download className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -672,10 +695,12 @@ const Index = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-            <div className="flex items-center gap-1">
-              <CreditPill />
-              <ThemeToggle />
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {isAuthenticated && <CreditPill />}
+            <ThemeToggle />
+            {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -683,6 +708,7 @@ const Index = () => {
                     size="icon"
                     className="h-8 w-8 rounded-full"
                     title={profile?.name ?? "Account"}
+                    aria-label={profile?.name ?? "Account"}
                   >
                     {profile?.picture ? (
                       <img
@@ -691,7 +717,7 @@ const Index = () => {
                         className="h-8 w-8 rounded-full object-cover"
                       />
                     ) : (
-                      <CircleUserRound className="h-5 w-5" />
+                      <CircleUserRound className="h-5 w-5" aria-hidden="true" />
                     )}
                   </Button>
                 </DropdownMenuTrigger>
@@ -701,22 +727,22 @@ const Index = () => {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" />
+                    <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </header>
-        )}
+            ) : null}
+          </div>
+        </header>
 
         {!isAuthenticated ? (
           <div className="flex h-full items-center justify-center px-4">
             <div className="max-w-md space-y-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                <Sparkles className="h-7 w-7" />
+                <Sparkles className="h-7 w-7" aria-hidden="true" />
               </div>
-              <h1 className="text-3xl font-semibold text-foreground">
+              <h1 className="text-3xl font-semibold text-foreground text-balance">
                 Welcome to AI Chat
               </h1>
               <p className="text-muted-foreground">
@@ -731,9 +757,9 @@ const Index = () => {
               {messages.length === 0 && !isStreaming ? (
                 <div className="flex h-full flex-col items-center justify-center px-4 py-12">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                    <Sparkles className="h-7 w-7" />
+                    <Sparkles className="h-7 w-7" aria-hidden="true" />
                   </div>
-                  <h1 className="mt-6 text-center text-3xl font-semibold text-foreground">
+                  <h1 className="mt-6 text-center text-3xl font-semibold text-foreground text-balance">
                     How can I help you today?
                   </h1>
                   <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
