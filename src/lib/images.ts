@@ -44,6 +44,25 @@ export function newImagePath(): string {
   return `freetalk-${id}.png`;
 }
 
+/** Extension for a mime type; PNG because that is the conversion fallback. */
+function extensionFor(mimeType?: string): string {
+  const subtype = /^image\/([a-z0-9.+-]+)$/i.exec(mimeType?.trim() ?? "")?.[1];
+  if (!subtype) return "png";
+  // Keep the file name boring: jpeg -> jpg, svg+xml -> svg.
+  const clean = subtype.split("+")[0].toLowerCase();
+  if (clean === "jpeg") return "jpg";
+  return /^[a-z0-9]+$/.test(clean) ? clean : "png";
+}
+
+/**
+ * A unique Drive path for an uploaded attachment. Sibling of `newImagePath`,
+ * with its own prefix so uploads and generated images stay tellable apart.
+ */
+export function newAttachmentPath(mimeType?: string): string {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `freetalk-upload-${id}.${extensionFor(mimeType)}`;
+}
+
 /**
  * Generate an image and save it to Puter storage.
  * Resolves to the Puter path of the saved file.
@@ -62,18 +81,48 @@ export async function generateImage(prompt: string): Promise<string> {
   }
 }
 
-// Object URLs for saved images, keyed by path. A failed read is evicted so a
-// later render can retry it.
+// Stored images, keyed by path: one Blob cache, with object URLs derived from
+// it. A failed read is evicted so a later render can retry it.
+const imageBlobCache = new Map<string, Promise<Blob>>();
 const imageUrlCache = new Map<string, Promise<string>>();
+
+/** Resolves to the stored Blob for a Puter file (cached per path). */
+export function loadImageBlob(path: string): Promise<Blob> {
+  const cached = imageBlobCache.get(path);
+  if (cached) return cached;
+  const fs = window.puter?.fs;
+  if (!fs?.read) return Promise.reject(new Error("Image storage is not available."));
+  const pending = fs.read(path);
+  imageBlobCache.set(path, pending);
+  pending.catch(() => imageBlobCache.delete(path));
+  return pending;
+}
 
 /** Resolves to a displayable blob: URL for a Puter file (cached per path). */
 export function loadImageUrl(path: string): Promise<string> {
   const cached = imageUrlCache.get(path);
   if (cached) return cached;
-  const fs = window.puter?.fs;
-  if (!fs?.read) return Promise.reject(new Error("Image storage is not available."));
-  const pending = fs.read(path).then((blob) => URL.createObjectURL(blob));
+  const pending = loadImageBlob(path).then((blob) => URL.createObjectURL(blob));
   imageUrlCache.set(path, pending);
   pending.catch(() => imageUrlCache.delete(path));
   return pending;
+}
+
+/**
+ * Save an attachment to Drive so the conversation keeps a reference to it.
+ *
+ * Best-effort by design: this runs in the background of a send, and a Drive
+ * failure must never lose the user's message. Resolves false when the file
+ * could not be written — the panel then shows the same "unavailable" state a
+ * generated image shows when its read fails.
+ */
+export async function persistAttachment(blob: Blob, path: string): Promise<boolean> {
+  try {
+    const fs = window.puter?.fs;
+    if (!fs?.write) return false;
+    await fs.write(path, blob, { dedupeName: false, overwrite: true });
+    return true;
+  } catch {
+    return false;
+  }
 }

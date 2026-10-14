@@ -52,3 +52,13 @@ export function useMediaQuery(query: string): boolean {
  */
 export const DESKTOP_QUERY = "(min-width: 1024px)";
 export const MOBILE_QUERY = "(max-width: 1023px)";
+
+/**
+ * Width at which the artifacts panel docks instead of overlaying.
+ *
+ * Deliberately wider than `DESKTOP_QUERY`: with the left rail docked at 260px,
+ * a 300px panel at 1024px would leave a ~464px transcript. Below this the panel
+ * is an overlay with a scrim, exactly like the sidebar below `lg`. The CSS in
+ * ArtifactsPanel.css and Index.css uses the same `xl` breakpoint.
+ */
+export const ARTIFACTS_DOCK_QUERY = "(min-width: 1280px)";

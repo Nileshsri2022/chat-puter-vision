@@ -73,6 +73,16 @@ the model keeps context. Images are sent only with the current turn (storing
 data URLs in localStorage would exhaust its quota); history carries the
 `[Images: N attached]` marker as text.
 
+The **normalized file is also written to Puter Drive** (`persistAttachment()` in
+`src/lib/images.ts`) and the message keeps an `attachments: AttachmentRef[]`
+array of `{ path, name, mimeType, bytes }` refs — ~40 bytes each, so the
+conversation record stays small while the images panel can show every
+attachment again later. The write is fired in the background of a send and
+resolves `false` instead of throwing: a Drive failure must never cost the user
+their message. Messages sent before this existed carry only the marker, which
+`countUnsavedAttachments()` (`src/lib/artifacts.ts`) reports rather than
+pretending to resolve. Attachments are still not re-sent on retry.
+
 ### 4. AI SDK Interaction
 - The messages array is passed through to the API as-is.
 - Streaming chunks are parsed per the documented shape:
@@ -119,8 +129,11 @@ does not advertise image input is rejected with HTTP 400
 
 ## References
 - `src/lib/attachments.ts` — preparation + the attachment contract
+- `src/lib/artifacts.ts` — the image index behind the artifacts panel
+- `src/lib/images.ts` — Drive persistence + reads for generated and attached images
 - `src/lib/utils/imageConversion.ts` — format conversion + downscaling
 - `src/lib/streamingHandler.ts` — message building + streaming
 - `src/lib/models.ts` — live catalog + vision gating
 - `src/components/ChatInput.tsx` — selection, previews, OCR
+- `docs/image-artifacts-panel-spec.md` — the images panel that references all of it
 - https://docs.puter.com/AI/chat/

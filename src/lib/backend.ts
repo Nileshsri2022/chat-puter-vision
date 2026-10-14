@@ -238,6 +238,22 @@ export function signOut(): void {
   }
 }
 
+/**
+ * An image attachment persisted to Puter Drive so it stays referenceable after
+ * the send. The message keeps this ~40-byte ref instead of the payload: a
+ * normalized attachment targets ~1.2 MB (see lib/attachments.ts) and storing
+ * those in localStorage would trip the quota path that drops conversations.
+ */
+export interface AttachmentRef {
+  /** Drive path of the normalized file that was actually sent to the model. */
+  path: string;
+  /** Original file name, when the browser supplied one. */
+  name?: string;
+  mimeType?: string;
+  /** Decoded size of the normalized file, in bytes. */
+  bytes?: number;
+}
+
 export interface Message {
   role: "user" | "assistant";
   content: string;
@@ -246,6 +262,8 @@ export interface Message {
   image?: string;
   /** Puter Drive path of a generated image (saved via `puter_output_path`). */
   imagePath?: string;
+  /** Attachments persisted to Drive, in the order they were attached. */
+  attachments?: AttachmentRef[];
   /** Compaction summary for this reply; sent back on later turns of the same model. */
   compaction?: CompactionItem;
 }

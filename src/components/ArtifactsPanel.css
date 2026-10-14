@@ -1,0 +1,181 @@
+/* ArtifactsPanel styles — the right-hand image index.
+   Mirrors ConversationSidebar.css: overlay + fixed panel below the dock
+   breakpoint, docked (and paid for with a right margin on .app-main) above it. */
+
+/* Overlay only below `xl`, matching the docked breakpoint used by
+   .app-main-artifacts-open in Index.css. */
+.artifacts-overlay {
+  @apply fixed inset-0 z-30 bg-black/40 backdrop-blur-[1px] xl:hidden;
+}
+
+.artifacts-panel {
+  @apply fixed right-0 top-0 z-40 flex flex-col border-l border-border bg-background transition-transform duration-300 ease-in-out;
+  /* Shared with .app-main-artifacts-open via --artifacts-w. min() guarantees
+     the panel never exceeds the viewport on a small screen. */
+  width: min(var(--artifacts-w), 88vw);
+  /* Dynamic viewport height: h-full would use the 100vh (chrome-hidden) value
+     and spill past the bottom of the screen when mobile browser UI is shown. */
+  height: 100vh;
+  height: 100dvh;
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.artifacts-panel-open {
+  @apply translate-x-0;
+}
+
+.artifacts-panel-closed {
+  @apply translate-x-full;
+}
+
+.artifacts-header {
+  @apply flex shrink-0 items-center justify-between border-b border-border px-3 py-3;
+}
+
+.artifacts-title-row {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.artifacts-title-icon {
+  @apply size-4 shrink-0 text-muted-foreground;
+}
+
+.artifacts-title {
+  @apply truncate text-sm font-semibold text-foreground;
+}
+
+.artifacts-count {
+  @apply shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground;
+}
+
+.artifacts-close-btn {
+  @apply size-8 shrink-0 tap-expand text-muted-foreground hover:text-foreground;
+}
+
+.artifacts-close-icon {
+  @apply size-4;
+}
+
+/* Filter row. Rendered only when more than one kind is present. */
+.artifacts-filters {
+  @apply flex shrink-0 gap-1 border-b border-border px-3 py-2;
+}
+
+.artifacts-filter {
+  @apply inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.artifacts-filter-active {
+  @apply border-transparent bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground;
+}
+
+.artifacts-filter-count {
+  @apply tabular-nums opacity-70;
+}
+
+.artifacts-scroll {
+  @apply min-h-0 flex-1;
+}
+
+/* Radix's inner `display: table` wrapper would stretch the grid to max-content. */
+.artifacts-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+
+.artifacts-grid {
+  @apply grid grid-cols-2 gap-2 p-3;
+}
+
+.artifacts-tile {
+  @apply relative overflow-hidden rounded-lg border border-border bg-muted/40;
+}
+
+.artifacts-tile-pending {
+  @apply aspect-square;
+}
+
+.artifacts-tile-btn {
+  @apply block aspect-square w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset;
+}
+
+.artifacts-tile-img {
+  @apply size-full object-cover;
+}
+
+.artifacts-tile-missing {
+  @apply flex size-full flex-col items-center justify-center gap-1 px-1 text-center;
+}
+
+.artifacts-tile-missing-icon {
+  @apply size-4 text-muted-foreground;
+}
+
+.artifacts-tile-missing-text {
+  @apply text-[11px] leading-tight text-muted-foreground;
+}
+
+.artifacts-tile-spinner {
+  @apply size-3.5 animate-spin rounded-full border border-current border-t-transparent text-muted-foreground;
+}
+
+.artifacts-tile-badge {
+  @apply pointer-events-none absolute bottom-1 left-1 inline-flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white;
+}
+
+.artifacts-tile-badge-icon {
+  @apply size-2.5 shrink-0;
+}
+
+/* Tile actions sit over the thumbnail. Visible everywhere by default; the
+   hover-reveal below applies to fine pointers only, so a touch user is never
+   left with a control they cannot reach. */
+.artifacts-tile-actions {
+  @apply absolute right-1 top-1 flex items-center gap-0.5 rounded-full bg-black/55 p-0.5 opacity-100 transition-opacity;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .artifacts-tile-actions {
+    opacity: 0;
+  }
+
+  .group:hover .artifacts-tile-actions,
+  .artifacts-tile-action:focus-visible {
+    opacity: 1;
+  }
+}
+
+.artifacts-tile-action {
+  @apply size-7 tap-expand text-white hover:bg-white/20 hover:text-white;
+}
+
+.artifacts-tile-action-icon {
+  @apply size-3.5;
+}
+
+/* Empty state */
+.artifacts-empty {
+  @apply flex flex-col items-center gap-2 px-5 py-12 text-center;
+}
+
+.artifacts-empty-badge {
+  @apply flex size-11 items-center justify-center rounded-2xl bg-muted;
+}
+
+.artifacts-empty-icon {
+  @apply size-5 text-muted-foreground;
+}
+
+.artifacts-empty-title {
+  @apply mt-1 text-sm font-medium text-foreground;
+}
+
+.artifacts-empty-sub {
+  @apply text-xs leading-relaxed text-muted-foreground text-pretty;
+}
+
+/* Footnote about attachments that predate Drive persistence. */
+.artifacts-note {
+  @apply shrink-0 border-t border-border px-3 py-2 text-[11px] leading-snug text-muted-foreground;
+}
