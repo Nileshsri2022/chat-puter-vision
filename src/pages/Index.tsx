@@ -23,7 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Download, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
+import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Share2, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -776,7 +776,7 @@ const Index = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="app-icon-btn" title="Export conversation" aria-label="Export conversation">
-                    <Download className="app-header-icon" aria-hidden="true" />
+                    <Share2 className="app-header-icon" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">

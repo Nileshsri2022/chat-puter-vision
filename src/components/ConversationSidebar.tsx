@@ -1,4 +1,4 @@
-import { Plus, PanelLeftClose, Trash2, Search, Sparkles, MoreHorizontal, Pencil, Pin, Share2, ListChecks, X } from "lucide-react";
+import { Plus, PanelLeftClose, Trash2, Search, MoreHorizontal, Pencil, Pin, Share2, ListChecks, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -310,9 +310,6 @@ export const ConversationSidebar = ({
         {/* Header with logo */}
         <div className="sidebar-header">
           <div className="sidebar-brand">
-            <span className="sidebar-logo">
-              <Sparkles className="sidebar-logo-icon" />
-            </span>
             <span className="sidebar-brand-text">FreeTalk</span>
           </div>
           <Button

@@ -24,14 +24,6 @@
   @apply flex items-center gap-2;
 }
 
-.sidebar-logo {
-  @apply flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground;
-}
-
-.sidebar-logo-icon {
-  @apply h-4 w-4;
-}
-
 .sidebar-brand-text {
   @apply font-semibold text-sidebar-foreground;
 }
