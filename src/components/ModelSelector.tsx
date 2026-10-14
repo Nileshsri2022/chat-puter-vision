@@ -609,17 +609,25 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
   return (
     <DropdownMenu open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery(""); }}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 px-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+          aria-label={`Selected model: ${currentModel?.name ?? "Select model"}`}
+        >
           <span className="max-w-[140px] truncate">{currentModel?.name ?? "Select model"}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72 p-1">
         <div className="p-1">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search models..."
+              id="search-models"
+              name="search"
+              aria-label="Search models"
+              placeholder="Search models…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}

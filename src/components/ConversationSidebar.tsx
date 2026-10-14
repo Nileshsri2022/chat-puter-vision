@@ -62,29 +62,19 @@ export const ConversationSidebar = ({
   );
   return (
     <>
-      {/* Mobile menu button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onToggle}
-        className="fixed top-3 left-3 z-50 md:hidden rounded-lg"
-      >
-        <Menu className="w-5 h-5" />
-      </Button>
-
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/20 z-30 md:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-30 md:hidden"
           onClick={onToggle}
         />
       )}
 
       <aside
         className={cn(
-          "fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border transition-transform duration-300 z-40",
+          "fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border transition-transform duration-300 ease-in-out z-40",
           "w-[260px] flex flex-col",
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Header with logo */}
@@ -99,9 +89,11 @@ export const ConversationSidebar = ({
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            className="hidden md:flex h-8 w-8"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            title="Close sidebar"
+            aria-label="Close sidebar"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            <PanelLeftClose className="w-4 h-4" aria-hidden="true" />
           </Button>
         </div>
 
@@ -113,8 +105,9 @@ export const ConversationSidebar = ({
               if (window.innerWidth < 768) onToggle();
             }}
             className="w-full justify-start gap-2 rounded-lg h-10 font-medium"
+            aria-label="Start new chat"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             Start new chat
           </Button>
         </div>
@@ -122,9 +115,12 @@ export const ConversationSidebar = ({
         {/* Search input */}
         <div className="px-3 pb-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Search conversations..."
+              id="search-conversations"
+              name="search"
+              aria-label="Search conversations"
+              placeholder="Search conversations…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 bg-sidebar-accent/50 border-sidebar-border"
@@ -150,36 +146,41 @@ export const ConversationSidebar = ({
               </div>
             ) : (
               filteredConversations.map((conv) => (
-                <button
+                <div
                   key={conv.id}
-                  onClick={() => {
-                    onSelectConversation(conv.id);
-                    if (window.innerWidth < 768) onToggle();
-                  }}
                   className={cn(
-                    "w-full text-left px-3 py-2.5 rounded-lg transition-all",
-                    "hover:bg-sidebar-accent text-sm group",
+                    "flex items-center justify-between w-full px-2 py-1 rounded-lg transition-colors group",
+                    "hover:bg-sidebar-accent text-sm",
                     currentConversationId === conv.id
                       ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                       : "text-sidebar-foreground"
                   )}
                 >
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-60" />
-                      <span className="truncate">{conv.title}</span>
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectConversation(conv.id);
+                      if (window.innerWidth < 768) onToggle();
+                    }}
+                    className="flex-1 min-w-0 flex items-center gap-2.5 text-left py-1 px-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Open conversation: ${conv.title}`}
+                  >
+                    <MessageSquare className="w-4 h-4 shrink-0 opacity-60" aria-hidden="true" />
+                    <span className="truncate">{conv.title}</span>
+                  </button>
+                  <div className="shrink-0 ml-1">
                     {confirmId === conv.id ? (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-2 text-xs font-medium text-red-600 hover:text-red-600"
+                        className="h-7 px-2 text-xs font-medium text-red-600 hover:text-red-600 focus-visible:ring-2"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirmTimer.current) clearTimeout(confirmTimer.current);
                           setConfirmId(null);
                           onDeleteConversation(conv.id);
                         }}
+                        aria-label="Confirm delete conversation"
                       >
                         Confirm?
                       </Button>
@@ -187,18 +188,19 @@ export const ConversationSidebar = ({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                        className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100"
                         onClick={(e) => {
-                          e.stopPropagation(); // Prevent selecting conversation
+                          e.stopPropagation();
                           armDelete(conv.id);
                         }}
                         title="Delete conversation"
+                        aria-label="Delete conversation"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </Button>
                     )}
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>

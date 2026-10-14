@@ -32,12 +32,14 @@ export const CreditPill = () => {
   const low = balance.allowance > 0 && balance.remaining / balance.allowance < 0.1;
   return (
     <div
-      className={`flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium ${
+      role="status"
+      className={`flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium tabular-nums ${
         low ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
       }`}
       title={`${formatCredits(balance.remaining)} of ${formatCredits(balance.allowance)} monthly credit remaining`}
+      aria-label={`${formatCredits(balance.remaining)} of ${formatCredits(balance.allowance)} monthly credit remaining`}
     >
-      <Zap className="h-3 w-3" />
+      <Zap className="h-3 w-3" aria-hidden="true" />
       {formatCredits(balance.remaining)}
     </div>
   );

@@ -78,8 +78,16 @@ export const AuthButton = ({ onAuthChange }: AuthButtonProps) => {
       onClick={handleSignIn}
       disabled={isLoading}
       className="bg-primary hover:bg-primary/90"
+      aria-label={isLoading ? "Signing in…" : "Sign in"}
     >
-      {isLoading ? "Signing in..." : "Sign in"}
+      {isLoading ? (
+        <>
+          <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+          Signing in…
+        </>
+      ) : (
+        "Sign in"
+      )}
     </Button>
   );
 };

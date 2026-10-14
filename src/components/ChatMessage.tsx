@@ -255,20 +255,24 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
         <div className="group px-4 py-2">
           <div className="mx-auto max-w-3xl">
             <div className="mb-1 text-xs font-medium text-muted-foreground">
-              {isStreaming ? "Thinking..." : getModelDisplayName(model)}
+              {isStreaming ? "Thinking…" : getModelDisplayName(model)}
             </div>
             {image && (
               <img
                 src={image}
                 alt="Generated image"
                 className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover"
+                loading="lazy"
               />
             )}
             {(thinking || thinkingOpen) && (
               <div className="mb-2">
                 <button
+                  type="button"
                   onClick={() => setShowThinking((v) => !v)}
-                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  aria-expanded={showThinking}
+                  aria-label={showThinking ? "Hide thought process" : "Show thought process"}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1 -mx-1"
                 >
                   <ThoughtIcon className="h-4 w-4 text-blue-500" />
                   {thinkingOpen
@@ -277,7 +281,8 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                       ? `Thought for ${thinkSecs} second${thinkSecs === 1 ? "" : "s"}`
                       : "Thought process"}
                   <ChevronDown
-                    className={`h-4 w-4 transition-transform ${showThinking ? "" : "-rotate-90"}`}
+                    className={`h-4 w-4 transition-transform duration-200 ${showThinking ? "" : "-rotate-90"}`}
+                    aria-hidden="true"
                   />
                 </button>
                 {showThinking && (
@@ -301,14 +306,14 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
               </ReactMarkdown>
             </div>
             {isStreaming && content.length === 0 && (
-              <div className="flex gap-1 py-2">
+              <div className="flex gap-1 py-2" aria-live="polite" aria-label="Thinking">
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
               </div>
             )}
             {!isStreaming && (speakable || onCopy || onDelete) && (
-              <div className="mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="mt-1 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
                 {speakable && (
                   <Button
                     variant="ghost"
@@ -317,25 +322,38 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     disabled={ttsState === "loading"}
                     className="h-7 px-2 text-xs text-muted-foreground"
                     title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
+                    aria-label={ttsState === "playing" ? "Stop reading" : "Read aloud"}
                   >
                     {ttsState === "loading" ? (
-                      <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                      <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
                     ) : ttsState === "playing" ? (
-                      <Square className="mr-1 h-3 w-3" />
+                      <Square className="mr-1 h-3 w-3" aria-hidden="true" />
                     ) : (
-                      <Volume2 className="mr-1 h-3 w-3" />
+                      <Volume2 className="mr-1 h-3 w-3" aria-hidden="true" />
                     )}
-                    {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading" : "Read aloud"}
+                    {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading…" : "Read aloud"}
                   </Button>
                 )}
                 {onCopy && (
-                  <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 text-xs text-muted-foreground">
-                    {copied ? <><Check className="mr-1 h-3 w-3" /> Copied</> : <><Copy className="mr-1 h-3 w-3" /> Copy</>}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopy}
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    aria-label={copied ? "Copied" : "Copy message"}
+                  >
+                    {copied ? <><Check className="mr-1 h-3 w-3" aria-hidden="true" /> Copied</> : <><Copy className="mr-1 h-3 w-3" aria-hidden="true" /> Copy</>}
                   </Button>
                 )}
                 {onDelete && (
-                  <Button variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive">
-                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onDelete}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    aria-label="Delete message"
+                  >
+                    <Trash2 className="mr-1 h-3 w-3" aria-hidden="true" /> Delete
                   </Button>
                 )}
               </div>
