@@ -33,7 +33,19 @@ export interface ImageBlock {
   image_url: { url: string };
 }
 
-export type ContentBlock = TextBlock | ImageBlock;
+/**
+ * Summary the model returns when compaction fires
+ * (https://docs.puter.com/AI/chat/#compaction). Carried back unchanged as the
+ * first block of the assistant turn that produced it.
+ */
+export interface CompactionItem {
+  type: "compaction";
+  id: string;
+  encrypted_content: string;
+  [key: string]: unknown;
+}
+
+export type ContentBlock = TextBlock | ImageBlock | CompactionItem;
 
 export interface BackendChatMessage {
   role: ChatRole;
@@ -46,6 +58,8 @@ export interface ChatOptions {
   max_tokens?: number;
   temperature?: number;
   signal?: AbortSignal;
+  /** Enables server-side summarization of long conversations. */
+  compaction?: boolean | { trigger_tokens: number };
 }
 
 export interface StreamPart {
@@ -63,6 +77,9 @@ export interface ModelInfo {
   provider?: string;
   name?: string;
   aliases?: string[];
+  /** Context window and maximum output, in tokens (listModels docs). */
+  context?: number;
+  max_tokens?: number;
   modalities?: { input?: string[]; output?: string[] };
   [key: string]: unknown;
 }
@@ -229,4 +246,6 @@ export interface Message {
   image?: string;
   /** Puter Drive path of a generated image (saved via `puter_output_path`). */
   imagePath?: string;
+  /** Compaction summary for this reply; sent back on later turns of the same model. */
+  compaction?: CompactionItem;
 }

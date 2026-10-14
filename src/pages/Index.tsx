@@ -8,13 +8,15 @@ import { getProfileInfo, type ProfileInfo } from "@/lib/profile";
 import {
   Message,
   checkAuthStatus,
-  signOut
+  signOut,
+  type CompactionItem,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
 import { generateImage } from "@/lib/images";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
   getModelCatalog,
+  contextPlanFor,
   resolveDefaultModel,
   DEFAULT_MODEL_ID,
   type ModelCatalog,
@@ -482,7 +484,7 @@ const Index = () => {
       abortRef.current = null;
     };
 
-    const appendAssistantMessage = (assistantContent: string) => {
+    const appendAssistantMessage = (assistantContent: string, compaction?: CompactionItem) => {
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === currentConversationId
@@ -492,12 +494,20 @@ const Index = () => {
                 replaceIndex !== undefined
                   ? conv.messages.map((m, i) =>
                       i === replaceIndex
-                        ? { ...m, content: assistantContent, model: modelId }
-                        : m
+                        ? { ...m, content: assistantContent, model: modelId, compaction }
+                        : // Summaries made after a regenerated reply covered the old text.
+                          i > replaceIndex && m.compaction
+                          ? { ...m, compaction: undefined }
+                          : m
                     )
                   : [
                       ...baseMessages,
-                      { role: "assistant", content: assistantContent, model: modelId },
+                      {
+                        role: "assistant",
+                        content: assistantContent,
+                        model: modelId,
+                        ...(compaction ? { compaction } : {}),
+                      },
                     ],
             }
             : conv
@@ -514,8 +524,8 @@ const Index = () => {
       }, 10);
     };
 
-    const onComplete = (fullContent: string) => {
-      appendAssistantMessage(fullContent);
+    const onComplete = (fullContent: string, compaction?: CompactionItem) => {
+      appendAssistantMessage(fullContent, compaction);
       resetStreaming();
     };
 
@@ -549,7 +559,7 @@ const Index = () => {
         onComplete,
         onError,
         onAbort,
-      }, imageBase64s, controller.signal);
+      }, imageBase64s, controller.signal, contextPlanFor(modelCatalog, modelId));
     } catch (error) {
       onError(error instanceof Error ? error : new Error(`AI request failed: ${(error as Error)?.message || 'Unknown error'}`));
     }
@@ -833,7 +843,13 @@ const Index = () => {
   const handleDeleteMessage = (messageIndex: number) => {
     setConversations(prev => prev.map(conv =>
       conv.id === currentConversationId
-        ? { ...conv, messages: conv.messages.filter((_, i) => i !== messageIndex) }
+        ? {
+            ...conv,
+            // Summaries after the deleted message covered it; drop them.
+            messages: conv.messages
+              .filter((_, i) => i !== messageIndex)
+              .map((m, i) => (i >= messageIndex && m.compaction ? { ...m, compaction: undefined } : m)),
+          }
         : conv
     ));
     toast({

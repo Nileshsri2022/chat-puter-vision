@@ -5,6 +5,7 @@
 // features on real `modalities` data instead of keyword guessing.
 
 import type { ModelInfo } from "./backend";
+import { computeContextPlan, type ContextPlan } from "./context";
 
 export interface ModelCatalog {
   /** Every ID the API accepts: primary id + puterId + aliases. */
@@ -13,6 +14,8 @@ export interface ModelCatalog {
   vision: Set<string>;
   /** Live provider name per accepted ID (primary id + puterId + aliases). */
   providerOf: Map<string, string>;
+  /** Context window and output limit per accepted ID, when listModels reports them. */
+  limits: Map<string, { context?: number; maxOutput?: number; provider?: string }>;
 }
 
 let cache: ModelCatalog | null = null;
@@ -31,9 +34,21 @@ export function getModelCatalog(): Promise<ModelCatalog | null> {
       const ids = new Set<string>();
       const vision = new Set<string>();
       const providerOf = new Map<string, string>();
+      const limits = new Map<string, { context?: number; maxOutput?: number; provider?: string }>();
+      const recordLimits = (id: string, m: ModelInfo) => {
+        if (limits.has(id)) return;
+        const context = typeof m.context === "number" ? m.context : undefined;
+        if (context === undefined) return;
+        limits.set(id, {
+          context,
+          maxOutput: typeof m.max_tokens === "number" ? m.max_tokens : undefined,
+          provider: typeof m.provider === "string" ? m.provider : undefined,
+        });
+      };
       for (const m of models) {
         if (!m || typeof m.id !== "string") continue;
         ids.add(m.id);
+        recordLimits(m.id, m);
         // Primary IDs are authoritative for providerOf: mirror entries
         // (e.g. "openrouter:openai/gpt-5.4-nano") reuse bare IDs as aliases,
         // and must not overwrite the real entry's provider.
@@ -48,15 +63,17 @@ export function getModelCatalog(): Promise<ModelCatalog | null> {
         if (!m || typeof m.id !== "string" || typeof m.provider !== "string") continue;
         if (typeof m.puterId === "string") {
           ids.add(m.puterId);
+          recordLimits(m.puterId, m);
           if (!providerOf.has(m.puterId)) providerOf.set(m.puterId, m.provider);
         }
         for (const a of m.aliases ?? []) {
           if (typeof a !== "string") continue;
           ids.add(a);
+          recordLimits(a, m);
           if (!providerOf.has(a)) providerOf.set(a, m.provider);
         }
       }
-      cache = { ids, vision, providerOf };
+      cache = { ids, vision, providerOf, limits };
       return cache;
     } catch {
       return null;
@@ -146,4 +163,22 @@ export function getModelProviders(): Promise<string[] | null> {
  */
 export function liveProviderForModelId(id: string, catalog: ModelCatalog | null): string | null {
   return catalog?.providerOf.get(id) ?? null;
+}
+
+/**
+ * Context budget and compaction threshold for a model, from its listModels()
+ * limits. Null when the catalog or the model's context size is unknown.
+ */
+export function contextPlanFor(
+  catalog: ModelCatalog | null,
+  modelId: string
+): ContextPlan | null {
+  const info = catalog?.limits?.get(modelId);
+  if (!info) return null;
+  return computeContextPlan({
+    id: modelId,
+    context: info.context,
+    maxOutput: info.maxOutput,
+    provider: info.provider ?? catalog?.providerOf.get(modelId),
+  });
 }
