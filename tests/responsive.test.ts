@@ -203,13 +203,14 @@ test("composer text is at least 16px on phones to prevent iOS zoom", () => {
   expect(css).toMatch(/@media \(min-width: 640px\)\s*\{\s*\.composer-textarea\s*\{\s*font-size:\s*15px/);
 });
 
-test("inline message edit sizes to content and resends the edited prompt", () => {
+test("inline message edit fills the message column like the bottom composer", () => {
   const css = read("components/ChatInput.css");
   const wrapRule = /\.composer-wrap-compact\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-  expect(wrapRule).toContain("w-fit");
-  expect(wrapRule).toContain("ml-auto");
-  const textareaRule = /\.composer-textarea-compact\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-  expect(textareaRule).toContain("field-sizing: content");
+  expect(wrapRule).toContain("w-full");
+  expect(wrapRule).not.toContain("w-fit");
+  // The edit box reuses the bottom composer's textarea (no compact override).
+  expect(css).not.toContain("composer-textarea-compact");
+  expect(read("components/ChatInput.tsx")).not.toContain("composer-textarea-compact");
 
   const page = read("pages/Index.tsx");
   const editFn = /const handleEditMessage[\s\S]*?^\s{2}\};/m.exec(page)?.[0] ?? "";

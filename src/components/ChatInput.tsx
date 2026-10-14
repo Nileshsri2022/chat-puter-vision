@@ -350,7 +350,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             disabled={disabled}
             rows={1}
             autoFocus={compact}
-            className={cn("composer-textarea", compact && "composer-textarea-compact")}
+            className="composer-textarea"
           />
           <div className="composer-toolbar">
             <div className="composer-tools">

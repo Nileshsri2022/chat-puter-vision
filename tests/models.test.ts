@@ -13,6 +13,7 @@ const catalog = (ids: string[], vision: string[] = []): ModelCatalog => ({
   ids: new Set(ids),
   vision: new Set(vision),
   providerOf: new Map(ids.map((id) => [id, "test"])),
+  limits: new Map(),
 });
 
 // ---- resolveDefaultModel ----

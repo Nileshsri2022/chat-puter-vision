@@ -16,6 +16,8 @@ import { copyToClipboard } from "@/lib/utils/export";
 import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { usePuterImage } from "@/hooks/usePuterImage";
+import type { ModelCatalog } from "@/lib/models";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import "./ChatMessage.css";
 
@@ -25,6 +27,10 @@ interface ChatMessageProps {
   isStreaming?: boolean;
   model?: string;
   image?: string;
+  /** Puter path of a generated image; loaded from Puter storage for display. */
+  imagePath?: string;
+  /** The model summarized earlier turns to produce this reply. */
+  compacted?: boolean;
   /** Position in the transcript; tags the node for in-conversation search. */
   messageIndex?: number;
   /** In-conversation search: this message contains the query. */
@@ -33,7 +39,11 @@ interface ChatMessageProps {
   searchActive?: boolean;
   onCopy?: (content: string) => void;
   onDelete?: () => void;
-  onEdit?: (content: string, images?: File[]) => void;
+  onEdit?: (content: string, images?: File[], model?: string) => void;
+  /** Model state shared with the bottom composer, so edit uses the same selector. */
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
+  modelCatalog?: ModelCatalog | null;
   onShareExchange?: (format: "md") => void;
   onRetry?: () => void;
 }
@@ -50,7 +60,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, compacted, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -58,6 +68,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
   const [previewOpen, setPreviewOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const { src: imageSrc, failed: imageFailed } = usePuterImage(imagePath, image);
 
   const speakable = !isUser && stripMarkdownForSpeech(content).trim().length > 0;
 
@@ -273,10 +284,12 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
               initialValue={content.replace(/\n\n\[Images: \d+ attached\]$/, "")}
               compact
               disabled={isStreaming}
-              selectedModel={model}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+              modelCatalog={modelCatalog}
               onCancel={() => setEditing(false)}
-              onSend={(text, _model, images) => {
-                if (onEdit) onEdit(text, images);
+              onSend={(text, sendModel, images) => {
+                if (onEdit) onEdit(text, images, sendModel);
                 setEditing(false);
               }}
             />
@@ -333,9 +346,14 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
             <div className="msg-model-label">
               {isStreaming ? "Thinking…" : getModelDisplayName(model)}
             </div>
-            {image && (
+            {(imagePath || image) && !imageSrc && (
+              <div className="msg-image-status" role="status">
+                {imageFailed ? "Image unavailable." : "Loading image…"}
+              </div>
+            )}
+            {imageSrc && (
               <img
-                src={image}
+                src={imageSrc}
                 alt="Generated image"
                 className="msg-image"
                 loading="lazy"
@@ -389,6 +407,11 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
                 {answer}
               </ReactMarkdown>
             </div>
+            {compacted && !isStreaming && (
+              <div className="msg-compaction-note" role="note">
+                Earlier messages in this chat were summarized to keep the model&apos;s memory of the conversation.
+              </div>
+            )}
             {isStreaming && content.length === 0 && (
               <div className="msg-typing" aria-live="polite" aria-label="Thinking">
                 <div className="msg-typing-dot" />
@@ -478,7 +501,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
           </div>
         </div>
       )}
-      {previewOpen && image && (
+      {previewOpen && imageSrc && (
         <div
           className="msg-lightbox"
           role="dialog"
@@ -492,7 +515,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, messageI
           autoFocus
         >
           <img
-            src={image}
+            src={imageSrc}
             alt="Image preview"
             className="msg-lightbox-img"
             onClick={(e) => e.stopPropagation()}
