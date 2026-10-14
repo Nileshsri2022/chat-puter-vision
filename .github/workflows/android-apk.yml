@@ -18,6 +18,8 @@ jobs:
     name: Assemble release APK
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -102,6 +104,21 @@ jobs:
         run: |
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$APKSIGNER" verify --print-certs dist-apk/*.apk
+
+      - name: Publish GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.apk.outputs.version }}
+        run: |
+          # Create the release with the APK attached. Release notes are edited
+          # separately; this placeholder is only used until then.
+          printf 'FreeTalk Android %s. Release notes are being prepared.\n' "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" dist-apk/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "FreeTalk Android $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
