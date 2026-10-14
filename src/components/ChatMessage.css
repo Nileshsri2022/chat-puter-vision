@@ -64,25 +64,25 @@
   @apply h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground;
 }
 
-/* Message actions */
+/* Message actions (always visible, icon-only) */
 .msg-actions {
-  @apply mt-1 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100;
+  @apply mt-1 flex gap-1;
 }
 
 .msg-action-btn {
-  @apply h-7 px-2 text-xs text-muted-foreground;
+  @apply h-7 w-7 p-0 text-muted-foreground;
 }
 
 .msg-action-btn-danger {
-  @apply h-7 px-2 text-xs text-muted-foreground hover:text-destructive;
+  @apply h-7 w-7 p-0 text-muted-foreground hover:text-destructive;
 }
 
 .msg-action-spinner {
-  @apply mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent;
+  @apply h-3 w-3 animate-spin rounded-full border border-current border-t-transparent;
 }
 
 .msg-action-icon {
-  @apply mr-1 h-3 w-3;
+  @apply h-4 w-4;
 }
 
 /* Code blocks */

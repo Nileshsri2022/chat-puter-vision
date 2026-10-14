@@ -332,7 +332,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     ) : (
                       <Volume2 className="msg-action-icon" aria-hidden="true" />
                     )}
-                    {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading…" : "Read aloud"}
                   </Button>
                 )}
                 {onCopy && (
@@ -341,9 +340,10 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     size="sm"
                     onClick={handleCopy}
                     className="msg-action-btn"
+                    title={copied ? "Copied" : "Copy message"}
                     aria-label={copied ? "Copied" : "Copy message"}
                   >
-                    {copied ? <><Check className="msg-action-icon" aria-hidden="true" /> Copied</> : <><Copy className="msg-action-icon" aria-hidden="true" /> Copy</>}
+                    {copied ? <Check className="msg-action-icon" aria-hidden="true" /> : <Copy className="msg-action-icon" aria-hidden="true" />}
                   </Button>
                 )}
                 {onDelete && (
@@ -352,9 +352,10 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     size="sm"
                     onClick={onDelete}
                     className="msg-action-btn-danger"
+                    title="Delete message"
                     aria-label="Delete message"
                   >
-                    <Trash2 className="msg-action-icon" aria-hidden="true" /> Delete
+                    <Trash2 className="msg-action-icon" aria-hidden="true" />
                   </Button>
                 )}
               </div>
