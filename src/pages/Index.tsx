@@ -23,7 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, PanelLeftClose, Download, LogOut, CircleUserRound } from "lucide-react";
+import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Download, LogOut, CircleUserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -659,20 +659,18 @@ const Index = () => {
       >
         <header className="app-header">
           <div className="app-header-group">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="app-icon-btn"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-            >
-              {sidebarOpen ? (
-                <PanelLeftClose className="app-header-icon" aria-hidden="true" />
-              ) : (
+            {!sidebarOpen && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="app-icon-btn"
+                onClick={() => setSidebarOpen(true)}
+                title="Open sidebar"
+                aria-label="Open sidebar"
+              >
                 <PanelLeftOpen className="app-header-icon" aria-hidden="true" />
-              )}
-            </Button>
+              </Button>
+            )}
             {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

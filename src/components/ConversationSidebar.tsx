@@ -157,6 +157,7 @@ export const ConversationSidebar = ({
                       if (window.innerWidth < 768) onToggle();
                     }}
                     className="conv-row-btn"
+                    title={conv.title}
                     aria-label={`Open conversation: ${conv.title}`}
                   >
                     <MessageSquare className="conv-row-icon" aria-hidden="true" />
