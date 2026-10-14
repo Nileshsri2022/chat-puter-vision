@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ProfileInfo } from "@/lib/profile";
 import { cn } from "@/lib/utils";
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import "./ConversationSidebar.css";
@@ -67,6 +68,8 @@ export const ConversationSidebar = ({
   // Inline rename
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  // Lets the row menu skip focus-restore when it closes to start a rename.
+  const pendingRenameId = useRef<string | null>(null);
   // Two-step delete inside the menu
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,99 +208,99 @@ export const ConversationSidebar = ({
         )}
         {!isRenaming && (
           <div className="conv-row-menu-wrap">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="conv-row-menu-btn"
-              aria-label={`Conversation options: ${conv.title}`}
-              aria-expanded={menuOpenId === conv.id}
-              onClick={(e) => {
-                e.stopPropagation();
+            <DropdownMenuPrimitive.Root
+              open={menuOpenId === conv.id}
+              onOpenChange={(open) => {
+                setMenuOpenId(open ? conv.id : null);
                 setConfirmId(null);
-                setMenuOpenId(menuOpenId === conv.id ? null : conv.id);
               }}
             >
-              <MoreHorizontal className="conv-row-menu-icon" aria-hidden="true" />
-            </Button>
-            {menuOpenId === conv.id && (
-              <div className="conv-menu" role="menu">
-                <button
-                  type="button"
-                  className="conv-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setRenameDraft(conv.title);
-                    setRenameId(conv.id);
+              <DropdownMenuPrimitive.Trigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="conv-row-menu-btn"
+                  aria-label={`Conversation options: ${conv.title}`}
+                >
+                  <MoreHorizontal className="conv-row-menu-icon" aria-hidden="true" />
+                </Button>
+              </DropdownMenuPrimitive.Trigger>
+              {/* Portalled to <body>: the list is inside an overflow-hidden scroll
+                  area, so an absolutely positioned menu got clipped (and could run
+                  off-screen) on rows near the bottom. Radix flips/shifts it to fit. */}
+              <DropdownMenuPrimitive.Portal>
+                <DropdownMenuPrimitive.Content
+                  align="end"
+                  side="bottom"
+                  sideOffset={4}
+                  collisionPadding={8}
+                  className="conv-menu"
+                  onCloseAutoFocus={(e) => {
+                    // Renaming unmounts this trigger; keep focus on the rename input.
+                    if (pendingRenameId.current === conv.id) {
+                      pendingRenameId.current = null;
+                      e.preventDefault();
+                    }
                   }}
                 >
-                  <Pencil className="conv-menu-icon" aria-hidden="true" />
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  className="conv-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    onTogglePin(conv.id);
-                    setMenuOpenId(null);
-                  }}
-                >
-                  <Pin className="conv-menu-icon" aria-hidden="true" />
-                  {conv.pinned ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  type="button"
-                  className="conv-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    onShareConversation(conv.id);
-                    setMenuOpenId(null);
-                  }}
-                >
-                  <Share2 className="conv-menu-icon" aria-hidden="true" />
-                  Share
-                </button>
-                <button
-                  type="button"
-                  className="conv-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMenuOpenId(null);
-                    setSelectedIds(new Set([conv.id]));
-                    setMultiSelect(true);
-                  }}
-                >
-                  <ListChecks className="conv-menu-icon" aria-hidden="true" />
-                  Multi-select
-                </button>
-                {confirmId === conv.id ? (
-                  <button
-                    type="button"
-                    className="conv-menu-item conv-menu-item-confirm"
-                    role="menuitem"
-                    onClick={() => {
+                  <DropdownMenuPrimitive.Item
+                    className="conv-menu-item"
+                    onSelect={() => {
+                      pendingRenameId.current = conv.id;
+                      setRenameDraft(conv.title);
+                      setRenameId(conv.id);
+                    }}
+                  >
+                    <Pencil className="conv-menu-icon" aria-hidden="true" />
+                    Rename
+                  </DropdownMenuPrimitive.Item>
+                  <DropdownMenuPrimitive.Item
+                    className="conv-menu-item"
+                    onSelect={() => onTogglePin(conv.id)}
+                  >
+                    <Pin className="conv-menu-icon" aria-hidden="true" />
+                    {conv.pinned ? "Unpin" : "Pin"}
+                  </DropdownMenuPrimitive.Item>
+                  <DropdownMenuPrimitive.Item
+                    className="conv-menu-item"
+                    onSelect={() => onShareConversation(conv.id)}
+                  >
+                    <Share2 className="conv-menu-icon" aria-hidden="true" />
+                    Share
+                  </DropdownMenuPrimitive.Item>
+                  <DropdownMenuPrimitive.Item
+                    className="conv-menu-item"
+                    onSelect={() => {
+                      setSelectedIds(new Set([conv.id]));
+                      setMultiSelect(true);
+                    }}
+                  >
+                    <ListChecks className="conv-menu-icon" aria-hidden="true" />
+                    Multi-select
+                  </DropdownMenuPrimitive.Item>
+                  <DropdownMenuPrimitive.Item
+                    className={cn(
+                      "conv-menu-item",
+                      confirmId === conv.id ? "conv-menu-item-confirm" : "conv-menu-item-danger",
+                    )}
+                    onSelect={(e) => {
+                      if (confirmId !== conv.id) {
+                        // First step: keep the menu open and ask for confirmation.
+                        e.preventDefault();
+                        armDelete(conv.id);
+                        return;
+                      }
                       if (confirmTimer.current) clearTimeout(confirmTimer.current);
                       setConfirmId(null);
-                      setMenuOpenId(null);
                       onDeleteConversation(conv.id);
                     }}
                   >
                     <Trash2 className="conv-menu-icon" aria-hidden="true" />
-                    Click to confirm
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="conv-menu-item conv-menu-item-danger"
-                    role="menuitem"
-                    onClick={() => armDelete(conv.id)}
-                  >
-                    <Trash2 className="conv-menu-icon" aria-hidden="true" />
-                    Delete
-                  </button>
-                )}
-              </div>
-            )}
+                    {confirmId === conv.id ? "Click to confirm" : "Delete"}
+                  </DropdownMenuPrimitive.Item>
+                </DropdownMenuPrimitive.Content>
+              </DropdownMenuPrimitive.Portal>
+            </DropdownMenuPrimitive.Root>
           </div>
         )}
       </div>
@@ -313,17 +316,6 @@ export const ConversationSidebar = ({
           onClick={onToggle}
         />
       )}
-      {/* Scrim to close the row menu on outside click */}
-      {menuOpenId && (
-        <div
-          className="conv-menu-scrim"
-          onClick={() => {
-            setMenuOpenId(null);
-            setConfirmId(null);
-          }}
-        />
-      )}
-
       <aside
         className={cn("sidebar", isOpen ? "sidebar-open" : "sidebar-closed")}
       >
