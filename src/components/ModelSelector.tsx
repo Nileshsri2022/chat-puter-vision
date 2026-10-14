@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check, X } from "lucide-react";
+import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check } from "lucide-react";
 import { PUTER_MODELS_SNAPSHOT, type SnapshotModel } from "@/lib/puterModels.generated";
 import "./ModelSelector.css";
 
@@ -640,27 +640,22 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
             aria-label="Select model"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="ms-modal-header">
-              <span className="ms-modal-title">Select model</span>
-              <button type="button" className="ms-modal-close" onClick={() => setOpen(false)} aria-label="Close">
-                <X className="ms-modal-close-icon" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="ms-search-wrap">
-              <div className="ms-search-relative">
-                <Search className="ms-search-icon" aria-hidden="true" />
-                <Input
-                  ref={searchRef}
-                  aria-label="Search models"
-                  placeholder={`Search ${active.label} models…`}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="ms-search-input"
-                />
-              </div>
-            </div>
             <div className="ms-picker-body">
-              <div className="ms-provider-sidebar" role="tablist" aria-label="Providers">
+              <div className="ms-provider-sidebar">
+                <div className="ms-search-wrap">
+                  <div className="ms-search-relative">
+                    <Search className="ms-search-icon" aria-hidden="true" />
+                    <Input
+                      ref={searchRef}
+                      aria-label="Search models"
+                      placeholder={`Search ${active.label} models…`}
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      className="ms-search-input"
+                    />
+                  </div>
+                </div>
+                <div className="ms-provider-list" role="tablist" aria-label="Providers">
                 {groups.map((g) => (
                   <button
                     key={g.label}
@@ -674,6 +669,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                     <span className="ms-provider-count">{g.models.length}</span>
                   </button>
                 ))}
+                </div>
               </div>
               <div className="ms-modal-list">
                 {models.length === 0 && (

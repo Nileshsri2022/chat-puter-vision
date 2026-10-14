@@ -31,42 +31,30 @@
   @apply flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl;
 }
 
-.ms-modal-header {
-  @apply flex items-center justify-between border-b px-4 py-3;
-}
-
-.ms-modal-title {
-  @apply text-sm font-semibold;
-}
-
-.ms-modal-close {
-  @apply rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground;
-}
-
-.ms-modal-close-icon {
-  @apply h-4 w-4;
-}
-
 /* Picker body: provider sidebar + model list */
 .ms-picker-body {
   @apply flex min-h-0 flex-1;
 }
 
 .ms-provider-sidebar {
-  @apply w-40 shrink-0 overflow-y-auto border-r p-1;
+  @apply flex w-44 shrink-0 flex-col border-r;
+}
+
+.ms-provider-list {
+  @apply min-h-0 flex-1 overflow-y-auto p-1;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
 
-.ms-provider-sidebar::-webkit-scrollbar {
+.ms-provider-list::-webkit-scrollbar {
   width: 6px;
 }
 
-.ms-provider-sidebar::-webkit-scrollbar-track {
+.ms-provider-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ms-provider-sidebar::-webkit-scrollbar-thumb {
+.ms-provider-list::-webkit-scrollbar-thumb {
   @apply rounded-full bg-border;
 }
 
@@ -88,7 +76,7 @@
 
 /* Search */
 .ms-search-wrap {
-  @apply p-3 pb-1;
+  @apply p-2;
 }
 
 .ms-search-relative {
