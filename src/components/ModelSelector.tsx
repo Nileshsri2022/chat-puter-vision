@@ -669,50 +669,45 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                 />
               </div>
             </div>
-            <div className="ms-provider-row" role="tablist" aria-label="Providers">
-              {groups.map((g) => (
-                <button
-                  key={g.label}
-                  type="button"
-                  role="tab"
-                  aria-selected={g.label === active.label}
-                  className={"ms-provider-chip" + (g.label === active.label ? " ms-provider-chip-active" : "")}
-                  onClick={() => setBrand(g.label)}
-                >
-                  {g.icon}
-                  <span className="ms-provider-chip-label">{g.label}</span>
-                  <span className="ms-provider-count">{g.models.length}</span>
-                </button>
-              ))}
-            </div>
-            <div className="ms-modal-list">
-              {models.length === 0 && (
-                <div className="ms-empty">No models found</div>
-              )}
-              {models.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
-                  onClick={() => handleSelect(m.id)}
-                >
-                  <span className="ms-item-main">
-                    {active.icon}
-                    <span className="ms-item-text">
-                      <span className="ms-item-name">{shortModelName(m.name)}</span>
-                      <span className="ms-item-id">{m.id}</span>
+            <div className="ms-picker-body">
+              <div className="ms-provider-sidebar" role="tablist" aria-label="Providers">
+                {groups.map((g) => (
+                  <button
+                    key={g.label}
+                    type="button"
+                    role="tab"
+                    aria-selected={g.label === active.label}
+                    className={"ms-provider-item" + (g.label === active.label ? " ms-provider-item-active" : "")}
+                    onClick={() => setBrand(g.label)}
+                  >
+                    <span className="ms-provider-item-label">{g.label}</span>
+                    <span className="ms-provider-count">{g.models.length}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="ms-modal-list">
+                {models.length === 0 && (
+                  <div className="ms-empty">No models found</div>
+                )}
+                {models.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={"ms-item" + (m.id === selectedModel ? " ms-item-selected" : "")}
+                    onClick={() => handleSelect(m.id)}
+                  >
+                    <span className="ms-item-name">{shortModelName(m.name)}</span>
+                    <span className="ms-item-side">
+                      {CURATED_BADGE_OF.get(m.id) && (
+                        <Badge variant="secondary" className="ms-item-badge">
+                          {CURATED_BADGE_OF.get(m.id)}
+                        </Badge>
+                      )}
+                      {m.id === selectedModel && <Check className="ms-item-check" aria-hidden="true" />}
                     </span>
-                  </span>
-                  <span className="ms-item-side">
-                    {CURATED_BADGE_OF.get(m.id) && (
-                      <Badge variant="secondary" className="ms-item-badge">
-                        {CURATED_BADGE_OF.get(m.id)}
-                      </Badge>
-                    )}
-                    {m.id === selectedModel && <Check className="ms-item-check" aria-hidden="true" />}
-                  </span>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

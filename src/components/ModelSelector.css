@@ -47,43 +47,43 @@
   @apply h-4 w-4;
 }
 
-/* Provider chips row */
-.ms-provider-row {
-  @apply flex gap-1.5 overflow-x-auto border-b px-3 py-2;
+/* Picker body: provider sidebar + model list */
+.ms-picker-body {
+  @apply flex min-h-0 flex-1;
+}
+
+.ms-provider-sidebar {
+  @apply w-40 shrink-0 overflow-y-auto border-r p-1;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
 
-.ms-provider-row::-webkit-scrollbar {
-  height: 6px;
+.ms-provider-sidebar::-webkit-scrollbar {
+  width: 6px;
 }
 
-.ms-provider-row::-webkit-scrollbar-track {
+.ms-provider-sidebar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ms-provider-row::-webkit-scrollbar-thumb {
+.ms-provider-sidebar::-webkit-scrollbar-thumb {
   @apply rounded-full bg-border;
 }
 
-.ms-provider-chip {
-  @apply flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground;
+.ms-provider-item {
+  @apply flex w-full items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground;
 }
 
-.ms-provider-chip .provider-icon {
-  @apply h-3.5 w-3.5;
+.ms-provider-item-active {
+  @apply bg-accent text-foreground;
 }
 
-.ms-provider-chip-active {
-  @apply border-transparent bg-secondary text-foreground;
-}
-
-.ms-provider-chip-label {
-  @apply whitespace-nowrap;
+.ms-provider-item-label {
+  @apply truncate;
 }
 
 .ms-provider-count {
-  @apply rounded-full bg-muted px-1 text-[10px] text-muted-foreground;
+  @apply shrink-0 rounded-full bg-muted px-1 text-[10px] text-muted-foreground;
 }
 
 /* Search */
@@ -135,24 +135,8 @@
   @apply bg-accent;
 }
 
-.ms-item-main {
-  @apply flex min-w-0 items-center gap-2;
-}
-
-.ms-item-main .provider-icon {
-  @apply h-4 w-4 shrink-0 text-muted-foreground;
-}
-
-.ms-item-text {
-  @apply flex min-w-0 flex-col;
-}
-
 .ms-item-name {
-  @apply truncate text-sm;
-}
-
-.ms-item-id {
-  @apply truncate font-mono text-[10px] text-muted-foreground;
+  @apply min-w-0 flex-1 truncate text-sm;
 }
 
 .ms-item-side {
