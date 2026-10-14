@@ -17,27 +17,6 @@
   @apply mt-1 flex justify-end gap-1;
 }
 
-/* Inline edit box (DeepSeek-style) */
-.msg-edit-wrap {
-  @apply w-full rounded-2xl border border-border bg-background p-3;
-}
-
-.msg-edit-input {
-  @apply max-h-64 w-full resize-y bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground;
-}
-
-.msg-edit-actions {
-  @apply mt-2 flex items-center justify-end gap-2;
-}
-
-.msg-edit-cancel {
-  @apply rounded-full;
-}
-
-.msg-edit-send {
-  @apply rounded-full bg-blue-600 text-white hover:bg-blue-500;
-}
-
 .msg-row {
   @apply px-4 py-2;
 }

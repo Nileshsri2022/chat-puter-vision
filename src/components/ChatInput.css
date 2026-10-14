@@ -59,6 +59,19 @@
   @apply max-h-[200px] min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0;
 }
 
+/* Compact (inline edit) variant */
+.composer-wrap-compact {
+  @apply max-w-none px-0 pb-0;
+}
+
+.composer-textarea-compact {
+  @apply max-h-[120px] min-h-[40px] pt-3;
+}
+
+.composer-cancel-btn {
+  @apply rounded-full;
+}
+
 .composer-toolbar {
   @apply flex items-center justify-between px-3 pb-3;
 }

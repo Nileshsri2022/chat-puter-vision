@@ -448,17 +448,19 @@ const Index = () => {
     abortRef.current?.abort();
   };
 
-  const handleRegenerate = () => {
+  const handleRetryMessage = (aiIndex: number) => {
     if (isStreaming || !currentConversation) return;
-    let lastUserIdx = -1;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user") { lastUserIdx = i; break; }
+    const aiMsg = messages[aiIndex];
+    if (!aiMsg || aiMsg.role !== "assistant") return;
+    let questionIdx = -1;
+    for (let i = aiIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") { questionIdx = i; break; }
     }
-    if (lastUserIdx < 0) return;
+    if (questionIdx < 0) return;
     // Images aren't stored on messages, so regeneration is text-only; strip
     // the "[Images: N attached]" marker the send flow appends.
-    const prompt = messages[lastUserIdx].content.replace(/\n\n\[Images: \d+ attached\]$/, "");
-    const trimmed = messages.slice(0, lastUserIdx + 1);
+    const prompt = messages[questionIdx].content.replace(/\n\n\[Images: \d+ attached\]$/, "");
+    const trimmed = messages.slice(0, questionIdx + 1);
     setConversations((prev) =>
       prev.map((conv) =>
         conv.id === currentConversationId ? { ...conv, messages: trimmed } : conv
@@ -474,6 +476,12 @@ const Index = () => {
       prompt,
       modelId: selectedModel,
     });
+  };
+
+  const handleRegenerate = () => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") { handleRetryMessage(i); break; }
+    }
   };
 
   const handleGenerateImage = async (prompt: string) => {
@@ -932,6 +940,7 @@ const Index = () => {
                       onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content) => handleEditMessage(index, content) : undefined}
                       onShare={message.role === "assistant" ? () => handleShareExchange(index) : undefined}
+                      onRetry={message.role === "assistant" ? () => handleRetryMessage(index) : undefined}
                     />
                   ))}
                   {isStreaming && (

@@ -22,10 +22,16 @@ interface ChatInputProps {
   selectedModel?: string;
   onModelChange?: (model: string) => void;
   modelCatalog?: ModelCatalog | null;
+  /** Prefills the textarea (inline edit mode). */
+  initialValue?: string;
+  /** Compact rendering for inline editing (shorter box, no outer padding). */
+  compact?: boolean;
+  /** Shows a Cancel button; used for inline editing. */
+  onCancel?: () => void;
 }
 
-export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog }: ChatInputProps) => {
-  const [input, setInput] = useState("");
+export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, initialValue, compact, onCancel }: ChatInputProps) => {
+  const [input, setInput] = useState(initialValue ?? "");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
@@ -53,6 +59,8 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    } else if (e.key === "Escape" && onCancel) {
+      onCancel();
     }
   };
 
@@ -246,7 +254,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
 
   return (
-    <div className="composer-wrap">
+    <div className={"composer-wrap" + (compact ? " composer-wrap-compact" : "")}>
       <form onSubmit={handleSubmit}>
         {/* Image previews */}
         {modelSupportsImages && imagePreviews.length > 0 && (
@@ -340,7 +348,8 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             placeholder={modelSupportsImages ? "Message (images supported)…" : "Message FreeTalk…"}
             disabled={disabled}
             rows={1}
-            className="composer-textarea"
+            autoFocus={compact}
+            className={"composer-textarea" + (compact ? " composer-textarea-compact" : "")}
           />
           <div className="composer-toolbar">
             <div className="composer-tools">
@@ -386,7 +395,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
               )}
             </div>
             <div className="composer-send-group">
-              {modelSupportsImages && (
+{modelSupportsImages && (
                 <Button
                   type="button"
                   size="icon"
@@ -402,6 +411,17 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   ) : (
                     <Paperclip className="composer-tool-icon" aria-hidden="true" />
                   )}
+                </Button>
+              )}
+              {onCancel && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="composer-cancel-btn"
+                  onClick={onCancel}
+                >
+                  Cancel
                 </Button>
               )}
               {disabled && onStop ? (

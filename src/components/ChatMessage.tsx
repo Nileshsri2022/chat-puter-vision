@@ -1,4 +1,5 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Paperclip, Share2 } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
+import { ChatInput } from "./ChatInput";
 import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +22,7 @@ interface ChatMessageProps {
   onDelete?: () => void;
   onEdit?: (content: string) => void;
   onShare?: () => void;
+  onRetry?: () => void;
 }
 
 const ALL_MODELS: AIModel[] = [...CLAUDE_MODELS, ...MISTRAL_MODELS, ...PERPLEXITY_MODELS, ...GROK_MODELS, ...KIMI_MODELS, ...OPENAI_MODELS, ...OPENROUTER_MODELS];
@@ -36,12 +38,10 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit, onShare }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit, onShare, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState("");
-  const editFileRef = useRef<HTMLInputElement>(null);
   const [ttsState, setTtsState] = useState<"idle" | "loading" | "playing">("idle");
   const [previewOpen, setPreviewOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -114,12 +114,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     }
   }, [thinking, thinkingOpen]);
   const [showThinking, setShowThinking] = useState(true);
-
-  const submitEdit = () => {
-    const clean = editDraft.trim();
-    if (onEdit && clean) onEdit(clean);
-    setEditing(false);
-  };
 
   const handleCopy = async () => {
     if (onCopy) {
@@ -261,68 +255,19 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
       {isUser ? (
         <div className="msg-user-col">
           {editing ? (
-            <div className="msg-edit-wrap">
-              <textarea
-                className="msg-edit-input"
-                value={editDraft}
-                onChange={(e) => setEditDraft(e.target.value)}
-                rows={3}
-                autoFocus
-                aria-label="Edit message"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submitEdit();
-                  } else if (e.key === "Escape") {
-                    setEditing(false);
-                  }
-                }}
-              />
-              <div className="msg-edit-actions">
-                <input
-                  ref={editFileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  onChange={(e) => {
-                    const n = e.target.files?.length ?? 0;
-                    if (n > 0) {
-                      setEditDraft((d) => `${d}${d ? "\n\n" : ""}[Images: ${n} attached]`);
-                    }
-                    e.target.value = "";
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="msg-action-btn"
-                  title="Attach images"
-                  aria-label="Attach images"
-                  onClick={() => editFileRef.current?.click()}
-                >
-                  <Paperclip className="msg-action-icon" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="msg-edit-cancel"
-                  onClick={() => setEditing(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  className="msg-edit-send"
-                  onClick={submitEdit}
-                  disabled={!editDraft.trim()}
-                >
-                  Send
-                </Button>
-              </div>
-            </div>
+            <ChatInput
+              initialValue={content}
+              compact
+              onCancel={() => setEditing(false)}
+              onSend={(text, _model, images) => {
+                const marker =
+                  images && images.length > 0
+                    ? `${text ? "\n\n" : ""}[Images: ${images.length} attached]`
+                    : "";
+                if (onEdit) onEdit(text + marker);
+                setEditing(false);
+              }}
+            />
           ) : (
             <>
               <div className="msg-user-row">
@@ -348,10 +293,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => {
-                        setEditDraft(content);
-                        setEditing(true);
-                      }}
+                      onClick={() => setEditing(true)}
                       className="msg-action-btn"
                       title="Edit message"
                       aria-label="Edit message"
@@ -433,7 +375,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                 <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {!isStreaming && (speakable || onCopy || onDelete || onShare) && (
+            {!isStreaming && (speakable || onCopy || onDelete || onShare || onRetry) && (
               <div className="msg-actions">
                 {speakable && (
                   <Button
@@ -464,6 +406,18 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     aria-label={copied ? "Copied" : "Copy message"}
                   >
                     {copied ? <Check className="msg-action-icon" aria-hidden="true" /> : <Copy className="msg-action-icon" aria-hidden="true" />}
+                  </Button>
+                )}
+                {onRetry && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onRetry}
+                    className="msg-action-btn"
+                    title="Retry this answer"
+                    aria-label="Retry this answer"
+                  >
+                    <RotateCcw className="msg-action-icon" aria-hidden="true" />
                   </Button>
                 )}
                 {onShare && (
