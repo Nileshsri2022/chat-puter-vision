@@ -1123,6 +1123,7 @@ const Index = () => {
                       model={message.model}
                       image={message.image}
                       imagePath={message.imagePath}
+                      compacted={!!message.compaction}
                       messageIndex={index}
                       searchMatch={searchMatches.includes(index)}
                       searchActive={searchMatches[activeMatch] === index}

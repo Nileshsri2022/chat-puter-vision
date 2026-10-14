@@ -62,6 +62,11 @@
   @apply mb-3 text-sm text-muted-foreground;
 }
 
+/* Shown on the reply where the model summarized earlier turns. */
+.msg-compaction-note {
+  @apply mt-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground;
+}
+
 .msg-lightbox {
   @apply fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4;
   /* 90dvh, not 90vh: the vh unit measures the chrome-hidden viewport and would

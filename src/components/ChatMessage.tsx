@@ -29,6 +29,8 @@ interface ChatMessageProps {
   image?: string;
   /** Puter path of a generated image; loaded from Puter storage for display. */
   imagePath?: string;
+  /** The model summarized earlier turns to produce this reply. */
+  compacted?: boolean;
   /** Position in the transcript; tags the node for in-conversation search. */
   messageIndex?: number;
   /** In-conversation search: this message contains the query. */
@@ -58,7 +60,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, compacted, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -405,6 +407,11 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 {answer}
               </ReactMarkdown>
             </div>
+            {compacted && !isStreaming && (
+              <div className="msg-compaction-note" role="note">
+                Earlier messages in this chat were summarized to keep the model&apos;s memory of the conversation.
+              </div>
+            )}
             {isStreaming && content.length === 0 && (
               <div className="msg-typing" aria-live="polite" aria-label="Thinking">
                 <div className="msg-typing-dot" />

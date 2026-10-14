@@ -1,5 +1,9 @@
 import { test, expect } from "bun:test";
 import { mockPuter } from "./helpers";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const read = (rel: string) => readFileSync(join(import.meta.dir, "..", "src", rel), "utf8");
 import { computeContextPlan, type ContextPlan } from "../src/lib/context";
 import {
   fitHistory,
@@ -230,4 +234,14 @@ test("without limits, a long transcript sends the last 20 messages", async () =>
   await streamAIResponse(toHistory(transcript), "now", "m1", callbacks, undefined, undefined, null);
   expect(sent[0].messages.length).toBe(21);
   expect(sent[0].messages[sent[0].messages.length - 1].content).toBe("now");
+});
+
+// ---- compaction indication in the UI ----
+
+test("the reply that compacted shows a note, and the transcript passes the flag", () => {
+  const chat = read("components/ChatMessage.tsx");
+  expect(chat).toContain("msg-compaction-note");
+  expect(chat).toContain("compacted && !isStreaming");
+  expect(read("pages/Index.tsx")).toContain("compacted={!!message.compaction}");
+  expect(read("components/ChatMessage.css")).toContain(".msg-compaction-note");
 });
