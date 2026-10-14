@@ -57,8 +57,12 @@
   @apply h-3.5 w-3.5;
 }
 
+.ms-cat-item {
+  @apply inline-flex items-center gap-1.5;
+}
+
 .ms-cat-item-icon {
-  @apply mr-1 h-4 w-4 text-muted-foreground;
+  @apply h-4 w-4 shrink-0 text-muted-foreground;
 }
 
 /* Picker body: provider sidebar + model list */

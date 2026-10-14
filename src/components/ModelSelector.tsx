@@ -735,8 +735,10 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                       onCheckedChange={() => setCatMask((m) => m ^ c.key)}
                       onSelect={(e) => e.preventDefault()}
                     >
+                    <span className="ms-cat-item">
                       <c.icon className="ms-cat-item-icon" aria-hidden="true" />
                       {c.label}
+                    </span>
                     </DropdownMenuCheckboxItem>
                   ))}
                   {catMask !== 0 && (
