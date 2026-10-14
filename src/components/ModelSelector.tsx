@@ -608,7 +608,11 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
   const [query, setQuery] = useState("");
   const [catMask, setCatMask] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // On narrow screens the two-pane layout is cramped — start collapsed so the
+  // model list gets the full width (the toggle stays available).
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const groups = useMemo(brandGroups, []);
 
