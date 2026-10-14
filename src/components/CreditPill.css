@@ -1,0 +1,17 @@
+/* CreditPill styles — extracted from Tailwind utilities. */
+
+.credit-pill {
+  @apply flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium tabular-nums;
+}
+
+.credit-pill-normal {
+  @apply text-muted-foreground;
+}
+
+.credit-pill-low {
+  @apply text-amber-600 dark:text-amber-500;
+}
+
+.credit-pill-icon {
+  @apply h-3 w-3;
+}

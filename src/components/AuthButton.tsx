@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { checkAuthStatus, signIn, getCurrentUser, type BackendUser } from "@/lib/backend";
 import { useToast } from "@/hooks/use-toast";
+import "./AuthButton.css";
 
 interface AuthButtonProps {
   onAuthChange?: (isAuthenticated: boolean) => void;
@@ -77,12 +78,12 @@ export const AuthButton = ({ onAuthChange }: AuthButtonProps) => {
     <Button
       onClick={handleSignIn}
       disabled={isLoading}
-      className="bg-primary hover:bg-primary/90"
+      className="auth-button"
       aria-label={isLoading ? "Signing in…" : "Sign in"}
     >
       {isLoading ? (
         <>
-          <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+          <div className="auth-spinner" aria-hidden="true" />
           Signing in…
         </>
       ) : (

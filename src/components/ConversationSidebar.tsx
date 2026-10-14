@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
+import "./ConversationSidebar.css";
 
 interface Conversation {
   id: string;
@@ -34,10 +35,10 @@ export const ConversationSidebar = ({
   syncStatus = "local",
 }: ConversationSidebarProps) => {
   const syncMeta = {
-    local: { icon: <CloudOff className="h-3 w-3" />, label: "Local only" },
-    syncing: { icon: <Loader2 className="h-3 w-3 animate-spin" />, label: "Syncing\u2026" },
-    synced: { icon: <Cloud className="h-3 w-3" />, label: "Synced" },
-    error: { icon: <CloudOff className="h-3 w-3" />, label: "Sync failed" },
+    local: { icon: <CloudOff className="sidebar-sync-icon" />, label: "Local only" },
+    syncing: { icon: <Loader2 className="sidebar-sync-icon-spin" />, label: "Syncing\u2026" },
+    synced: { icon: <Cloud className="sidebar-sync-icon" />, label: "Synced" },
+    error: { icon: <CloudOff className="sidebar-sync-icon" />, label: "Sync failed" },
   }[syncStatus];
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -65,57 +66,53 @@ export const ConversationSidebar = ({
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-30 md:hidden"
+          className="sidebar-overlay"
           onClick={onToggle}
         />
       )}
 
       <aside
-        className={cn(
-          "fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border transition-transform duration-300 ease-in-out z-40",
-          "w-[260px] flex flex-col",
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        )}
+        className={cn("sidebar", isOpen ? "sidebar-open" : "sidebar-closed")}
       >
         {/* Header with logo */}
-        <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Sparkles className="h-4 w-4" />
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <span className="sidebar-logo">
+              <Sparkles className="sidebar-logo-icon" />
             </span>
-            <span className="font-semibold text-sidebar-foreground">AI Chat</span>
+            <span className="sidebar-brand-text">AI Chat</span>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            className="sidebar-close-btn"
             title="Close sidebar"
             aria-label="Close sidebar"
           >
-            <PanelLeftClose className="w-4 h-4" aria-hidden="true" />
+            <PanelLeftClose className="sidebar-close-icon" aria-hidden="true" />
           </Button>
         </div>
 
         {/* New chat button */}
-        <div className="p-3">
+        <div className="sidebar-newchat-wrap">
           <Button
             onClick={() => {
               onNewConversation();
               if (window.innerWidth < 768) onToggle();
             }}
-            className="w-full justify-start gap-2 rounded-lg h-10 font-medium"
+            className="sidebar-newchat-btn"
             aria-label="Start new chat"
           >
-            <Plus className="w-4 h-4" aria-hidden="true" />
+            <Plus className="sidebar-newchat-icon" aria-hidden="true" />
             Start new chat
           </Button>
         </div>
 
         {/* Search input */}
-        <div className="px-3 pb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+        <div className="sidebar-search-wrap">
+          <div className="sidebar-search-relative">
+            <Search className="sidebar-search-icon" aria-hidden="true" />
             <Input
               id="search-conversations"
               name="search"
@@ -123,25 +120,25 @@ export const ConversationSidebar = ({
               placeholder="Search conversations…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 bg-sidebar-accent/50 border-sidebar-border"
+              className="sidebar-search-input"
             />
           </div>
         </div>
 
         {/* Sync status */}
-        <div className="flex items-center gap-1.5 px-6 pb-2 text-[11px] text-muted-foreground">
+        <div className="sidebar-sync">
           {syncMeta.icon}
           <span>{syncMeta.label}</span>
         </div>
 
         {/* Conversations list */}
-        <ScrollArea className="flex-1">
-          <div className="px-2 pb-2 space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground px-3 py-2">
+        <ScrollArea className="sidebar-scroll">
+          <div className="sidebar-list">
+            <div className="sidebar-list-heading">
               Recent
             </div>
             {filteredConversations.length === 0 ? (
-              <div className="text-center text-muted-foreground text-sm py-8">
+              <div className="sidebar-empty">
                 {searchQuery ? "No conversations found" : "No conversations yet"}
               </div>
             ) : (
@@ -149,11 +146,8 @@ export const ConversationSidebar = ({
                 <div
                   key={conv.id}
                   className={cn(
-                    "flex items-center justify-between w-full px-2 py-1 rounded-lg transition-colors group",
-                    "hover:bg-sidebar-accent text-sm",
-                    currentConversationId === conv.id
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground"
+                    "conv-row group",
+                    currentConversationId === conv.id ? "conv-row-active" : "conv-row-inactive"
                   )}
                 >
                   <button
@@ -162,18 +156,18 @@ export const ConversationSidebar = ({
                       onSelectConversation(conv.id);
                       if (window.innerWidth < 768) onToggle();
                     }}
-                    className="flex-1 min-w-0 flex items-center gap-2.5 text-left py-1 px-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="conv-row-btn"
                     aria-label={`Open conversation: ${conv.title}`}
                   >
-                    <MessageSquare className="w-4 h-4 shrink-0 opacity-60" aria-hidden="true" />
-                    <span className="truncate">{conv.title}</span>
+                    <MessageSquare className="conv-row-icon" aria-hidden="true" />
+                    <span className="conv-row-title">{conv.title}</span>
                   </button>
-                  <div className="shrink-0 ml-1">
+                  <div className="conv-row-delete-wrap">
                     {confirmId === conv.id ? (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs font-medium text-red-600 hover:text-red-600 focus-visible:ring-2"
+                        className="conv-row-confirm-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirmTimer.current) clearTimeout(confirmTimer.current);
@@ -188,7 +182,7 @@ export const ConversationSidebar = ({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100"
+                        className="conv-row-delete-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           armDelete(conv.id);
@@ -196,7 +190,7 @@ export const ConversationSidebar = ({
                         title="Delete conversation"
                         aria-label="Delete conversation"
                       >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        <Trash2 className="conv-row-delete-icon" aria-hidden="true" />
                       </Button>
                     )}
                   </div>

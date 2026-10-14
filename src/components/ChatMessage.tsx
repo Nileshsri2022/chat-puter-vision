@@ -9,6 +9,7 @@ import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
+import "./ChatMessage.css";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -138,10 +139,10 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
     };
 
     return (
-      <div className="group/code relative my-4">
+      <div className="msg-codeblock group/code">
         <pre
           ref={preRef}
-          className="overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm text-foreground"
+          className="msg-codeblock-pre"
         >
           {children}
         </pre>
@@ -150,12 +151,12 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
           size="icon"
           onClick={handleCopyCode}
           title="Copy code"
-          className="absolute right-2 top-2 h-7 w-7 opacity-0 transition-opacity group-hover/code:opacity-100"
+          className="msg-codeblock-copy"
         >
           {codeCopied ? (
-            <Check className="h-3.5 w-3.5" />
+            <Check className="msg-codeblock-copy-icon" />
           ) : (
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="msg-codeblock-copy-icon" />
           )}
         </Button>
       </div>
@@ -164,44 +165,44 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
 
   const markdownComponents: Components = {
     h1: ({ children }) => (
-      <h1 className="mb-4 mt-5 text-2xl font-bold text-foreground first:mt-0">
+      <h1 className="md-h1">
         {children}
       </h1>
     ),
     h2: ({ children }) => (
-      <h2 className="mb-4 mt-5 text-xl font-semibold text-foreground first:mt-0">
+      <h2 className="md-h2">
         {children}
       </h2>
     ),
     h3: ({ children }) => (
-      <h3 className="mb-3 mt-4 text-lg font-semibold text-foreground first:mt-0">
+      <h3 className="md-h3">
         {children}
       </h3>
     ),
-    p: ({ children }) => <p className="mb-4 leading-relaxed">{children}</p>,
+    p: ({ children }) => <p className="md-p">{children}</p>,
     ul: ({ children }) => (
-      <ul className="mb-4 list-disc pl-6">{children}</ul>
+      <ul className="md-ul">{children}</ul>
     ),
     ol: ({ children }) => (
-      <ol className="mb-4 list-decimal pl-6">{children}</ol>
+      <ol className="md-ol">{children}</ol>
     ),
-    li: ({ children }) => <li className="mb-1">{children}</li>,
+    li: ({ children }) => <li className="md-li">{children}</li>,
     strong: ({ children }) => (
-      <strong className="font-semibold text-foreground">{children}</strong>
+      <strong className="md-strong">{children}</strong>
     ),
-    em: ({ children }) => <em className="italic text-foreground">{children}</em>,
+    em: ({ children }) => <em className="md-em">{children}</em>,
     a: ({ children, href }) => (
       <a
         href={href}
         target="_blank"
         rel="noreferrer"
-        className="text-primary underline underline-offset-2"
+        className="md-a"
       >
         {children}
       </a>
     ),
     blockquote: ({ children }) => (
-      <blockquote className="mb-4 border-l-4 border-border pl-4 italic text-muted-foreground">
+      <blockquote className="md-blockquote">
         {children}
       </blockquote>
     ),
@@ -212,33 +213,33 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
         /language-/.test(className || "") || text.includes("\n");
       if (!isBlock) {
         return (
-          <code className="rounded-md border bg-muted/70 px-2 py-1 font-mono text-sm text-foreground">
+          <code className="md-code-inline">
             {children}
           </code>
         );
       }
       return (
-        <code className="font-mono text-[13px] leading-relaxed">{children}</code>
+        <code className="md-code-block">{children}</code>
       );
     },
     table: ({ children }) => (
-      <div className="my-4 overflow-x-auto">
-        <table className="w-full border-collapse text-sm">{children}</table>
+      <div className="md-table-wrap">
+        <table className="md-table">{children}</table>
       </div>
     ),
     th: ({ children }) => (
-      <th className="border border-border bg-muted/50 px-3 py-2 text-left font-semibold">
+      <th className="md-th">
         {children}
       </th>
     ),
     td: ({ children }) => (
-      <td className="border border-border px-3 py-2">{children}</td>
+      <td className="md-td">{children}</td>
     ),
     img: ({ src, alt }) => (
       <img
         src={src}
         alt={alt ?? ""}
-        className="max-w-full rounded-lg border border-border"
+        className="md-img"
       />
     ),
   };
@@ -246,47 +247,47 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
   return (
     <>
       {isUser ? (
-        <div className="flex justify-end px-4 py-2">
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed">
+        <div className="msg-user-row">
+          <div className="msg-user-bubble">
             {content}
           </div>
         </div>
       ) : (
-        <div className="group px-4 py-2">
-          <div className="mx-auto max-w-3xl">
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
+        <div className="msg-row group">
+          <div className="msg-inner">
+            <div className="msg-model-label">
               {isStreaming ? "Thinking…" : getModelDisplayName(model)}
             </div>
             {image && (
               <img
                 src={image}
                 alt="Generated image"
-                className="mb-3 max-h-96 w-auto rounded-xl border border-border object-cover"
+                className="msg-image"
                 loading="lazy"
               />
             )}
             {(thinking || thinkingOpen) && (
-              <div className="mb-2">
+              <div className="msg-think-wrap">
                 <button
                   type="button"
                   onClick={() => setShowThinking((v) => !v)}
                   aria-expanded={showThinking}
                   aria-label={showThinking ? "Hide thought process" : "Show thought process"}
-                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1 -mx-1"
+                  className="msg-think-toggle"
                 >
-                  <ThoughtIcon className="h-4 w-4 text-blue-500" />
+                  <ThoughtIcon className="msg-think-icon" />
                   {thinkingOpen
                     ? "Thinking…"
                     : thinkSecs !== null
                       ? `Thought for ${thinkSecs} second${thinkSecs === 1 ? "" : "s"}`
                       : "Thought process"}
                   <ChevronDown
-                    className={`h-4 w-4 transition-transform duration-200 ${showThinking ? "" : "-rotate-90"}`}
+                    className={`msg-think-chevron ${showThinking ? "" : "msg-think-chevron-collapsed"}`}
                     aria-hidden="true"
                   />
                 </button>
                 {showThinking && (
-                  <div className="mt-1.5 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
+                  <div className="msg-think-body">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={markdownComponents}
@@ -297,7 +298,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                 )}
               </div>
             )}
-            <div className="break-words text-[15px] leading-relaxed text-foreground">
+            <div className="msg-answer">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={markdownComponents}
@@ -306,30 +307,30 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
               </ReactMarkdown>
             </div>
             {isStreaming && content.length === 0 && (
-              <div className="flex gap-1 py-2" aria-live="polite" aria-label="Thinking">
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
+              <div className="msg-typing" aria-live="polite" aria-label="Thinking">
+                <div className="msg-typing-dot" />
+                <div className="msg-typing-dot" style={{ animationDelay: "150ms" }} />
+                <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
             {!isStreaming && (speakable || onCopy || onDelete) && (
-              <div className="mt-1 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+              <div className="msg-actions">
                 {speakable && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleSpeak}
                     disabled={ttsState === "loading"}
-                    className="h-7 px-2 text-xs text-muted-foreground"
+                    className="msg-action-btn"
                     title={ttsState === "playing" ? "Stop reading" : "Read aloud"}
                     aria-label={ttsState === "playing" ? "Stop reading" : "Read aloud"}
                   >
                     {ttsState === "loading" ? (
-                      <div className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+                      <div className="msg-action-spinner" aria-hidden="true" />
                     ) : ttsState === "playing" ? (
-                      <Square className="mr-1 h-3 w-3" aria-hidden="true" />
+                      <Square className="msg-action-icon" aria-hidden="true" />
                     ) : (
-                      <Volume2 className="mr-1 h-3 w-3" aria-hidden="true" />
+                      <Volume2 className="msg-action-icon" aria-hidden="true" />
                     )}
                     {ttsState === "playing" ? "Stop" : ttsState === "loading" ? "Loading…" : "Read aloud"}
                   </Button>
@@ -339,10 +340,10 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     variant="ghost"
                     size="sm"
                     onClick={handleCopy}
-                    className="h-7 px-2 text-xs text-muted-foreground"
+                    className="msg-action-btn"
                     aria-label={copied ? "Copied" : "Copy message"}
                   >
-                    {copied ? <><Check className="mr-1 h-3 w-3" aria-hidden="true" /> Copied</> : <><Copy className="mr-1 h-3 w-3" aria-hidden="true" /> Copy</>}
+                    {copied ? <><Check className="msg-action-icon" aria-hidden="true" /> Copied</> : <><Copy className="msg-action-icon" aria-hidden="true" /> Copy</>}
                   </Button>
                 )}
                 {onDelete && (
@@ -350,10 +351,10 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     variant="ghost"
                     size="sm"
                     onClick={onDelete}
-                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    className="msg-action-btn-danger"
                     aria-label="Delete message"
                   >
-                    <Trash2 className="mr-1 h-3 w-3" aria-hidden="true" /> Delete
+                    <Trash2 className="msg-action-icon" aria-hidden="true" /> Delete
                   </Button>
                 )}
               </div>

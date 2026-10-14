@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/lib/speech";
 import { extractText } from "@/lib/ocr";
 import { checkAuthStatus } from "@/lib/backend";
+import "./ChatInput.css";
 
 
 interface ChatInputProps {
@@ -245,41 +246,41 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-2">
+    <div className="composer-wrap">
       <form onSubmit={handleSubmit}>
         {/* Image previews */}
         {modelSupportsImages && imagePreviews.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className="composer-previews">
             {imagePreviews.map((preview, index) => (
-              <div key={index} className="group relative">
+              <div key={index} className="composer-preview group">
                 <img
                   src={preview}
                   alt={`Upload ${index + 1}`}
-                  className="h-16 w-16 rounded-xl border border-border object-cover"
+                  className="composer-preview-img"
                 />
                 <Button
                   type="button"
                   size="icon"
                   variant="secondary"
-                  className="absolute -left-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                  className="composer-preview-ocr"
                   onClick={() => extractFromImage(index)}
                   disabled={ocrIndex !== null}
                   title="Extract text from image"
                 >
                   {ocrIndex === index ? (
-                    <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    <div className="composer-mini-spinner" />
                   ) : (
-                    <ScanText className="h-3 w-3" />
+                    <ScanText className="composer-mini-icon" />
                   )}
                 </Button>
                 <Button
                   type="button"
                   size="icon"
                   variant="destructive"
-                  className="absolute -right-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                  className="composer-preview-remove"
                   onClick={() => removeImage(index)}
                 >
-                  <X className="h-3 w-3" />
+                  <X className="composer-mini-icon" />
                 </Button>
               </div>
             ))}
@@ -287,7 +288,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
         )}
 
         {showImagePrompt && onGenerateImage && (
-          <div className="mb-2 flex items-center gap-2">
+          <div className="composer-imgprompt">
             <Input
               id="image-prompt-input"
               name="imagePrompt"
@@ -297,7 +298,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitImagePrompt(); } }}
               placeholder="Describe the image to generate…"
               disabled={isGeneratingImage}
-              className="h-9"
+              className="composer-imgprompt-input"
               autoFocus
             />
             <Button
@@ -305,11 +306,11 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
               size="sm"
               onClick={submitImagePrompt}
               disabled={!imagePrompt.trim() || isGeneratingImage}
-              className="shrink-0"
+              className="composer-shrink"
               aria-label="Generate image"
             >
               {isGeneratingImage ? (
-                <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+                <div className="composer-spinner" aria-hidden="true" />
               ) : (
                 "Generate"
               )}
@@ -320,7 +321,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
               variant="ghost"
               onClick={() => setShowImagePrompt(false)}
               disabled={isGeneratingImage}
-              className="shrink-0"
+              className="composer-shrink"
               aria-label="Cancel image generation"
             >
               Cancel
@@ -328,7 +329,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
           </div>
         )}
 
-        <div className="rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md">
+        <div className="composer-box">
           <Textarea
             id="chat-message-input"
             name="message"
@@ -339,25 +340,25 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             placeholder={modelSupportsImages ? "Message (images supported)…" : "Message AI Chat…"}
             disabled={disabled}
             rows={1}
-            className="max-h-[200px] min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="composer-textarea"
           />
-          <div className="flex items-center justify-between px-3 pb-3">
-            <div className="flex items-center gap-1">
+          <div className="composer-toolbar">
+            <div className="composer-tools">
               {onGenerateImage && (
                 <Button
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-8 w-8 rounded-full text-muted-foreground"
+                  className="composer-tool-btn"
                   onClick={() => setShowImagePrompt((v) => !v)}
                   disabled={disabled || isGeneratingImage}
                   title="Generate image"
                   aria-label="Generate image"
                 >
                   {isGeneratingImage ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+                    <div className="composer-spinner" aria-hidden="true" />
                   ) : (
-                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                    <Sparkles className="composer-tool-icon" aria-hidden="true" />
                   )}
                 </Button>
               )}
@@ -365,16 +366,16 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8 rounded-full text-muted-foreground"
+                className="composer-tool-btn"
                 onClick={toggleRecording}
                 disabled={disabled || recordingState === "transcribing"}
                 title={recordingState === "recording" ? "Stop recording" : "Voice input"}
                 aria-label={recordingState === "recording" ? "Stop recording" : "Voice input"}
               >
                 {recordingState === "transcribing" ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+                  <div className="composer-spinner" aria-hidden="true" />
                 ) : (
-                  <Mic className={"h-4 w-4" + (recordingState === "recording" ? " text-red-500 animate-pulse" : "")} aria-hidden="true" />
+                  <Mic className={"composer-tool-icon" + (recordingState === "recording" ? " composer-mic-recording" : "")} aria-hidden="true" />
                 )}
               </Button>
               {modelSupportsImages && (
@@ -382,16 +383,16 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-8 w-8 rounded-full text-muted-foreground"
+                  className="composer-tool-btn"
                   onClick={() => imageInputRef.current?.click()}
                   disabled={disabled || selectedImages.length >= 4 || isProcessingImages}
                   title="Attach images"
                   aria-label="Attach images"
                 >
                   {isProcessingImages ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+                    <div className="composer-spinner" aria-hidden="true" />
                   ) : (
-                    <Image className="h-4 w-4" aria-hidden="true" />
+                    <Image className="composer-tool-icon" aria-hidden="true" />
                   )}
                 </Button>
               )}
@@ -407,22 +408,22 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 type="button"
                 size="icon"
                 onClick={onStop}
-                className="h-9 w-9 rounded-full"
+                className="composer-send-btn"
                 title="Stop generating"
                 aria-label="Stop generating"
               >
-                <Square className="h-4 w-4" aria-hidden="true" />
+                <Square className="composer-tool-icon" aria-hidden="true" />
               </Button>
             ) : (
               <Button
                 type="submit"
                 size="icon"
                 disabled={(!input.trim() && selectedImages.length === 0) || disabled}
-                className="h-9 w-9 rounded-full"
+                className="composer-send-btn"
                 title="Send message"
                 aria-label="Send message"
               >
-                <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                <ArrowUp className="composer-tool-icon" aria-hidden="true" />
               </Button>
             )}
           </div>
@@ -437,7 +438,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             type="file"
             accept="image/*"
             multiple
-            className="hidden"
+            className="composer-hidden-input"
             onChange={handleImageSelect}
           />
         )}

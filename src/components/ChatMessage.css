@@ -1,0 +1,176 @@
+/* ChatMessage styles — extracted from Tailwind utilities. */
+
+/* Message layout */
+.msg-user-row {
+  @apply flex justify-end px-4 py-2;
+}
+
+.msg-user-bubble {
+  @apply max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed;
+}
+
+.msg-row {
+  @apply px-4 py-2;
+}
+
+.msg-inner {
+  @apply mx-auto max-w-3xl;
+}
+
+.msg-model-label {
+  @apply mb-1 text-xs font-medium text-muted-foreground;
+}
+
+.msg-image {
+  @apply mb-3 max-h-96 w-auto rounded-xl border border-border object-cover;
+}
+
+/* Thinking section */
+.msg-think-wrap {
+  @apply mb-2;
+}
+
+.msg-think-toggle {
+  @apply flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1 -mx-1;
+}
+
+.msg-think-icon {
+  @apply h-4 w-4 text-blue-500;
+}
+
+.msg-think-chevron {
+  @apply h-4 w-4 transition-transform duration-200;
+}
+
+.msg-think-chevron-collapsed {
+  @apply -rotate-90;
+}
+
+.msg-think-body {
+  @apply mt-1.5 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground;
+}
+
+/* Answer body */
+.msg-answer {
+  @apply break-words text-[15px] leading-relaxed text-foreground;
+}
+
+/* Typing indicator */
+.msg-typing {
+  @apply flex gap-1 py-2;
+}
+
+.msg-typing-dot {
+  @apply h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground;
+}
+
+/* Message actions */
+.msg-actions {
+  @apply mt-1 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100;
+}
+
+.msg-action-btn {
+  @apply h-7 px-2 text-xs text-muted-foreground;
+}
+
+.msg-action-btn-danger {
+  @apply h-7 px-2 text-xs text-muted-foreground hover:text-destructive;
+}
+
+.msg-action-spinner {
+  @apply mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent;
+}
+
+.msg-action-icon {
+  @apply mr-1 h-3 w-3;
+}
+
+/* Code blocks */
+.msg-codeblock {
+  @apply relative my-4;
+}
+
+.msg-codeblock-pre {
+  @apply overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm text-foreground;
+}
+
+.msg-codeblock-copy {
+  @apply absolute right-2 top-2 h-7 w-7 opacity-0 transition-opacity group-hover/code:opacity-100;
+}
+
+.msg-codeblock-copy-icon {
+  @apply h-3.5 w-3.5;
+}
+
+/* Markdown elements */
+.md-h1 {
+  @apply mb-4 mt-5 text-2xl font-bold text-foreground first:mt-0;
+}
+
+.md-h2 {
+  @apply mb-4 mt-5 text-xl font-semibold text-foreground first:mt-0;
+}
+
+.md-h3 {
+  @apply mb-3 mt-4 text-lg font-semibold text-foreground first:mt-0;
+}
+
+.md-p {
+  @apply mb-4 leading-relaxed;
+}
+
+.md-ul {
+  @apply mb-4 list-disc pl-6;
+}
+
+.md-ol {
+  @apply mb-4 list-decimal pl-6;
+}
+
+.md-li {
+  @apply mb-1;
+}
+
+.md-strong {
+  @apply font-semibold text-foreground;
+}
+
+.md-em {
+  @apply italic text-foreground;
+}
+
+.md-a {
+  @apply text-primary underline underline-offset-2;
+}
+
+.md-blockquote {
+  @apply mb-4 border-l-4 border-border pl-4 italic text-muted-foreground;
+}
+
+.md-code-inline {
+  @apply rounded-md border bg-muted/70 px-2 py-1 font-mono text-sm text-foreground;
+}
+
+.md-code-block {
+  @apply font-mono text-[13px] leading-relaxed;
+}
+
+.md-table-wrap {
+  @apply my-4 overflow-x-auto;
+}
+
+.md-table {
+  @apply w-full border-collapse text-sm;
+}
+
+.md-th {
+  @apply border border-border bg-muted/50 px-3 py-2 text-left font-semibold;
+}
+
+.md-td {
+  @apply border border-border px-3 py-2;
+}
+
+.md-img {
+  @apply max-w-full rounded-lg border border-border;
+}

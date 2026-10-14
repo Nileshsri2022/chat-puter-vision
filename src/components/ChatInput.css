@@ -1,0 +1,88 @@
+/* ChatInput styles — extracted from Tailwind utilities. */
+
+.composer-wrap {
+  @apply mx-auto w-full max-w-3xl px-4 pb-2;
+}
+
+/* Image previews */
+.composer-previews {
+  @apply mb-2 flex flex-wrap gap-2;
+}
+
+.composer-preview {
+  @apply relative;
+}
+
+.composer-preview-img {
+  @apply h-16 w-16 rounded-xl border border-border object-cover;
+}
+
+.composer-preview-ocr {
+  @apply absolute -left-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100;
+}
+
+.composer-preview-remove {
+  @apply absolute -right-2 -top-2 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100;
+}
+
+.composer-mini-spinner {
+  @apply h-3 w-3 animate-spin rounded-full border border-current border-t-transparent;
+}
+
+.composer-mini-icon {
+  @apply h-3 w-3;
+}
+
+/* Image generation prompt row */
+.composer-imgprompt {
+  @apply mb-2 flex items-center gap-2;
+}
+
+.composer-imgprompt-input {
+  @apply h-9;
+}
+
+.composer-shrink {
+  @apply shrink-0;
+}
+
+.composer-spinner {
+  @apply h-4 w-4 animate-spin rounded-full border border-current border-t-transparent;
+}
+
+/* Composer box */
+.composer-box {
+  @apply rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md;
+}
+
+.composer-textarea {
+  @apply max-h-[200px] min-h-[44px] resize-none border-0 bg-transparent px-5 pt-4 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0;
+}
+
+.composer-toolbar {
+  @apply flex items-center justify-between px-3 pb-3;
+}
+
+.composer-tools {
+  @apply flex items-center gap-1;
+}
+
+.composer-tool-btn {
+  @apply h-8 w-8 rounded-full text-muted-foreground;
+}
+
+.composer-tool-icon {
+  @apply h-4 w-4;
+}
+
+.composer-mic-recording {
+  @apply text-red-500 animate-pulse;
+}
+
+.composer-send-btn {
+  @apply h-9 w-9 rounded-full;
+}
+
+.composer-hidden-input {
+  @apply hidden;
+}

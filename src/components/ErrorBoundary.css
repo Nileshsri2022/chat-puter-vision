@@ -1,0 +1,49 @@
+/* ErrorBoundary styles — extracted from Tailwind utilities. */
+
+.error-fallback-page {
+  @apply min-h-screen flex items-center justify-center p-4 bg-background;
+}
+
+.error-fallback-card {
+  @apply max-w-md w-full text-center space-y-6;
+}
+
+.error-fallback-icon-wrap {
+  @apply inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive;
+}
+
+.error-fallback-icon {
+  @apply w-8 h-8;
+}
+
+.error-fallback-heading-group {
+  @apply space-y-2;
+}
+
+.error-fallback-title {
+  @apply text-2xl font-bold text-foreground;
+}
+
+.error-fallback-message {
+  @apply text-muted-foreground;
+}
+
+.error-fallback-details {
+  @apply text-left bg-muted/50 p-3 rounded-lg text-sm;
+}
+
+.error-fallback-summary {
+  @apply cursor-pointer font-medium text-foreground;
+}
+
+.error-fallback-pre {
+  @apply mt-2 text-xs text-muted-foreground overflow-auto;
+}
+
+.error-fallback-actions {
+  @apply flex gap-3 justify-center;
+}
+
+.error-fallback-retry-icon {
+  @apply w-4 h-4 mr-2;
+}

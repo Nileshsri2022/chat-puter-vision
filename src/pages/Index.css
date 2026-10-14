@@ -1,0 +1,121 @@
+/* Index page styles — extracted from Tailwind utilities. */
+
+.app-root {
+  @apply flex h-screen overflow-hidden bg-background;
+}
+
+.app-main {
+  @apply flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-in-out;
+}
+
+.app-main-sidebar-open {
+  @apply md:ml-[260px];
+}
+
+.app-main-sidebar-closed {
+  @apply md:ml-0;
+}
+
+/* Header */
+.app-header {
+  @apply flex h-14 shrink-0 items-center justify-between border-b px-4;
+}
+
+.app-header-group {
+  @apply flex items-center gap-1;
+}
+
+.app-icon-btn {
+  @apply h-8 w-8;
+}
+
+.app-header-icon {
+  @apply h-4 w-4;
+}
+
+.app-avatar-btn {
+  @apply h-8 w-8 rounded-full;
+}
+
+.app-avatar-img {
+  @apply h-8 w-8 rounded-full object-cover;
+}
+
+.app-avatar-fallback-icon {
+  @apply h-5 w-5;
+}
+
+.app-account-label {
+  @apply max-w-[200px] truncate;
+}
+
+.app-menu-icon {
+  @apply mr-2 h-4 w-4;
+}
+
+/* Welcome / empty states */
+.app-welcome {
+  @apply flex h-full items-center justify-center px-4;
+}
+
+.app-welcome-card {
+  @apply max-w-md space-y-6 text-center;
+}
+
+.app-hero-badge {
+  @apply mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground;
+}
+
+.app-hero-icon {
+  @apply h-7 w-7;
+}
+
+.app-hero-title {
+  @apply text-3xl font-semibold text-foreground text-balance;
+}
+
+.app-welcome-sub {
+  @apply text-muted-foreground;
+}
+
+.app-empty {
+  @apply flex h-full flex-col items-center justify-center px-4 py-12;
+}
+
+.app-empty-title {
+  @apply mt-6 text-center text-3xl font-semibold text-foreground text-balance;
+}
+
+.app-suggestions {
+  @apply mt-8 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2;
+}
+
+.app-suggestion-btn {
+  @apply h-auto justify-start rounded-xl px-4 py-3 text-left text-sm font-normal;
+}
+
+/* Messages */
+.app-scroll {
+  @apply flex-1 bg-background;
+}
+
+.app-messages {
+  @apply py-4;
+}
+
+/* Composer area */
+.app-composer-wrap {
+  @apply shrink-0 border-t bg-background pt-3;
+}
+
+.app-regen-wrap {
+  @apply flex justify-center pb-1;
+}
+
+.app-regen-btn {
+  @apply gap-2 rounded-full;
+}
+
+.app-regen-icon {
+  @apply h-3.5 w-3.5;
+}

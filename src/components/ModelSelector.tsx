@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check } from "lucide-react";
 import { getModelCatalog, getModelProviders, isModelAvailable, liveProviderForModelId, type ModelCatalog } from "@/lib/models";
+import "./ModelSelector.css";
 
 export type ProviderId = "claude" | "mistral" | "perplexity" | "grok" | "openrouter" | "kimi" | "openai";
 
@@ -41,43 +42,43 @@ const PROVIDERS: AIProvider[] = [
    {
      id: "claude",
      name: "Claude",
-     icon: <Brain className="w-5 h-5" />,
+     icon: <Brain className="provider-icon" />,
      description: "Anthropic's Claude models"
    },
    {
      id: "mistral",
      name: "Mistral",
-     icon: <Wind className="w-5 h-5" />,
+     icon: <Wind className="provider-icon" />,
      description: "Mistral AI models"
    },
    {
      id: "perplexity",
      name: "Perplexity",
-     icon: <Search className="w-5 h-5" />,
+     icon: <Search className="provider-icon" />,
      description: "Perplexity research models"
    },
    {
      id: "grok",
      name: "Grok",
-     icon: <MessageSquare className="w-5 h-5" />,
+     icon: <MessageSquare className="provider-icon" />,
      description: "xAI's Grok models"
    },
    {
      id: "kimi",
      name: "Kimi",
-     icon: <Brain className="w-5 h-5" />,
+     icon: <Brain className="provider-icon" />,
      description: "Moonshot AI's Kimi models"
    },
    {
      id: "openai",
      name: "OpenAI",
-     icon: <Brain className="w-5 h-5" />,
+     icon: <Brain className="provider-icon" />,
      description: "OpenAI's GPT models"
    },
    {
      id: "openrouter",
      name: "OpenRouter",
-     icon: <Globe className="w-5 h-5" />,
+     icon: <Globe className="provider-icon" />,
      description: "OpenRouter marketplace"
    }
 ];
@@ -88,7 +89,7 @@ export const CLAUDE_MODELS: AIModel[] = [
     name: "Claude Sonnet 5",
     description: "Latest Sonnet — best balance of speed and smarts",
     badge: "Recommended",
-    icon: <Zap className="w-4 h-4" />,
+    icon: <Zap className="model-icon" />,
     type: "claude"
   },
   {
@@ -96,7 +97,7 @@ export const CLAUDE_MODELS: AIModel[] = [
     name: "Claude Opus 5.5",
     description: "Most capable Claude for hard problems",
     badge: "Flagship",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "claude"
   },
   {
@@ -104,7 +105,7 @@ export const CLAUDE_MODELS: AIModel[] = [
     name: "Claude Haiku 5.5",
     description: "Fast and efficient for everyday tasks",
     badge: "Vision",
-    icon: <Wind className="w-4 h-4" />,
+    icon: <Wind className="model-icon" />,
     type: "claude"
   },
   {
@@ -112,7 +113,7 @@ export const CLAUDE_MODELS: AIModel[] = [
     name: "Claude Sonnet 5.5",
     description: "Enhanced Sonnet with deeper reasoning",
     badge: "Vision",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "claude"
   },
   {
@@ -120,7 +121,7 @@ export const CLAUDE_MODELS: AIModel[] = [
     name: "Claude Opus 4.8",
     description: "Previous-gen Opus, still very capable",
     badge: "Vision",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "claude"
   },
   {
@@ -128,7 +129,7 @@ export const CLAUDE_MODELS: AIModel[] = [
     name: "Claude Fable 5",
     description: "New Claude family entry",
     badge: "Vision",
-    icon: <Sparkles className="w-4 h-4" />,
+    icon: <Sparkles className="model-icon" />,
     type: "claude"
   },
 ];
@@ -139,7 +140,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5.4 Nano",
     description: "Default — fast, cheap, capable",
     badge: "Recommended",
-    icon: <Zap className="w-4 h-4" />,
+    icon: <Zap className="model-icon" />,
     type: "openai"
   },
   {
@@ -147,7 +148,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5.4",
     description: "Latest OpenAI flagship",
     badge: "Flagship",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openai"
   },
   {
@@ -155,7 +156,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5.4 Mini",
     description: "Lighter flagship, quick responses",
     badge: "Vision",
-    icon: <Wind className="w-4 h-4" />,
+    icon: <Wind className="model-icon" />,
     type: "openai"
   },
   {
@@ -163,7 +164,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5.3 Codex",
     description: "Coding-specialized GPT",
     badge: "Code",
-    icon: <Code className="w-4 h-4" />,
+    icon: <Code className="model-icon" />,
     type: "openai"
   },
   {
@@ -171,7 +172,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5.2",
     description: "Previous flagship generation",
     badge: "Vision",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openai"
   },
   {
@@ -179,7 +180,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5",
     description: "GPT-5 base model",
     badge: "Vision",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openai"
   },
   {
@@ -187,7 +188,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 5 Mini",
     description: "Compact GPT-5",
     badge: "Vision",
-    icon: <Wind className="w-4 h-4" />,
+    icon: <Wind className="model-icon" />,
     type: "openai"
   },
   {
@@ -195,7 +196,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 4o",
     description: "Multimodal with vision",
     badge: "Vision",
-    icon: <Bot className="w-4 h-4" />,
+    icon: <Bot className="model-icon" />,
     type: "openai"
   },
   {
@@ -203,7 +204,7 @@ export const OPENAI_MODELS: AIModel[] = [
     name: "GPT 4.1",
     description: "Refined GPT-4 generation",
     badge: "Vision",
-    icon: <Cpu className="w-4 h-4" />,
+    icon: <Cpu className="model-icon" />,
     type: "openai"
   },
 ];
@@ -214,7 +215,7 @@ export const GROK_MODELS: AIModel[] = [
     name: "Grok 4.7",
     description: "Latest Grok",
     badge: "Recommended",
-    icon: <MessageSquare className="w-4 h-4" />,
+    icon: <MessageSquare className="model-icon" />,
     type: "grok"
   },
   {
@@ -222,7 +223,7 @@ export const GROK_MODELS: AIModel[] = [
     name: "Grok 4.6",
     description: "Previous Grok generation",
     badge: "Vision",
-    icon: <MessageSquare className="w-4 h-4" />,
+    icon: <MessageSquare className="model-icon" />,
     type: "grok"
   },
   {
@@ -230,7 +231,7 @@ export const GROK_MODELS: AIModel[] = [
     name: "Grok 4.5",
     description: "Strong all-rounder",
     badge: "Vision",
-    icon: <Bot className="w-4 h-4" />,
+    icon: <Bot className="model-icon" />,
     type: "grok"
   },
   {
@@ -238,7 +239,7 @@ export const GROK_MODELS: AIModel[] = [
     name: "Grok 4.3",
     description: "Earlier Grok 4 release",
     badge: "Vision",
-    icon: <Bot className="w-4 h-4" />,
+    icon: <Bot className="model-icon" />,
     type: "grok"
   },
   {
@@ -246,7 +247,7 @@ export const GROK_MODELS: AIModel[] = [
     name: "Grok 4.1 Fast (Reasoning)",
     description: "Fast Grok with reasoning",
     badge: "Vision",
-    icon: <Zap className="w-4 h-4" />,
+    icon: <Zap className="model-icon" />,
     type: "grok"
   },
   {
@@ -254,7 +255,7 @@ export const GROK_MODELS: AIModel[] = [
     name: "Grok 4.1 Fast (Non-Reasoning)",
     description: "Fast Grok, non-reasoning",
     badge: "Vision",
-    icon: <Wind className="w-4 h-4" />,
+    icon: <Wind className="model-icon" />,
     type: "grok"
   },
 ];
@@ -265,7 +266,7 @@ export const MISTRAL_MODELS: AIModel[] = [
     name: "Mistral Large 4",
     description: "Most capable Mistral",
     badge: "Flagship",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "mistral"
   },
   {
@@ -273,7 +274,7 @@ export const MISTRAL_MODELS: AIModel[] = [
     name: "Mistral Large 3",
     description: "Large Mistral snapshot",
     badge: "Vision",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "mistral"
   },
   {
@@ -281,7 +282,7 @@ export const MISTRAL_MODELS: AIModel[] = [
     name: "Mistral Medium 3.5",
     description: "Mid-size Mistral",
     badge: "Vision",
-    icon: <Cpu className="w-4 h-4" />,
+    icon: <Cpu className="model-icon" />,
     type: "mistral"
   },
   {
@@ -289,14 +290,14 @@ export const MISTRAL_MODELS: AIModel[] = [
     name: "Mistral Small 4",
     description: "Small efficient Mistral",
     badge: "Vision",
-    icon: <Wind className="w-4 h-4" />,
+    icon: <Wind className="model-icon" />,
     type: "mistral"
   },
   {
     id: "infron:mistral/mistral-nemo",
     name: "Mistral: Mistral Nemo (Infron)",
     description: "Compact Mistral Nemo",
-    icon: <Bot className="w-4 h-4" />,
+    icon: <Bot className="model-icon" />,
     type: "mistral"
   },
   {
@@ -304,7 +305,7 @@ export const MISTRAL_MODELS: AIModel[] = [
     name: "Codestral",
     description: "Code generation specialist",
     badge: "Code",
-    icon: <Code className="w-4 h-4" />,
+    icon: <Code className="model-icon" />,
     type: "mistral"
   },
 ];
@@ -315,42 +316,42 @@ export const KIMI_MODELS: AIModel[] = [
     name: "Moonshotai: Kimi K3 (Infron)",
     description: "Latest Kimi",
     badge: "Recommended",
-    icon: <Sparkles className="w-4 h-4" />,
+    icon: <Sparkles className="model-icon" />,
     type: "kimi"
   },
   {
     id: "infron:moonshotai/kimi-k2.6",
     name: "Moonshot: Kimi K2.6 (Infron)",
     description: "Kimi K2.6",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "kimi"
   },
   {
     id: "infron:moonshotai/kimi-k2.5",
     name: "Moonshot: Kimi K2.5 (Infron)",
     description: "Kimi K2.5",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "kimi"
   },
   {
     id: "infron:moonshotai/kimi-k2-instruct",
     name: "Moonshot: Kimi-K2-Instruct (Infron)",
     description: "Instruction-tuned Kimi",
-    icon: <Bot className="w-4 h-4" />,
+    icon: <Bot className="model-icon" />,
     type: "kimi"
   },
   {
     id: "infron:moonshotai/kimi-k2-thinking",
     name: "Moonshot: Kimi K2 Thinking (Infron)",
     description: "Reasoning-focused Kimi",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "kimi"
   },
   {
     id: "infron:moonshotai/kimi-k2-0905",
     name: "MoonshotAI: Kimi K2 0905 (Infron)",
     description: "Kimi K2 snapshot",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "kimi"
   },
 ];
@@ -361,7 +362,7 @@ export const PERPLEXITY_MODELS: AIModel[] = [
     name: "Perplexity: Sonar (OpenRouter)",
     description: "General research model",
     badge: "Recommended",
-    icon: <Search className="w-4 h-4" />,
+    icon: <Search className="model-icon" />,
     type: "perplexity"
   },
   {
@@ -369,28 +370,28 @@ export const PERPLEXITY_MODELS: AIModel[] = [
     name: "Perplexity: Sonar Pro (OpenRouter)",
     description: "Professional research",
     badge: "Pro",
-    icon: <Search className="w-4 h-4" />,
+    icon: <Search className="model-icon" />,
     type: "perplexity"
   },
   {
     id: "openrouter:perplexity/sonar-deep-research",
     name: "Perplexity: Sonar Deep Research (OpenRouter)",
     description: "Comprehensive deep analysis",
-    icon: <Microscope className="w-4 h-4" />,
+    icon: <Microscope className="model-icon" />,
     type: "perplexity"
   },
   {
     id: "openrouter:perplexity/sonar-reasoning-pro",
     name: "Perplexity: Sonar Reasoning Pro (OpenRouter)",
     description: "Advanced reasoning search",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "perplexity"
   },
   {
     id: "openrouter:perplexity/sonar-pro-search",
     name: "Perplexity: Sonar Pro Search (OpenRouter)",
     description: "Pro search variant",
-    icon: <Search className="w-4 h-4" />,
+    icon: <Search className="model-icon" />,
     type: "perplexity"
   },
 ];
@@ -400,7 +401,7 @@ export const OPENROUTER_MODELS: AIModel[] = [
     id: "infron:deepseek/deepseek-chat",
     name: "Deepseek: Deepseek Chat (Infron)",
     description: "DeepSeek chat model",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
   {
@@ -408,14 +409,14 @@ export const OPENROUTER_MODELS: AIModel[] = [
     name: "Deepseek: Deepseek R1 (Infron)",
     description: "DeepSeek reasoning model",
     badge: "Reasoning",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "infron:meta-llama/llama-3.3-70b-instruct",
     name: "Meta: Llama 3.3 70B Instruct (Infron)",
     description: "Meta's Llama 3.3 70B",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
   {
@@ -423,21 +424,21 @@ export const OPENROUTER_MODELS: AIModel[] = [
     name: "Google: Gemini 2.5 pro (Infron)",
     description: "Google's Gemini 2.5 Pro",
     badge: "Pro",
-    icon: <Sparkles className="w-4 h-4" />,
+    icon: <Sparkles className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "infron:google/gemini-2.5-flash",
     name: "Google: Gemini 2.5 flash (Infron)",
     description: "Google's fast Gemini 2.5 Flash",
-    icon: <Zap className="w-4 h-4" />,
+    icon: <Zap className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "infron:google/gemma-3-27b-it",
     name: "Google: Gemma 3 27B IT (Infron)",
     description: "Google's Gemma 3 27B",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
   {
@@ -445,21 +446,21 @@ export const OPENROUTER_MODELS: AIModel[] = [
     name: "Qwen: Qwen3 235B A22B (Infron)",
     description: "Qwen3 235B MoE",
     badge: "Large",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "infron:qwen/qwen3-32b",
     name: "Qwen: Qwen3 32B (Infron)",
     description: "Qwen3 32B",
-    icon: <Cpu className="w-4 h-4" />,
+    icon: <Cpu className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "openrouter:microsoft/phi-4",
     name: "Microsoft: Phi 4 (OpenRouter)",
     description: "Microsoft's Phi-4",
-    icon: <Cpu className="w-4 h-4" />,
+    icon: <Cpu className="model-icon" />,
     type: "openrouter"
   },
   {
@@ -467,14 +468,14 @@ export const OPENROUTER_MODELS: AIModel[] = [
     name: "Mistral: Mixtral 8x22B Instruct (OpenRouter)",
     description: "Mixtral 8x22B MoE",
     badge: "MoE",
-    icon: <Sparkles className="w-4 h-4" />,
+    icon: <Sparkles className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "openrouter:moonshotai/kimi-k2",
     name: "MoonshotAI: Kimi K2 0711 (OpenRouter)",
     description: "Kimi K2 via OpenRouter",
-    icon: <Sparkles className="w-4 h-4" />,
+    icon: <Sparkles className="model-icon" />,
     type: "openrouter"
   },
   {
@@ -482,21 +483,21 @@ export const OPENROUTER_MODELS: AIModel[] = [
     name: "OpenAI: Gpt 4o (Infron)",
     description: "GPT-4o via OpenRouter",
     badge: "Vision",
-    icon: <Bot className="w-4 h-4" />,
+    icon: <Bot className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "infron:z-ai/glm-4.6",
     name: "Z.AI: GLM 4.6 (Infron)",
     description: "Zhipu GLM 4.6",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
   {
     id: "infron:minimax/minimax-m2",
     name: "MiniMax: MiniMax M2 (Infron)",
     description: "MiniMax M2",
-    icon: <Brain className="w-4 h-4" />,
+    icon: <Brain className="model-icon" />,
     type: "openrouter"
   },
 ];
@@ -537,29 +538,29 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
   // route through infron/openrouter). Variants sharing a label merge into one
   // group. Unknown keys fall back to a capitalized label + generic icon.
   const LIVE_PROVIDER_BRANDS: Record<string, { label: string; icon: React.ReactNode }> = {
-    "claude": { label: "Claude", icon: <Brain className="w-5 h-5" /> },
-    "openai-completion": { label: "OpenAI", icon: <Brain className="w-5 h-5" /> },
-    "openai-responses": { label: "OpenAI", icon: <Brain className="w-5 h-5" /> },
-    "azure-openai": { label: "Azure OpenAI", icon: <Cpu className="w-5 h-5" /> },
-    "azure-openai-responses": { label: "Azure OpenAI", icon: <Cpu className="w-5 h-5" /> },
-    "xai": { label: "Grok", icon: <MessageSquare className="w-5 h-5" /> },
-    "mistral": { label: "Mistral", icon: <Wind className="w-5 h-5" /> },
-    "moonshotai": { label: "Kimi", icon: <Brain className="w-5 h-5" /> },
-    "gemini": { label: "Gemini", icon: <Sparkles className="w-5 h-5" /> },
-    "deepseek": { label: "DeepSeek", icon: <Brain className="w-5 h-5" /> },
-    "openrouter": { label: "OpenRouter", icon: <Globe className="w-5 h-5" /> },
-    "infron": { label: "Infron", icon: <Zap className="w-5 h-5" /> },
-    "alibaba": { label: "Alibaba", icon: <Bot className="w-5 h-5" /> },
-    "byteplus": { label: "BytePlus", icon: <Bot className="w-5 h-5" /> },
-    "minimax": { label: "MiniMax", icon: <Bot className="w-5 h-5" /> },
-    "together-ai": { label: "Together AI", icon: <Bot className="w-5 h-5" /> },
-    "zai": { label: "Z.AI", icon: <Bot className="w-5 h-5" /> },
+    "claude": { label: "Claude", icon: <Brain className="provider-icon" /> },
+    "openai-completion": { label: "OpenAI", icon: <Brain className="provider-icon" /> },
+    "openai-responses": { label: "OpenAI", icon: <Brain className="provider-icon" /> },
+    "azure-openai": { label: "Azure OpenAI", icon: <Cpu className="provider-icon" /> },
+    "azure-openai-responses": { label: "Azure OpenAI", icon: <Cpu className="provider-icon" /> },
+    "xai": { label: "Grok", icon: <MessageSquare className="provider-icon" /> },
+    "mistral": { label: "Mistral", icon: <Wind className="provider-icon" /> },
+    "moonshotai": { label: "Kimi", icon: <Brain className="provider-icon" /> },
+    "gemini": { label: "Gemini", icon: <Sparkles className="provider-icon" /> },
+    "deepseek": { label: "DeepSeek", icon: <Brain className="provider-icon" /> },
+    "openrouter": { label: "OpenRouter", icon: <Globe className="provider-icon" /> },
+    "infron": { label: "Infron", icon: <Zap className="provider-icon" /> },
+    "alibaba": { label: "Alibaba", icon: <Bot className="provider-icon" /> },
+    "byteplus": { label: "BytePlus", icon: <Bot className="provider-icon" /> },
+    "minimax": { label: "MiniMax", icon: <Bot className="provider-icon" /> },
+    "together-ai": { label: "Together AI", icon: <Bot className="provider-icon" /> },
+    "zai": { label: "Z.AI", icon: <Bot className="provider-icon" /> },
   };
 
   const brandFor = (liveKey: string): { label: string; icon: React.ReactNode } =>
     LIVE_PROVIDER_BRANDS[liveKey] ?? {
       label: liveKey.charAt(0).toUpperCase() + liveKey.slice(1),
-      icon: <Bot className="w-5 h-5" />,
+      icon: <Bot className="provider-icon" />,
     };
 
   // Live path: group the curated models by their real provider route,
@@ -612,17 +613,17 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 px-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+          className="ms-trigger"
           aria-label={`Selected model: ${currentModel?.name ?? "Select model"}`}
         >
-          <span className="max-w-[140px] truncate">{currentModel?.name ?? "Select model"}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="ms-trigger-label">{currentModel?.name ?? "Select model"}</span>
+          <ChevronDown className="ms-trigger-chevron" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72 p-1">
-        <div className="p-1">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <DropdownMenuContent align="start" className="ms-menu">
+        <div className="ms-search-wrap">
+          <div className="ms-search-relative">
+            <Search className="ms-search-icon" aria-hidden="true" />
             <Input
               id="search-models"
               name="search"
@@ -631,19 +632,19 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
-              className="h-8 pl-8"
+              className="ms-search-input"
             />
           </div>
         </div>
-        <div className="max-h-[320px] overflow-y-auto">
+        <div className="ms-list">
           {groups.length === 0 && (
-            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+            <div className="ms-empty">
               No models found
             </div>
           )}
           {groups.map((g) => (
             <div key={g.id}>
-              <DropdownMenuLabel className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <DropdownMenuLabel className="ms-group-label">
                 {g.icon}
                 {g.name}
               </DropdownMenuLabel>
@@ -651,19 +652,19 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                 <DropdownMenuItem
                   key={model.id}
                   onSelect={() => handleSelect(model.id)}
-                  className="flex items-center justify-between gap-2"
+                  className="ms-item"
                 >
-                  <span className="flex min-w-0 items-center gap-2">
+                  <span className="ms-item-main">
                     {model.icon}
-                    <span className="truncate text-sm">{model.name}</span>
+                    <span className="ms-item-name">{model.name}</span>
                   </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="ms-item-side">
                     {model.badge && (
-                      <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                      <Badge variant="secondary" className="ms-item-badge">
                         {model.badge}
                       </Badge>
                     )}
-                    {model.id === selectedModel && <Check className="h-3.5 w-3.5 text-primary" />}
+                    {model.id === selectedModel && <Check className="ms-item-check" />}
                   </span>
                 </DropdownMenuItem>
               ))}

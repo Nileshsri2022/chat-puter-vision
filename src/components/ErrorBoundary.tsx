@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import "./ErrorBoundary.css";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -51,31 +52,31 @@ interface ErrorFallbackProps {
 
 export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetError }) => {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <div className="max-w-md w-full text-center space-y-6">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive">
-          <AlertTriangle className="w-8 h-8" />
+    <div className="error-fallback-page">
+      <div className="error-fallback-card">
+        <div className="error-fallback-icon-wrap">
+          <AlertTriangle className="error-fallback-icon" />
         </div>
 
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">Something went wrong</h1>
-          <p className="text-muted-foreground">
+        <div className="error-fallback-heading-group">
+          <h1 className="error-fallback-title">Something went wrong</h1>
+          <p className="error-fallback-message">
             We encountered an unexpected error. Please try refreshing the page or contact support if the problem persists.
           </p>
         </div>
 
         {error && (
-          <details className="text-left bg-muted/50 p-3 rounded-lg text-sm">
-            <summary className="cursor-pointer font-medium text-foreground">Error details</summary>
-            <pre className="mt-2 text-xs text-muted-foreground overflow-auto">
+          <details className="error-fallback-details">
+            <summary className="error-fallback-summary">Error details</summary>
+            <pre className="error-fallback-pre">
               {error.message}
             </pre>
           </details>
         )}
 
-        <div className="flex gap-3 justify-center">
+        <div className="error-fallback-actions">
           <Button onClick={resetError} variant="outline">
-            <RefreshCw className="w-4 h-4 mr-2" />
+            <RefreshCw className="error-fallback-retry-icon" />
             Try again
           </Button>
           <Button onClick={() => window.location.reload()}>
