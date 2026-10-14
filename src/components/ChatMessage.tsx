@@ -1,5 +1,12 @@
 import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
 import { ChatInput } from "./ChatInput";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AIModel, CLAUDE_MODELS, MISTRAL_MODELS, PERPLEXITY_MODELS, GROK_MODELS, KIMI_MODELS, OPENAI_MODELS, OPENROUTER_MODELS } from "./ModelSelector";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +28,7 @@ interface ChatMessageProps {
   onCopy?: (content: string) => void;
   onDelete?: () => void;
   onEdit?: (content: string) => void;
-  onShare?: () => void;
+  onShareExchange?: (format: "md" | "json" | "drive") => void;
   onRetry?: () => void;
 }
 
@@ -38,7 +45,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit, onShare, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, onDelete, onEdit, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -375,7 +382,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                 <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {!isStreaming && (speakable || onCopy || onDelete || onShare || onRetry) && (
+            {!isStreaming && (speakable || onCopy || onDelete || onShareExchange || onRetry) && (
               <div className="msg-actions">
                 {speakable && (
                   <Button
@@ -420,17 +427,32 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, onCopy, 
                     <RotateCcw className="msg-action-icon" aria-hidden="true" />
                   </Button>
                 )}
-                {onShare && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onShare}
-                    className="msg-action-btn"
-                    title="Share this answer"
-                    aria-label="Share this answer"
-                  >
-                    <Share2 className="msg-action-icon" aria-hidden="true" />
-                  </Button>
+                {onShareExchange && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="msg-action-btn"
+                        title="Share this answer"
+                        aria-label="Share this answer"
+                      >
+                        <Share2 className="msg-action-icon" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={() => onShareExchange("md")}>
+                        Export as Markdown
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onShareExchange("json")}>
+                        Export as JSON
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => onShareExchange("drive")}>
+                        Save to Drive
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 {onDelete && (
                   <Button

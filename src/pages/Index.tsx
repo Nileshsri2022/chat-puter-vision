@@ -23,7 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Menu, X, Sparkles, RotateCcw, PanelLeftOpen, Share2, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
+import { Menu, X, Sparkles, PanelLeftOpen, Share2, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -170,11 +170,6 @@ const Index = () => {
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
   const messages = currentConversation?.messages || [];
-  const canRegenerate =
-    !isStreaming &&
-    messages.length > 0 &&
-    messages[messages.length - 1].role === "assistant";
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -486,12 +481,6 @@ const Index = () => {
     });
   };
 
-  const handleRegenerate = () => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "assistant") { handleRetryMessage(i); break; }
-    }
-  };
-
   const handleGenerateImage = async (prompt: string) => {
     if (!currentConversation) return;
     if (!isAuthenticated) {
@@ -689,7 +678,7 @@ const Index = () => {
     });
   };
 
-  const handleShareExchange = (index: number) => {
+  const handleShareExchange = async (index: number, format: "md" | "json" | "drive") => {
     const aiMsg = messages[index];
     if (!aiMsg || aiMsg.role !== "assistant") return;
     let question = "";
@@ -700,10 +689,43 @@ const Index = () => {
       }
     }
     const model = aiMsg.model ? ` (${aiMsg.model})` : "";
+    const answer = stripThinkBlocks(aiMsg.content);
+    const base = (question || answer).slice(0, 50).replace(/[^a-z0-9]/gi, "_") || "answer";
+    if (format === "json") {
+      downloadFile(
+        `${base}.json`,
+        JSON.stringify({ question, answer, model: aiMsg.model ?? null }, null, 2),
+        "application/json"
+      );
+      toast({ title: "Answer exported as JSON", duration: 2000 });
+      return;
+    }
     const md =
       (question ? `**You:**\n\n${question}\n\n---\n\n` : "") +
-      `**AI${model}:**\n\n${stripThinkBlocks(aiMsg.content)}\n`;
-    const base = (question || aiMsg.content).slice(0, 50).replace(/[^a-z0-9]/gi, "_") || "answer";
+      `**AI${model}:**\n\n${answer}\n`;
+    if (format === "drive") {
+      if (!isAuthenticated) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to save to Drive.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+      try {
+        const name = await saveConversationToDrive(question || base, md);
+        toast({ title: "Saved to Drive", description: name, duration: 3000 });
+      } catch (error) {
+        toast({
+          title: "Could not save to Drive",
+          description: error instanceof Error ? error.message : undefined,
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+      return;
+    }
     downloadFile(`${base}.md`, md);
     toast({ title: "Answer exported", duration: 2000 });
   };
@@ -947,7 +969,11 @@ const Index = () => {
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content) => handleEditMessage(index, content) : undefined}
-                      onShare={message.role === "assistant" ? () => handleShareExchange(index) : undefined}
+                      onShareExchange={
+                        message.role === "assistant"
+                          ? (format) => handleShareExchange(index, format)
+                          : undefined
+                      }
                       onRetry={message.role === "assistant" ? () => handleRetryMessage(index) : undefined}
                     />
                   ))}
@@ -964,19 +990,6 @@ const Index = () => {
             </ScrollArea>
 
             <div className="app-composer-wrap">
-              {canRegenerate && (
-                <div className="app-regen-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRegenerate}
-                    className="app-regen-btn"
-                  >
-                    <RotateCcw className="app-regen-icon" />
-                    Regenerate
-                  </Button>
-                </div>
-              )}
               <ChatInput
                 key={currentConversationId}
                 onSend={handleSendMessage}

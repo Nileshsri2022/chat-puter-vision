@@ -120,15 +120,3 @@
 .app-composer-wrap {
   @apply shrink-0 bg-background pt-3;
 }
-
-.app-regen-wrap {
-  @apply flex justify-center pb-1;
-}
-
-.app-regen-btn {
-  @apply gap-2 rounded-full;
-}
-
-.app-regen-icon {
-  @apply h-3.5 w-3.5;
-}
