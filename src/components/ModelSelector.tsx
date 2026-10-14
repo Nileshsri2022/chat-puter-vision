@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Zap, Brain, Cpu, Wind, Sparkles, Code, Bot, Search, Microscope, MessageSquare, Globe, Check } from "lucide-react";
-import { PUTER_MODELS_SNAPSHOT, type SnapshotModel } from "@/lib/puterModels.generated";
+import { PUTER_MODELS_SNAPSHOT, CAT_VISION, CAT_REASONING, CAT_WEBSEARCH, CAT_FUNCTION_CALLING, CAT_AUDIO_IN, CAT_VIDEO_IN, type SnapshotModel } from "@/lib/puterModels.generated";
 import "./ModelSelector.css";
 
 export type ProviderId = "claude" | "mistral" | "perplexity" | "grok" | "openrouter" | "kimi" | "openai";
@@ -577,10 +577,21 @@ function brandGroups(): BrandGroup[] {
     .concat(extras);
 }
 
+/** Category filter chips (multi-select). Matches a model having ANY selected category. */
+const CATEGORIES = [
+  { key: CAT_VISION, label: "Vision" },
+  { key: CAT_REASONING, label: "Reasoning" },
+  { key: CAT_WEBSEARCH, label: "Web Search" },
+  { key: CAT_FUNCTION_CALLING, label: "Function Calling" },
+  { key: CAT_AUDIO_IN, label: "Audio Input" },
+  { key: CAT_VIDEO_IN, label: "Video Input" },
+];
+
 export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
   const [query, setQuery] = useState("");
+  const [catMask, setCatMask] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const groups = useMemo(brandGroups, []);
 
@@ -592,6 +603,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
   const openPicker = () => {
     setBrand(brandOfModel(selectedModel) || groups[0]?.label || "");
     setQuery("");
+    setCatMask(0);
     setOpen(true);
   };
 
@@ -605,17 +617,37 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const active = groups.find((g) => g.label === brand) ?? groups[0];
+  // Category mode (multi-select): ignore the provider sidebar, show matching
+  // models from all providers. Otherwise the active provider's models.
+  const inCategoryMode = catMask !== 0;
+  const active = inCategoryMode ? undefined : (groups.find((g) => g.label === brand) ?? groups[0]);
+  const allModels = useMemo(() => {
+    const seen = new Set<string>();
+    const out: SnapshotModel[] = [];
+    for (const g of groups)
+      for (const m of g.models)
+        if (!seen.has(m.id)) {
+          seen.add(m.id);
+          out.push(m);
+        }
+    return out;
+  }, [groups]);
+  const base = inCategoryMode
+    ? allModels.filter((m) => (m.cats & catMask) !== 0)
+    : (active?.models ?? []);
   const q = query.trim().toLowerCase();
-  const models = active
-    ? q
-      ? active.models.filter((m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
-      : active.models
-    : [];
+  const models = q
+    ? base.filter((m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
+    : base;
 
   const handleSelect = (id: string) => {
     onModelChange(id);
     setOpen(false);
+  };
+
+  const selectProvider = (label: string) => {
+    setCatMask(0);
+    setBrand(label);
   };
 
   return (
@@ -631,7 +663,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
         <span className="ms-trigger-label">{modelDisplayName(selectedModel)}</span>
         <ChevronDown className="ms-trigger-chevron" aria-hidden="true" />
       </Button>
-      {open && active && (
+      {open && (
         <div className="ms-modal-overlay" onClick={() => setOpen(false)}>
           <div
             className="ms-modal"
@@ -640,30 +672,46 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
             aria-label="Select model"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="ms-search-wrap">
+              <div className="ms-search-relative">
+                <Search className="ms-search-icon" aria-hidden="true" />
+                <Input
+                  ref={searchRef}
+                  aria-label="Search models"
+                  placeholder={inCategoryMode ? "Search all models…" : `Search ${active?.label ?? ""} models…`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="ms-search-input"
+                />
+              </div>
+            </div>
+            <div className="ms-cat-row" aria-label="Filter by category">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c.label}
+                  type="button"
+                  aria-pressed={(catMask & c.key) !== 0}
+                  className={"ms-cat-chip" + ((catMask & c.key) !== 0 ? " ms-cat-chip-active" : "")}
+                  onClick={() => setCatMask((m) => m ^ c.key)}
+                >
+                  {c.label}
+                </button>
+              ))}
+              {inCategoryMode && (
+                <span className="ms-cat-count">{models.length} across all providers</span>
+              )}
+            </div>
             <div className="ms-picker-body">
               <div className="ms-provider-sidebar">
-                <div className="ms-search-wrap">
-                  <div className="ms-search-relative">
-                    <Search className="ms-search-icon" aria-hidden="true" />
-                    <Input
-                      ref={searchRef}
-                      aria-label="Search models"
-                      placeholder={`Search ${active.label} models…`}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      className="ms-search-input"
-                    />
-                  </div>
-                </div>
                 <div className="ms-provider-list" role="tablist" aria-label="Providers">
                 {groups.map((g) => (
                   <button
                     key={g.label}
                     type="button"
                     role="tab"
-                    aria-selected={g.label === active.label}
-                    className={"ms-provider-item" + (g.label === active.label ? " ms-provider-item-active" : "")}
-                    onClick={() => setBrand(g.label)}
+                    aria-selected={!inCategoryMode && g.label === active?.label}
+                    className={"ms-provider-item" + (!inCategoryMode && g.label === active?.label ? " ms-provider-item-active" : "")}
+                    onClick={() => selectProvider(g.label)}
                   >
                     <span className="ms-provider-item-label">{g.label}</span>
                     <span className="ms-provider-count">{g.models.length}</span>

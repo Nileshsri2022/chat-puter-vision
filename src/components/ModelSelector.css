@@ -76,7 +76,24 @@
 
 /* Search */
 .ms-search-wrap {
-  @apply p-2;
+  @apply p-3 pb-2;
+}
+
+/* Category filter chips (multi-select) */
+.ms-cat-row {
+  @apply flex flex-wrap items-center gap-1.5 px-3 pb-2;
+}
+
+.ms-cat-chip {
+  @apply rounded-full border border-input bg-transparent px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground;
+}
+
+.ms-cat-chip-active {
+  @apply border-transparent bg-secondary text-foreground;
+}
+
+.ms-cat-count {
+  @apply ml-auto text-[11px] text-muted-foreground;
 }
 
 .ms-search-relative {
