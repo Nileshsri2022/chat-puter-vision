@@ -102,11 +102,12 @@
 
 /* Compact (inline edit) variant */
 .composer-wrap-compact {
-  @apply max-w-none px-0 pb-0;
+  @apply ml-auto w-fit min-w-[14rem] max-w-[92%] px-0 pb-0 sm:max-w-[85%];
 }
 
 .composer-textarea-compact {
-  @apply min-h-[40px] pt-3;
+  @apply min-h-[40px] w-auto min-w-[12rem] max-w-full pt-3;
+  field-sizing: content;
   max-height: 120px;
   max-height: min(120px, 24dvh);
 }

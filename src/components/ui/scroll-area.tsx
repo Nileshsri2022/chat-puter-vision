@@ -10,8 +10,10 @@ const ScrollArea = React.forwardRef<
   <ScrollAreaPrimitive.Root ref={ref} className={cn("relative overflow-hidden", className)} {...props}>
     {/* overscroll-contain stops a fling at either end of the transcript from
         chaining to the document behind the shell (iOS rubber-band, Android
-        pull-to-refresh). */}
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] overscroll-contain">
+        pull-to-refresh). [&>div]:!block overrides Radix's inline
+        `display: table` wrapper so `truncate` children constrain to the
+        viewport width instead of stretching it to max-content. */}
+    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] overscroll-contain [&>div]:!block">
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
