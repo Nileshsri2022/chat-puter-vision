@@ -203,6 +203,17 @@ test("composer text is at least 16px on phones to prevent iOS zoom", () => {
   expect(css).toMatch(/@media \(min-width: 640px\)\s*\{\s*\.composer-textarea\s*\{\s*font-size:\s*15px/);
 });
 
+test("image generation uses the shared composer and keeps its mode active", () => {
+  const input = read("components/ChatInput.tsx");
+  expect(input).not.toContain("composer-imgprompt");
+  expect(input).toContain('aria-label={imageGenerationMode ? "Image prompt" : "Message"}');
+  expect(input).toContain('aria-pressed={imageGenerationMode}');
+  expect(input).toContain('imageGenerationMode && "composer-tool-btn-active"');
+  expect(input).toContain("if (imageGenerationMode && onGenerateImage)");
+  expect(input).toContain("void onGenerateImage(message)");
+  expect(input).toContain('title={imageGenerationMode ? "Generate image" : "Send message"}');
+});
+
 test("inline message edit fills the message column like the bottom composer", () => {
   const css = read("components/ChatInput.css");
   const wrapRule = /\.composer-wrap-compact\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";

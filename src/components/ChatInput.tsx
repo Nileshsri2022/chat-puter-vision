@@ -5,7 +5,6 @@ import { useState, useRef } from "react";
 import { ArrowUp, Paperclip, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { ModelSelector } from "./ModelSelector";
 import { useToast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/lib/speech";
@@ -38,8 +37,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);  // For attaching images to messages
-  const [showImagePrompt, setShowImagePrompt] = useState(false);
-  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageGenerationMode, setImageGenerationMode] = useState(false);
   const [recordingState, setRecordingState] = useState<"idle" | "recording" | "transcribing">("idle");
   const [ocrIndex, setOcrIndex] = useState<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -49,8 +47,18 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if ((input.trim() || selectedImages.length > 0) && !disabled && !isUploading) {
-      onSend(input.trim(), selectedModel, selectedImages);
+    if (disabled || isUploading || isGeneratingImage) return;
+    const message = input.trim();
+
+    if (imageGenerationMode && onGenerateImage) {
+      if (!message) return;
+      setInput("");
+      void onGenerateImage(message);
+      return;
+    }
+
+    if (message || selectedImages.length > 0) {
+      onSend(message, selectedModel, selectedImages);
       setInput("");
       clearImages();
     }
@@ -213,14 +221,6 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
     }
   };
 
-  const submitImagePrompt = () => {
-    const prompt = imagePrompt.trim();
-    if (!prompt || isGeneratingImage || !onGenerateImage) return;
-    setImagePrompt("");
-    setShowImagePrompt(false);
-    void onGenerateImage(prompt);
-  };
-
   const extractFromImage = async (index: number) => {
     const file = selectedImages[index];
     if (!file || ocrIndex !== null) return;
@@ -253,6 +253,10 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   // Vision support comes from the live model catalog (modalities data);
   // keyword matching is only the offline fallback inside modelSupportsVision.
   const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
+  const hasMessage = input.trim().length > 0;
+  const canSubmit = imageGenerationMode
+    ? hasMessage && Boolean(onGenerateImage)
+    : hasMessage || selectedImages.length > 0;
 
   return (
     <div className={cn("composer-wrap", compact && "composer-wrap-compact")}>
@@ -296,58 +300,22 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
           </div>
         )}
 
-        {showImagePrompt && onGenerateImage && (
-          <div className="composer-imgprompt">
-            <Input
-              id="image-prompt-input"
-              name="imagePrompt"
-              aria-label="Image prompt"
-              value={imagePrompt}
-              onChange={(e) => setImagePrompt(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitImagePrompt(); } }}
-              placeholder="Describe the image to generate…"
-              disabled={isGeneratingImage}
-              className="composer-imgprompt-input"
-              autoFocus
-            />
-            <Button
-              type="button"
-              size="sm"
-              onClick={submitImagePrompt}
-              disabled={!imagePrompt.trim() || isGeneratingImage}
-              className="composer-shrink"
-              aria-label="Generate image"
-            >
-              {isGeneratingImage ? (
-                <div className="composer-spinner" aria-hidden="true" />
-              ) : (
-                "Generate"
-              )}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowImagePrompt(false)}
-              disabled={isGeneratingImage}
-              className="composer-shrink"
-              aria-label="Cancel image generation"
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
-
         <div className="composer-box">
           <Textarea
             id={compact ? undefined : "chat-message-input"}
             name="message"
-            aria-label="Message"
+            aria-label={imageGenerationMode ? "Image prompt" : "Message"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={modelSupportsImages ? "Message (images supported)…" : "Message FreeTalk…"}
-            disabled={disabled}
+            placeholder={
+              imageGenerationMode
+                ? "Describe an image to generate…"
+                : modelSupportsImages
+                  ? "Message (images supported)…"
+                  : "Message FreeTalk…"
+            }
+            disabled={disabled || isGeneratingImage}
             rows={1}
             autoFocus={compact}
             className="composer-textarea"
@@ -359,11 +327,15 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="composer-tool-btn"
-                  onClick={() => setShowImagePrompt((v) => !v)}
+                  className={cn(
+                    "composer-tool-btn",
+                    imageGenerationMode && "composer-tool-btn-active"
+                  )}
+                  onClick={() => setImageGenerationMode((mode) => !mode)}
                   disabled={disabled || isGeneratingImage}
-                  title="Generate image"
-                  aria-label="Generate image"
+                  aria-pressed={imageGenerationMode}
+                  title={imageGenerationMode ? "Turn off image generation" : "Generate image"}
+                  aria-label={imageGenerationMode ? "Turn off image generation" : "Generate image"}
                 >
                   {isGeneratingImage ? (
                     <div className="composer-spinner" aria-hidden="true" />
@@ -396,7 +368,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
               )}
             </div>
             <div className="composer-send-group">
-{modelSupportsImages && (
+              {modelSupportsImages && (
                 <Button
                   type="button"
                   size="icon"
@@ -440,10 +412,10 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 <Button
                   type="submit"
                   size="icon"
-                  disabled={(!input.trim() && selectedImages.length === 0) || disabled}
+                  disabled={!canSubmit || disabled || isGeneratingImage || isUploading}
                   className="composer-send-btn"
-                  title="Send message"
-                  aria-label="Send message"
+                  title={imageGenerationMode ? "Generate image" : "Send message"}
+                  aria-label={imageGenerationMode ? "Generate image" : "Send message"}
                 >
                   <ArrowUp className="composer-tool-icon" aria-hidden="true" />
                 </Button>

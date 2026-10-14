@@ -36,12 +36,12 @@ function friendlyImageError(error: unknown): Error {
 }
 
 /**
- * A new file path in the user's home folder. A `~/` path is sent to the API
- * as-is (docs: absolute and home-relative paths are not rebased).
+ * A unique path relative to the app's writable Puter Drive folder. Writing
+ * directly to `~/` is denied because that targets the user's home folder.
  */
 export function newImagePath(): string {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  return `~/freetalk-${id}.png`;
+  return `freetalk-${id}.png`;
 }
 
 /**
