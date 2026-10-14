@@ -501,6 +501,14 @@ export const OPENROUTER_MODELS: AIModel[] = [
     type: "openrouter"
   },
 ];
+/** Short display name: drops the redundant "Provider: " prefix and the
+ *  " (Infron)"/" (OpenRouter)" suffix — the group header already shows it. */
+export const shortModelName = (name: string): string =>
+  name
+    .replace(/^[^:]+:\s*/, "")
+    .replace(/\s*\((Infron|OpenRouter)\)\s*$/i, "")
+    .trim();
+
 export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorProps) => {
   const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
   const [providers, setProviders] = useState<string[] | null>(null);
@@ -616,7 +624,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
           className="ms-trigger"
           aria-label={`Selected model: ${currentModel?.name ?? "Select model"}`}
         >
-          <span className="ms-trigger-label">{currentModel?.name ?? "Select model"}</span>
+          <span className="ms-trigger-label">{currentModel ? shortModelName(currentModel.name) : "Select model"}</span>
           <ChevronDown className="ms-trigger-chevron" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
@@ -656,7 +664,7 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
                 >
                   <span className="ms-item-main">
                     {model.icon}
-                    <span className="ms-item-name">{model.name}</span>
+                    <span className="ms-item-name">{shortModelName(model.name)}</span>
                   </span>
                   <span className="ms-item-side">
                     {model.badge && (
