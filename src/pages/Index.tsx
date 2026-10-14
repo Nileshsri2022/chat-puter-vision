@@ -23,6 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import { Menu, X, Sparkles, PanelLeftOpen, Share2, LogOut, CircleUserRound, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
@@ -146,18 +147,31 @@ const Index = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  // Docked-vs-overlay sidebar. Subscribed rather than sampled once, so rotating
+  // a phone or resizing a desktop window re-lays out instead of freezing the
+  // decision made at first load.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("sidebar_open");
       if (saved !== null) return saved === "true";
-      return window.innerWidth >= 768;
     }
-    return true;
+    return isDesktop;
   });
 
   useEffect(() => {
     localStorage.setItem("sidebar_open", String(sidebarOpen));
   }, [sidebarOpen]);
+
+  // Crossing the breakpoint snaps to that side's sensible default: a docked
+  // rail is wrong on a phone, a collapsed rail is wrong on a desktop.
+  const prevIsDesktop = useRef(isDesktop);
+  useEffect(() => {
+    if (prevIsDesktop.current === isDesktop) return;
+    prevIsDesktop.current = isDesktop;
+    setSidebarOpen(isDesktop);
+  }, [isDesktop]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
 
@@ -797,7 +811,7 @@ const Index = () => {
         className={cn("app-main", sidebarOpen ? "app-main-sidebar-open" : "app-main-sidebar-closed")}
       >
         <header className="app-header">
-          <div className="app-header-group">
+          <div className="app-header-group app-header-group-start">
             {!sidebarOpen && (
               <div className="app-header-pill">
                 <Button
@@ -813,7 +827,7 @@ const Index = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="app-icon-btn"
+                  className="app-icon-btn app-header-search-btn"
                   onClick={openSearch}
                   title="Search conversations"
                   aria-label="Search conversations"
@@ -835,7 +849,7 @@ const Index = () => {
             {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="app-icon-btn" title="Export conversation" aria-label="Export conversation">
+                  <Button variant="ghost" size="icon" className="app-icon-btn app-header-export" title="Export conversation" aria-label="Export conversation">
                     <Share2 className="app-header-icon" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -882,7 +896,7 @@ const Index = () => {
                 {currentConversation.title}
               </button>
             ))}
-          <div className="app-header-group">
+          <div className="app-header-group app-header-group-end">
             {isAuthenticated && <CreditPill />}
             <ThemeToggle />
             {isAuthenticated ? (
@@ -911,6 +925,21 @@ const Index = () => {
                     {profile?.name ?? "Account"}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {/* The header's export button is hidden below `sm`, where the
+                      header row has no width left for it. Mirror the same
+                      actions here so export stays reachable on a phone. */}
+                  <DropdownMenuGroup className="sm:hidden">
+                    <DropdownMenuItem onClick={() => handleExport("md")}>
+                      Export as Markdown
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport("json")}>
+                      Export as JSON
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSaveToDrive}>
+                      Save to Drive
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator className="sm:hidden" />
                   <DropdownMenuGroup>
                   <DropdownMenuItem onClick={handleSignOut} className="gap-2">
                     <LogOut className="app-menu-icon" aria-hidden="true" />

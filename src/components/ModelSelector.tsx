@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -609,10 +610,10 @@ export const ModelSelector = ({ selectedModel, onModelChange }: ModelSelectorPro
   const [catMask, setCatMask] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
   // On narrow screens the two-pane layout is cramped — start collapsed so the
-  // model list gets the full width (the toggle stays available).
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches
-  );
+  // model list gets the full width (the toggle stays available). Subscribed
+  // rather than sampled once so resizing/rotating re-evaluates it.
+  const isWide = useMediaQuery("(min-width: 640px)");
+  const [sidebarOpen, setSidebarOpen] = useState(isWide);
   const searchRef = useRef<HTMLInputElement>(null);
   const groups = useMemo(brandGroups, []);
 

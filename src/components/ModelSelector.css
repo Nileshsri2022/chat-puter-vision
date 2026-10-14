@@ -15,25 +15,52 @@
 }
 
 .ms-trigger-label {
-  @apply max-w-[140px] truncate;
+  @apply truncate;
+  /* Scales with the viewport: a fixed 140px eats half of a 320px screen. */
+  max-width: 6.5rem;
+}
+
+@media (min-width: 640px) {
+  .ms-trigger-label {
+    max-width: 140px;
+  }
 }
 
 .ms-trigger-chevron {
   @apply size-3.5 shrink-0;
 }
 
-/* Modal window */
+/* Modal window — a bottom sheet on phones, a centred dialog from `sm` up.
+   A full-height inset-padded modal wastes the top of a phone screen on empty
+   scrim and buries the list below the thumb. */
 .ms-modal-overlay {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4;
+  @apply fixed inset-0 z-50 flex justify-center bg-black/60;
+  align-items: flex-end;
 }
 
 .ms-modal {
-  @apply flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl;
+  @apply flex w-full max-w-2xl flex-col overflow-hidden border bg-popover text-popover-foreground shadow-xl;
+  max-height: 88vh;
+  max-height: 88dvh;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+@media (min-width: 640px) {
+  .ms-modal-overlay {
+    @apply items-center p-4;
+  }
+
+  .ms-modal {
+    @apply rounded-xl;
+    max-height: 80vh;
+    max-height: 80dvh;
+  }
 }
 
 /* Category filter dropdown */
 .ms-filter-btn {
-  @apply relative flex size-9 shrink-0 items-center justify-center rounded-md border border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground;
+  @apply relative flex size-9 shrink-0 items-center justify-center rounded-md border border-input bg-transparent text-muted-foreground tap-expand hover:bg-accent hover:text-foreground;
 }
 
 .ms-filter-icon {
@@ -71,11 +98,14 @@
 }
 
 .ms-provider-sidebar {
-  @apply flex w-44 shrink-0 flex-col border-r;
+  @apply flex shrink-0 flex-col border-r;
+  /* Never starves the model list of room on a narrow phone. */
+  width: min(11rem, 38vw);
 }
 
 .ms-provider-list {
   @apply min-h-0 flex-1 overflow-y-auto p-1;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
@@ -94,6 +124,7 @@
 
 .ms-provider-item {
   @apply flex w-full items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground;
+  min-height: 2.75rem;
 }
 
 .ms-provider-item-active {
@@ -111,6 +142,8 @@
 /* Top bar: search + category filter dropdown */
 .ms-topbar {
   @apply flex items-center gap-2 p-3 pb-2;
+  /* The sheet can reach the very top of a short landscape phone. */
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
 }
 
 /* Search */
@@ -133,6 +166,7 @@
 /* Model list */
 .ms-modal-list {
   @apply min-h-0 flex-1 overflow-y-auto p-1;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
@@ -156,6 +190,7 @@
 /* Model rows */
 .ms-item {
   @apply flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-2 py-2 text-left hover:bg-accent;
+  min-height: 2.75rem;
 }
 
 .ms-item-selected {

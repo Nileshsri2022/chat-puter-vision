@@ -13,5 +13,19 @@
 }
 
 .credit-pill-icon {
-  @apply size-3;
+  @apply size-3 shrink-0;
+}
+
+/* The header is the tightest row in the app: at 320px the three-button pill,
+   the credit pill, the theme toggle and the avatar already exceed the width.
+   The exact figure is still exposed to assistive tech via aria-label, and the
+   full value is back in the title tooltip, so nothing is actually lost. */
+@media (max-width: 639px) {
+  .credit-pill-value {
+    display: none;
+  }
+
+  .credit-pill {
+    @apply px-1.5 py-1.5;
+  }
 }

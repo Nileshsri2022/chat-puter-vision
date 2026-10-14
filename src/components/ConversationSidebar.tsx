@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useState, useRef, useEffect, useMemo } from "react";
+import { DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import "./ConversationSidebar.css";
 
 interface Conversation {
@@ -80,7 +81,10 @@ export const ConversationSidebar = ({
   };
 
   const closeMobile = () => {
-    if (window.innerWidth < 768) onToggle();
+    // Only auto-dismiss on the overlay layout. Above `lg` the sidebar is docked
+    // and dismissing it would collapse the layout out from under the selection.
+    if (window.matchMedia(DESKTOP_QUERY).matches) return;
+    onToggle();
   };
 
   // Filter conversations based on search query
