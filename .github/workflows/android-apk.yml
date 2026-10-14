@@ -16,7 +16,7 @@ permissions:
 jobs:
   build-apk:
     name: Assemble release APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -34,13 +34,14 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android platform and build tools
+        # The runner image ships the Android SDK at $ANDROID_HOME; add the
+        # platform and build tools this project targets (compileSdk 35).
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | head -1)/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install dependencies
         run: npm ci
