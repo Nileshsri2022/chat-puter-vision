@@ -253,14 +253,9 @@ const Index = () => {
     }
   }, [messages, streamingContent]);
 
-  // ---- Artifacts panel: the image index for the open conversation ----
-  const {
-    artifactsOpen,
-    setArtifactsOpen,
-    artifacts,
-    unsavedAttachments,
-    locateMessage,
-  } = useArtifactsPanel({ scrollRef, conversation: currentConversation });
+  // The artifacts panel's open state, derived lists and locate (see the hook).
+  const { artifactsOpen, setArtifactsOpen, artifacts, unsavedAttachments, locateMessage } =
+    useArtifactsPanel({ scrollRef, conversation: currentConversation });
 
   const searchTerm = searchQuery.trim().toLowerCase();
 
@@ -1140,8 +1135,8 @@ const Index = () => {
               </button>
             ))}
           <div className="app-header-group app-header-group-end">
-            {/* Conversation-level actions: the image index, share/export and
-                theme. The account lives in the sidebar footer now. */}
+            {/* Conversation-level actions: the artifacts panel, share/export
+                and theme. The account lives in the sidebar footer now. */}
             {isAuthenticated && (
               <Button
                 variant="ghost"
@@ -1342,8 +1337,8 @@ const Index = () => {
         )}
       </main>
 
-      {/* Image index for the open conversation. Docked at `xl`, an overlay
-          below it — the same split the sidebar uses at `lg`. */}
+      {/* Artifacts panel for the open conversation. Docked at `xl`, an
+          overlay below it — the same split the sidebar uses at `lg`. */}
       {isAuthenticated && (
         <ArtifactsPanel
           artifacts={artifacts}

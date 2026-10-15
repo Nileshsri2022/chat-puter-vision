@@ -11,7 +11,7 @@ import { test, expect } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { collectArtifacts } from "@/lib/artifacts";
+import { collectArtifacts, isImageArtifact } from "@/lib/artifacts";
 
 test("a text-only answer opens no overlay", () => {
   const html = renderToStaticMarkup(
@@ -69,36 +69,44 @@ test("the overlay renders the image it was given", () => {
   expect(html).toContain("receipt.jpg");
 });
 
-// ---- Phase 3a: block offsets (spec §6.5) ----
+// ---- Phase 3: block-level locate ----
+//
+// The artifacts panel locates a code block or table by the offset the
+// collector computed; the transcript has to stamp the very same number.
 
-const MIXED_ANSWER = [
-  "Here it is:",
+const BLOCKS = [
+  "<think>Plan:\n\n```js\nthinking()\n```\n\n| t | u |\n| - | - |\n| 1 | 2 |</think>Here is the script:",
   "",
   "```python",
   "print('hi')",
   "```",
   "",
-  "| A | B |",
-  "|---|---|",
-  "| 1 | 2 |",
+  "| Item | Price |",
+  "| --- | --- |",
+  "| Tea | ₹40 |",
   "",
-  "    indented()",
+  "- then run:",
+  "",
+  "      indented()",
 ].join("\n");
 
-test("the answer stamps each block with the offset the collector reports", () => {
-  const html = renderToStaticMarkup(
-    <ChatMessage role="assistant" content={MIXED_ANSWER} messageIndex={3} />
-  );
+test("the answer's code blocks and tables carry the collector's offsets", () => {
+  const html = renderToStaticMarkup(<ChatMessage role="assistant" content={BLOCKS} />);
   const stamped = [...html.matchAll(/data-artifact-at="(\d+)"/g)].map((m) => Number(m[1]));
-  const collected = collectArtifacts([{ role: "assistant", content: MIXED_ANSWER }])
-    .filter((a) => a.kind === "code" || a.kind === "table")
-    .map((a) => (a.kind === "code" || a.kind === "table" ? a.at : -1));
-  expect(collected).toHaveLength(3);
-  expect(stamped.sort((a, b) => a - b)).toEqual(collected.sort((a, b) => a - b));
+  const expected = collectArtifacts([{ role: "assistant", content: BLOCKS }]).flatMap((a) =>
+    isImageArtifact(a) ? [] : [a.at]
+  );
+  // Fenced code, a table and code indented inside a list item.
+  expect(expected).toHaveLength(3);
+  expect(stamped).toEqual(expected);
 });
 
-test("the thinking section stamps nothing, so its offsets cannot collide", () => {
-  const content = "<think>\n```js\nlet a = 1\n```\n</think>\n\nThe answer is 4.";
-  const html = renderToStaticMarkup(<ChatMessage role="assistant" content={content} />);
-  expect(html).not.toContain("data-artifact-at");
+test("blocks in the thinking section carry no offsets", () => {
+  const html = renderToStaticMarkup(<ChatMessage role="assistant" content={BLOCKS} />);
+  const thinking = /class="msg-think-body"[\s\S]*?class="msg-answer"/.exec(html)?.[0] ?? "";
+  // Rendered (thinking opens expanded), with its own code and table...
+  expect(thinking).toContain("thinking()");
+  expect(thinking).toContain("md-table-wrap");
+  // ...but unstamped: its offsets index a different string.
+  expect(thinking).not.toContain("data-artifact-at");
 });

@@ -1,57 +1,70 @@
-import { Code2, Table2, Maximize2, Copy, Check, Download } from "lucide-react";
+import { Check, Code2, Copy, Download, Maximize2, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTextArtifactActions } from "@/hooks/useTextArtifactActions";
+import { cn } from "@/lib/utils";
 import type { TextArtifact } from "@/lib/artifacts";
 import "./ArtifactRow.css";
 
 interface ArtifactRowProps {
   artifact: TextArtifact;
-  /** "message 4", the position shown on the row. */
+  /** "message 4": where the block lives, as the row shows it. */
   position: string;
   onLocate: () => void;
   onPreview: () => void;
 }
 
-/** First three non-empty lines of code, or the header cells of a table. */
-function previewOf(artifact: TextArtifact): string {
+/** The label as a screen reader should hear it: "Python, 24 lines". */
+function spokenLabel(artifact: TextArtifact): string {
+  if (artifact.kind === "table") {
+    const rows = artifact.rows.length;
+    const columns = artifact.header.length;
+    return `Table, ${rows} row${rows === 1 ? "" : "s"}, ${columns} column${columns === 1 ? "" : "s"}`;
+  }
+  return artifact.label.replace(/ · /g, ", ");
+}
+
+/** A glance, not a read: three non-empty lines of code, or a table's header. */
+function previewText(artifact: TextArtifact): string {
   if (artifact.kind === "table") return artifact.header.join(" · ");
   return artifact.text
     .split("\n")
-    .filter((line) => line.trim().length > 0)
+    .filter((line) => line.trim())
     .slice(0, 3)
     .join("\n");
 }
 
 /**
- * A code block or table in the panel. The row itself locates the block; the
- * action buttons sit beside it, never inside it (spec §6.2).
+ * One code block or table in the artifacts panel. The row itself is the
+ * button that locates the block; the actions sit beside it, never inside it.
  */
 export const ArtifactRow = ({ artifact, position, onLocate, onPreview }: ArtifactRowProps) => {
-  const { copy, download, copied, busy } = useTextArtifactActions(artifact);
-  const Icon = artifact.kind === "table" ? Table2 : Code2;
-  // The visible " · " reads as a comma to assistive tech (spec §11).
-  const spoken = artifact.label.replace(" · ", ", ");
+  const { copied, busy, copy, download } = useTextArtifactActions(artifact);
+  const isTable = artifact.kind === "table";
+  const KindIcon = isTable ? Table2 : Code2;
+  const spoken = spokenLabel(artifact);
 
   return (
-    <div className="artifact-row group">
+    <div className="artifact-row">
       <button
         type="button"
-        className="artifact-row-main"
+        className="artifact-row-btn"
         onClick={onLocate}
         title={`Show in chat — ${artifact.label}`}
         aria-label={`${spoken}, ${position}. Show in chat.`}
       >
         <span className="artifact-row-head">
-          <Icon className="artifact-row-icon" aria-hidden="true" />
+          <KindIcon className="artifact-row-icon" aria-hidden="true" />
           <span className="artifact-row-label">{artifact.label}</span>
-          <span className="artifact-row-position" aria-hidden="true">
-            {position}
-          </span>
         </span>
-        <span className="artifact-row-preview" aria-hidden="true">
-          {previewOf(artifact)}
+        <span className={cn("artifact-row-preview", isTable && "artifact-row-preview-table")}>
+          {previewText(artifact)}
         </span>
+        {/* The bottom line: the position on the left, and the actions pill
+            (a sibling of this button) over its right end. */}
+        <span className="artifact-row-foot">{position}</span>
       </button>
+      {/* Visible on touch, hover-revealed for fine pointers only, as on the
+          image tile: a hover-only control cannot be reached on a phone. */}
       <div className="artifact-row-actions">
         <Button
           variant="ghost"
@@ -59,7 +72,7 @@ export const ArtifactRow = ({ artifact, position, onLocate, onPreview }: Artifac
           className="artifact-row-action tap-expand"
           onClick={onPreview}
           title="Open preview"
-          aria-label={`Open preview of ${artifact.label}`}
+          aria-label={`Open preview of ${spoken}`}
         >
           <Maximize2 className="artifact-row-action-icon" aria-hidden="true" />
         </Button>
@@ -69,8 +82,8 @@ export const ArtifactRow = ({ artifact, position, onLocate, onPreview }: Artifac
           className="artifact-row-action tap-expand"
           disabled={busy}
           onClick={() => void copy()}
-          title={artifact.kind === "table" ? "Copy table" : "Copy code"}
-          aria-label={`Copy ${artifact.label}`}
+          title={isTable ? "Copy table" : "Copy code"}
+          aria-label={`Copy ${spoken}`}
         >
           {copied ? (
             <Check className="artifact-row-action-icon" aria-hidden="true" />
@@ -83,8 +96,8 @@ export const ArtifactRow = ({ artifact, position, onLocate, onPreview }: Artifac
           size="icon"
           className="artifact-row-action tap-expand"
           onClick={download}
-          title="Download"
-          aria-label={`Download ${artifact.label}`}
+          title={isTable ? "Download CSV" : "Download code"}
+          aria-label={`Download ${spoken}`}
         >
           <Download className="artifact-row-action-icon" aria-hidden="true" />
         </Button>

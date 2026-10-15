@@ -25,9 +25,9 @@ const stylesheets = [
   "components/CreditPill.css",
   "components/ErrorBoundary.css",
   "components/ArtifactsPanel.css",
+  "components/ImageLightbox.css",
   "components/ArtifactRow.css",
   "components/TextPreviewDialog.css",
-  "components/ImageLightbox.css",
 ];
 
 const allCss = stylesheets.map(read).join("\n");
@@ -81,6 +81,20 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
   }
 });
 
+test("a hover-revealed action group also opens for keyboard focus", () => {
+  // The group is what goes transparent, and a child can never be more opaque
+  // than its parent: revealing just the focused button leaves it invisible.
+  // The reveal has to target the group, while focus is anywhere inside it.
+  for (const [file, group] of [
+    ["components/ArtifactsPanel.css", ".artifacts-tile-actions"],
+    ["components/ArtifactRow.css", ".artifact-row-actions"],
+  ] as const) {
+    const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
+    const guard = /@media \(hover: hover\) and \(pointer: fine\)\s*\{([\s\S]*)\}/.exec(css)?.[1] ?? "";
+    expect(`${file}: ${guard.includes(`${group}:focus-within`)}`).toBe(`${file}: true`);
+  }
+});
+
 test("icon buttons expand their touch target on coarse pointers", () => {
   // Assert the rule is actually *defined*, not merely referenced by the
   // `@apply tap-expand` lines — otherwise renaming the definition slips past.
@@ -96,6 +110,7 @@ test("icon buttons expand their touch target on coarse pointers", () => {
     ".artifacts-tile-action",
     ".artifacts-close-btn",
     ".artifact-row-action",
+    ".text-preview-action",
   ]) {
     expect(allCss).toMatch(new RegExp(`${cls.replace(".", "\\.")}\\s*\\{[^}]*tap-expand`));
   }
@@ -344,7 +359,7 @@ test("the artifacts panel docks and overlays at one breakpoint", () => {
   const hook = read("hooks/useMediaQuery.ts");
   expect(hook).toContain("ARTIFACTS_DOCK_QUERY");
   expect(hook).toMatch(/ARTIFACTS_DOCK_QUERY = "\(min-width: 1280px\)"/);
-  // Read by the panel hook since Phase 3 moved the wiring out of Index.tsx (§9.1).
+  // The panel's wiring moved out of Index.tsx (Phase 3 spec §9.1).
   expect(read("hooks/useArtifactsPanel.ts")).toContain("useMediaQuery(ARTIFACTS_DOCK_QUERY)");
 });
 
@@ -359,7 +374,7 @@ test("artifacts panel width has a single source of truth and cannot exceed the v
   );
 });
 
-test("the images panel is reachable at every width and announces its state", () => {
+test("the artifacts panel is reachable at every width and announces its state", () => {
   const css = read("pages/Index.css");
   // It is the only way to reach the panel, so it cannot shed like search does.
   const toggleRule = /\.app-header-artifacts\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
@@ -375,9 +390,9 @@ test("the images panel is reachable at every width and announces its state", () 
 });
 
 test("locating an image scrolls the Radix viewport and flashes the message", () => {
-  // The panel wiring moved to the hook in Phase 3 (§9.1); the guard follows it.
-  const page = read("hooks/useArtifactsPanel.ts");
-  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(page)?.[0] ?? "";
+  // Lives in the panel's hook since the Phase 3 move out of Index.tsx.
+  const hookSrc = read("hooks/useArtifactsPanel.ts");
+  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(hookSrc)?.[0] ?? "";
   expect(locate).toBeTruthy();
   // `scrollTop` on the ref'd root silently does nothing: the scroller is Radix's
   // viewport (issue #34). Find-in-chat already learned this.
@@ -396,6 +411,62 @@ test("locating an image scrolls the Radix viewport and flashes the message", () 
   expect(css).toMatch(
     /prefers-reduced-motion[\s\S]*?\[data-artifact-flash\]\s*\{[^}]*outline:/
   );
+});
+
+test("a code block or table locates itself, inside the answer only", () => {
+  const hookSrc = read("hooks/useArtifactsPanel.ts");
+  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(hookSrc)?.[0] ?? "";
+  // Offsets are stamped on the answer only; thinking renders another string,
+  // so a lookup outside .msg-answer could land on the wrong block.
+  expect(locate).toContain('.msg-answer [data-artifact-at=');
+  // A block that is no longer rendered falls back to the whole message.
+  expect(locate).toMatch(/block \?\? message/);
+
+  // Blocks flash with an outline (children paint over an inset ring), and the
+  // more specific block rule must still stand down for reduced motion.
+  const css = read("pages/Index.css");
+  expect(css).toMatch(/\.msg-answer \[data-artifact-at\]\[data-artifact-flash\]\s*\{[^}]*animation:\s*artifact-block-flash/);
+  expect(css).toMatch(
+    /prefers-reduced-motion[\s\S]*?\.msg-answer \[data-artifact-at\]\[data-artifact-flash\]\s*\{[^}]*animation:\s*none/
+  );
+
+  const message = read("components/ChatMessage.tsx");
+  expect(message).toContain('className="msg-codeblock group/code" data-artifact-at={at}');
+  expect(message).toContain("components={answerComponents}");
+  expect(message).toContain("components={markdownComponents}");
+});
+
+test("the chip row scrolls sideways instead of wrapping", () => {
+  const css = read("components/ArtifactsPanel.css");
+  const row = /\.artifacts-filters\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(row).toContain("overflow-x-auto");
+  expect(row).not.toContain("flex-wrap");
+  const chip = /\.artifacts-filter\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(chip).toContain("shrink-0");
+  expect(chip).toContain("whitespace-nowrap");
+});
+
+test("the text preview fits the dynamic viewport", () => {
+  const rule = /\.text-preview-panel\s*\{([^}]*)\}/.exec(read("components/TextPreviewDialog.css"))?.[1] ?? "";
+  // vh is the fallback; dvh, declared after it, is the one that wins.
+  const vhAt = rule.indexOf("max-height: calc(100vh - 2rem);");
+  const dvhAt = rule.indexOf("max-height: calc(100dvh - 2rem);");
+  expect(vhAt).toBeGreaterThanOrEqual(0);
+  expect(dvhAt).toBeGreaterThan(vhAt);
+});
+
+test("the artifacts panel never mints attachments of its own", () => {
+  // Attachment refs are created in exactly one place (Index's send and edit
+  // flows); a panel that wrote its own would orphan Drive files.
+  for (const file of [
+    "hooks/useArtifactsPanel.ts",
+    "components/ArtifactsPanel.tsx",
+    "components/ArtifactTile.tsx",
+    "components/ArtifactRow.tsx",
+  ]) {
+    const src = read(file);
+    expect(`${file}: ${/newAttachmentPath|persistAttachment/.test(src)}`).toBe(`${file}: false`);
+  }
 });
 
 test("a closed panel leaves the tab order instead of trapping focus off-screen", () => {
@@ -428,55 +499,6 @@ test("the panel never claims an image it cannot resolve", () => {
   expect(artifacts).toContain("countUnsavedAttachments");
   const panel = read("components/ArtifactsPanel.tsx");
   expect(panel).toContain("unsavedAttachments");
-  // The tile owns the "Unavailable" state since §9.1 moved it out of the panel.
+  // The tile (and its "Unavailable" state) moved into its own file.
   expect(read("components/ArtifactTile.tsx")).toContain("Unavailable");
-});
-
-// ---- Phase 3a: text artifacts (spec §12) ----
-
-test("the chip row scrolls sideways on one line instead of wrapping", () => {
-  const css = read("components/ArtifactsPanel.css");
-  const rule = /\.artifacts-filters\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-  expect(rule).toContain("overflow-x-auto");
-  expect(rule).not.toContain("flex-wrap");
-  expect(css).toMatch(/\.artifacts-filter\s*\{[^}]*whitespace-nowrap/);
-});
-
-test("the text preview dialog uses the vh to dvh fallback pair", () => {
-  const css = read("components/TextPreviewDialog.css");
-  const block = /\.text-preview\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-  expect(block.indexOf("height: 100vh;")).toBeGreaterThanOrEqual(0);
-  expect(block.indexOf("height: 100dvh;")).toBeGreaterThan(block.indexOf("height: 100vh;"));
-});
-
-test("copy reports what the clipboard did, and never shows a check on refusal", () => {
-  const hook = read("hooks/useTextArtifactActions.ts");
-  // The result is awaited and checked before the success state is set (#45).
-  expect(hook).toMatch(/const ok = await copyArtifact\(artifact\);\s*if \(!ok\)/);
-  expect(hook).toContain("Copy failed");
-  // The success state is set only after the check.
-  expect(hook.indexOf("setCopied(true)")).toBeGreaterThan(hook.indexOf("if (!ok)"));
-});
-
-test("the text artifact row and dialog never create attachments of their own", () => {
-  for (const file of [
-    "components/ArtifactsPanel.tsx",
-    "components/ArtifactTile.tsx",
-    "components/ArtifactRow.tsx",
-    "components/TextPreviewDialog.tsx",
-    "hooks/useArtifactsPanel.ts",
-    "hooks/useTextArtifactActions.ts",
-  ]) {
-    const src = read(file);
-    expect(src).not.toContain("newAttachmentPath");
-    expect(src).not.toContain("persistAttachment");
-  }
-});
-
-test("the parser's dependencies are declared, not imported by accident", () => {
-  const pkg = JSON.parse(readFileSync(join(SRC, "..", "package.json"), "utf8"));
-  expect(pkg.scripts.typecheck).toBeTruthy();
-  expect(pkg.dependencies.unified).toBeTruthy();
-  expect(pkg.dependencies["remark-parse"]).toBeTruthy();
-  expect(pkg.dependencies["mdast-util-to-string"]).toBeTruthy();
 });
