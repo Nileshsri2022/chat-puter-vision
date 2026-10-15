@@ -9,9 +9,14 @@
 // Everything here is pure and derived per render. Messages are keyed by array
 // index and deletion splices the array, so a stored index would go stale —
 // deriving the list from the transcript makes that impossible.
+//
+// Phase 3 adds text artifacts (code blocks and tables from assistant answers,
+// see lib/artifactBlocks.ts) beside the images. The Phase 1 exports below are
+// unchanged; the union and `collectArtifacts` are additive.
 
 import type { Message } from "./backend";
 import { hasImageMarker, imageMarkerCount } from "./attachments";
+import { extractTextBlocks } from "./artifactBlocks";
 
 export type ImageArtifactKind = "generated" | "attached" | "legacy";
 
@@ -147,4 +152,111 @@ export function countByKind(
     },
     { generated: 0, attached: 0, legacy: 0 } as Record<ImageArtifactKind, number>
   );
+}
+
+// ---- Phase 3: text artifacts ----
+
+/** "ocr" joins in PR 3b, together with the provenance that produces it. */
+export type TextArtifactKind = "code" | "table";
+/** The flat union: every Phase 1 `a.kind === "generated"` check stays correct. */
+export type ArtifactKind = ImageArtifactKind | TextArtifactKind;
+
+interface TextArtifactBase {
+  /** `${messageIndex}:${kind}:${n}`, the Phase 1 id scheme; `n` counts from 0. */
+  id: string;
+  messageIndex: number;
+  role: "user" | "assistant";
+  /** "Python · 24 lines", "Table · 5 × 3". */
+  label: string;
+  /** What copy and download start from. */
+  text: string;
+  model?: string;
+}
+
+export interface CodeArtifact extends TextArtifactBase {
+  kind: "code";
+  /** The fence info string's first word. */
+  language?: string;
+  lines: number;
+  /** Offset of the block in the rendered answer (`data-artifact-at`). */
+  at: number;
+}
+
+export interface TableArtifact extends TextArtifactBase {
+  kind: "table";
+  header: string[];
+  /** Cell text; `text` holds the table's Markdown. */
+  rows: string[][];
+  at: number;
+}
+
+export type TextArtifact = CodeArtifact | TableArtifact;
+export type Artifact = ImageArtifact | TextArtifact;
+
+/**
+ * Narrow to the Phase 1 image kinds. Test this first in exhaustive code: with
+ * `strict` off, ruling out a single image kind does not remove the member.
+ */
+export function isImageArtifact(a: Artifact): a is ImageArtifact {
+  return a.kind === "generated" || a.kind === "attached" || a.kind === "legacy";
+}
+
+/** Where to land when locating an artifact. Without `at`, the message flashes. */
+export interface LocateOptions {
+  /** A code block's or table's offset in the answer (`data-artifact-at`). */
+  at?: number;
+}
+
+function textArtifactsOf(message: Message, messageIndex: number): TextArtifact[] {
+  const blocks = extractTextBlocks(message);
+  if (blocks.length === 0) return [];
+  const seen: Record<TextArtifactKind, number> = { code: 0, table: 0 };
+  return blocks.map((block): TextArtifact => {
+    const base = {
+      id: `${messageIndex}:${block.kind}:${seen[block.kind]++}`,
+      messageIndex,
+      role: "assistant" as const,
+      label: block.label,
+      text: block.text,
+      model: message.model,
+    };
+    return block.kind === "code"
+      ? { ...base, kind: "code", language: block.language, lines: block.lines, at: block.at }
+      : { ...base, kind: "table", header: block.header, rows: block.rows, at: block.at };
+  });
+}
+
+/**
+ * Every artifact in the transcript. Messages stay in transcript order; within
+ * a message, its images come first (in `collectImageArtifacts` order, which
+ * this reuses rather than repeats), then its code blocks and tables in
+ * document order. Never throws: text extraction swallows its own failures.
+ */
+export function collectArtifacts(messages: Message[]): Artifact[] {
+  const images = collectImageArtifacts(messages);
+  const artifacts: Artifact[] = [];
+  let next = 0;
+  messages.forEach((message, messageIndex) => {
+    while (next < images.length && images[next].messageIndex === messageIndex) {
+      artifacts.push(images[next++]);
+    }
+    artifacts.push(...textArtifactsOf(message, messageIndex));
+  });
+  // Unreachable while both walks visit the same indices; kept so an image can
+  // never be dropped silently if that ever changes.
+  while (next < images.length) artifacts.push(images[next++]);
+  return artifacts;
+}
+
+/** Per-kind counts across every kind, for the panel's chips. */
+export function countArtifactKinds(artifacts: Artifact[]): Record<ArtifactKind, number> {
+  const counts: Record<ArtifactKind, number> = {
+    generated: 0,
+    attached: 0,
+    legacy: 0,
+    code: 0,
+    table: 0,
+  };
+  for (const a of artifacts) counts[a.kind] += 1;
+  return counts;
 }
