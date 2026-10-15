@@ -1,0 +1,100 @@
+/* Full-height overlay, same stacking as the image lightbox. The vh line is the
+   fallback; dvh wins where it is supported (browser chrome can hide). */
+.text-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 0.7);
+  height: 100vh;
+  height: 100dvh;
+}
+
+.text-preview-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(56rem, 100%);
+  max-height: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.text-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.text-preview-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.text-preview-tools {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+}
+
+.text-preview-btn {
+  position: relative;
+  height: 2rem;
+  width: 2rem;
+}
+
+.text-preview-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.text-preview-body {
+  overflow: auto;
+  padding: 0.75rem;
+  min-height: 0;
+}
+
+.text-preview-pre {
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.text-preview-table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.text-preview-table th,
+.text-preview-table td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.text-preview-table th {
+  font-weight: 600;
+  background: hsl(var(--muted));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-preview-btn {
+    transition: none;
+  }
+}

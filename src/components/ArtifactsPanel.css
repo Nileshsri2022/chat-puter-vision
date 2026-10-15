@@ -60,11 +60,17 @@
 
 /* Filter row. Rendered only when more than one kind is present. */
 .artifacts-filters {
-  @apply flex shrink-0 gap-1 border-b border-border px-3 py-2;
+  @apply flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 py-2;
+  /* One line that scrolls sideways; a chip never wraps (spec §6.2). */
+  scrollbar-width: none;
+}
+
+.artifacts-filters::-webkit-scrollbar {
+  display: none;
 }
 
 .artifacts-filter {
-  @apply inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  @apply inline-flex min-w-0 shrink-0 items-center whitespace-nowrap gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
 }
 
 .artifacts-filter-active {
@@ -84,8 +90,24 @@
   display: block !important;
 }
 
+.artifacts-body {
+  @apply flex flex-col;
+}
+
+.artifacts-group + .artifacts-group {
+  @apply border-t border-border;
+}
+
+.artifacts-group-title {
+  @apply px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground;
+}
+
 .artifacts-grid {
   @apply grid grid-cols-2 gap-2 p-3;
+}
+
+.artifacts-rows {
+  @apply flex flex-col gap-2 p-3;
 }
 
 .artifacts-tile {

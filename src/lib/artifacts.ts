@@ -12,6 +12,7 @@
 
 import type { Message } from "./backend";
 import { hasImageMarker, imageMarkerCount } from "./attachments";
+import { blocksForMessage, codeLabel, tableLabel } from "./artifactBlocks";
 
 export type ImageArtifactKind = "generated" | "attached" | "legacy";
 
@@ -147,4 +148,116 @@ export function countByKind(
     },
     { generated: 0, attached: 0, legacy: 0 } as Record<ImageArtifactKind, number>
   );
+}
+
+// ---- Phase 3: the flat union (spec §5.1) ----
+//
+// Everything above is Phase 1 and unchanged. The image kinds keep their exact
+// shape; the union grows around them. `kind` stays the discriminant, so every
+// `a.kind === "generated"` check still means what it meant.
+
+export type TextArtifactKind = "code" | "table";
+export type ArtifactKind = ImageArtifactKind | TextArtifactKind;
+
+interface TextArtifactBase {
+  /** `${messageIndex}:${kind}:${n}`, the Phase 1 id scheme. */
+  id: string;
+  messageIndex: number;
+  role: "user" | "assistant";
+  /** "Python · 24 lines", "Table · 5 × 3". */
+  label: string;
+  /** What copy and download start from. */
+  text: string;
+  model?: string;
+}
+
+export interface CodeArtifact extends TextArtifactBase {
+  kind: "code";
+  language?: string;
+  lines: number;
+  /** Offset of the block in the rendered answer (spec §6.5). */
+  at: number;
+}
+
+export interface TableArtifact extends TextArtifactBase {
+  kind: "table";
+  header: string[];
+  rows: string[][];
+  at: number;
+}
+
+export type TextArtifact = CodeArtifact | TableArtifact;
+export type Artifact = ImageArtifact | TextArtifact;
+
+const IMAGE_KINDS: ReadonlySet<string> = new Set<ImageArtifactKind>(["generated", "attached", "legacy"]);
+
+export function isImageArtifact(a: Artifact): a is ImageArtifact {
+  return IMAGE_KINDS.has(a.kind);
+}
+
+/**
+ * Every artifact in the transcript, in transcript order. A message contributes
+ * its image artifacts first (Phase 1 precedence), then its code and tables in
+ * document order. Derived on each render, never stored.
+ */
+export function collectArtifacts(messages: Message[]): Artifact[] {
+  const images = collectImageArtifacts(messages);
+  const out: Artifact[] = [];
+  let next = 0;
+  messages.forEach((message, messageIndex) => {
+    while (next < images.length && images[next].messageIndex === messageIndex) {
+      out.push(images[next]);
+      next += 1;
+    }
+    out.push(...collectTextArtifacts(message, messageIndex));
+  });
+  return out;
+}
+
+function collectTextArtifacts(message: Message, messageIndex: number): TextArtifact[] {
+  const blocks = blocksForMessage(message);
+  if (blocks.length === 0) return [];
+  const role: "user" | "assistant" = "assistant";
+  const counts: Record<TextArtifactKind, number> = { code: 0, table: 0 };
+  const out: TextArtifact[] = [];
+  for (const block of blocks) {
+    const n = counts[block.kind];
+    counts[block.kind] += 1;
+    const id = `${messageIndex}:${block.kind}:${n}`;
+    if (block.kind === "code") {
+      out.push({
+        id,
+        kind: "code",
+        messageIndex,
+        role,
+        label: codeLabel(block),
+        text: block.value,
+        model: message.model,
+        language: block.language,
+        lines: block.lines,
+        at: block.at,
+      });
+    } else {
+      out.push({
+        id,
+        kind: "table",
+        messageIndex,
+        role,
+        label: tableLabel(block),
+        text: block.source,
+        model: message.model,
+        header: block.header,
+        rows: block.rows,
+        at: block.at,
+      });
+    }
+  }
+  return out;
+}
+
+/** Per-kind counts over the full union. `countByKind` keeps its Phase 1 shape. */
+export function countArtifactKinds(artifacts: Artifact[]): Record<ArtifactKind, number> {
+  const acc: Record<ArtifactKind, number> = { generated: 0, attached: 0, legacy: 0, code: 0, table: 0 };
+  for (const a of artifacts) acc[a.kind] += 1;
+  return acc;
 }

@@ -11,6 +11,7 @@ import { test, expect } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { collectArtifacts } from "@/lib/artifacts";
 
 test("a text-only answer opens no overlay", () => {
   const html = renderToStaticMarkup(
@@ -66,4 +67,38 @@ test("the overlay renders the image it was given", () => {
   expect(html).toContain('role="dialog"');
   expect(html).toContain('src="data:image/png;base64,AAAA"');
   expect(html).toContain("receipt.jpg");
+});
+
+// ---- Phase 3a: block offsets (spec §6.5) ----
+
+const MIXED_ANSWER = [
+  "Here it is:",
+  "",
+  "```python",
+  "print('hi')",
+  "```",
+  "",
+  "| A | B |",
+  "|---|---|",
+  "| 1 | 2 |",
+  "",
+  "    indented()",
+].join("\n");
+
+test("the answer stamps each block with the offset the collector reports", () => {
+  const html = renderToStaticMarkup(
+    <ChatMessage role="assistant" content={MIXED_ANSWER} messageIndex={3} />
+  );
+  const stamped = [...html.matchAll(/data-artifact-at="(\d+)"/g)].map((m) => Number(m[1]));
+  const collected = collectArtifacts([{ role: "assistant", content: MIXED_ANSWER }])
+    .filter((a) => a.kind === "code" || a.kind === "table")
+    .map((a) => (a.kind === "code" || a.kind === "table" ? a.at : -1));
+  expect(collected).toHaveLength(3);
+  expect(stamped.sort((a, b) => a - b)).toEqual(collected.sort((a, b) => a - b));
+});
+
+test("the thinking section stamps nothing, so its offsets cannot collide", () => {
+  const content = "<think>\n```js\nlet a = 1\n```\n</think>\n\nThe answer is 4.";
+  const html = renderToStaticMarkup(<ChatMessage role="assistant" content={content} />);
+  expect(html).not.toContain("data-artifact-at");
 });
