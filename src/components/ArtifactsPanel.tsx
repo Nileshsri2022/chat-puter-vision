@@ -10,18 +10,18 @@ import {
   basenameOf,
   countByKind,
   KIND_LABEL,
-  type ImageArtifact,
-  type ImageArtifactKind,
+  type Artifact,
+  type ArtifactKind,
 } from "@/lib/artifacts";
 import { loadImageBlob } from "@/lib/images";
 import { copyToClipboard, dataUrlToBlob, downloadBlob } from "@/lib/utils/export";
 import "./ArtifactsPanel.css";
 
-type Filter = "all" | ImageArtifactKind;
+type Filter = "all" | ArtifactKind;
 
 interface ArtifactsPanelProps {
   /** Images in the open conversation, in transcript order. */
-  artifacts: ImageArtifact[];
+  artifacts: Artifact[];
   /** Attachments claimed by a legacy marker whose bytes were never stored. */
   unsavedAttachments: number;
   /** A `txt2img` call is in flight; the panel shows a pending tile. */
@@ -33,22 +33,25 @@ interface ArtifactsPanelProps {
 }
 
 /** Kind badge copy. `legacy` reads as an attachment: that is what it was. */
-const KIND_BADGE: Record<ImageArtifactKind, string> = {
-  generated: "Generated",
-  attached: "Attached",
-  legacy: "Attached",
+const KIND_BADGE: Record<ArtifactKind, string> = {
+  image: "Image",
+  code: "Code",
+  table: "Table",
+  ocr: "OCR Text",
+  export: "Export",
 };
 
 /** The bytes behind an artifact, for copy and download. Null when unreachable. */
-async function resolveBlob(artifact: ImageArtifact): Promise<Blob | null> {
-  if (artifact.path) {
+async function resolveBlob(artifact: Artifact): Promise<Blob | null> {
+  const path = artifact.data?.image?.path;
+  if (path) {
     try {
-      return await loadImageBlob(artifact.path);
+      return await loadImageBlob(path);
     } catch {
       return null;
     }
   }
-  const src = artifact.src;
+  const src = artifact.data?.code?.content || artifact.data?.table?.html || artifact.data?.ocr?.text || artifact.data?.export?.content;
   if (!src) return null;
   if (src.startsWith("data:")) return dataUrlToBlob(src);
   try {
@@ -59,12 +62,25 @@ async function resolveBlob(artifact: ImageArtifact): Promise<Blob | null> {
   }
 }
 
-function filenameFor(artifact: ImageArtifact): string {
+function filenameFor(artifact: Artifact): string {
   // `label` is the original file name when the browser gave one.
-  if (artifact.label !== KIND_LABEL.attached && artifact.label !== KIND_LABEL.generated) {
-    return artifact.label;
+  const kind = artifact.kind;
+  if (kind === "image" && (artifact.label === "Attached" || artifact.label === "Image")) {
+    return artifact.path ? basenameOf(artifact.path) : "image.png";
   }
-  return artifact.path ? basenameOf(artifact.path) : "image.png";
+  if (kind === "code" && artifact.label === "Attached") {
+    return "code.snippet";
+  }
+  if (kind === "table" && artifact.label === "Attached") {
+    return "table.html";
+  }
+  if (kind === "ocr" && artifact.label === "Attached") {
+    return "ocr-text.txt";
+  }
+  if (kind === "export" && artifact.label === "Attached") {
+    return "export.md";
+  }
+  return artifact.label || "artifact";
 }
 
 /** One thumbnail. Its own component so the image hook runs per tile. */
@@ -74,12 +90,12 @@ const ArtifactTile = ({
   onLocate,
   onPreview,
 }: {
-  artifact: ImageArtifact;
+  artifact: Artifact;
   position: string;
   onLocate: () => void;
   onPreview: (src: string) => void;
 }) => {
-  const { src, failed } = usePuterImage(artifact.path, artifact.src);
+  const { src, failed } = usePuterImage(artifact.data?.image?.path || artifact.data?.code?.content || artifact.data?.table?.html || artifact.data?.ocr?.text || artifact.data?.export?.content, undefined);
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);

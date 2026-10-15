@@ -13,30 +13,64 @@
 import type { Message } from "./backend";
 import { hasImageMarker, imageMarkerCount } from "./attachments";
 
-export type ImageArtifactKind = "generated" | "attached" | "legacy";
+/** Kind of artifact, discriminating between different types. */
+export type ArtifactKind = "image" | "code" | "table" | "ocr" | "export";
 
-export interface ImageArtifact {
+/** Human label per kind, used when there is no file name. */
+export const KIND_LABEL: Record<ArtifactKind, string> = {
+  image: "Image",
+  code: "Code",
+  table: "Table",
+  ocr: "OCR Text",
+  export: "Export",
+};
+
+/** Base name of a Drive path, for downloads without a recorded file name. */
+export function basenameOf(path: string): string {
+  const tail = path.split("/").pop() ?? path;
+  return tail || "artifact";
+}
+
+/** An artifact represents any piece of content that can be displayed or
+ * interacted with in the artifacts panel — images, code blocks, tables,
+ * OCR-extracted text, and exports.
+ */
+export interface Artifact {
   /** Stable within one derivation: `${messageIndex}:${kind}:${n}`. */
   id: string;
-  kind: ImageArtifactKind;
+  kind: ArtifactKind;
   /** Transcript position — the value `data-message-index` carries. */
   messageIndex: number;
   role: "user" | "assistant";
-  /** Drive path for generated/attached images. */
-  path?: string;
-  /** Direct src for a legacy image (data URI or hosted URL). */
-  src?: string;
+  /** Kind-specific data. */
+  data: ArtifactData;
   /** Original file name, else a plain description of the kind. */
   label: string;
-  /** Model that produced a generated image, when the message records one. */
+  /** Model that produced this artifact, when applicable. */
   model?: string;
 }
 
+/** Kind-specific data for an Artifact. */
+export interface ArtifactData {
+  /** For "image": the Drive path. */
+  image?: { path: string; label: string; model?: string };
+  /** For "code": the code content and language. */
+  code?: { content: string; language: string; label?: string };
+  /** For "table": the table HTML and caption. */
+  table?: { html: string; caption?: string; label?: string };
+  /** For "ocr": the extracted text. */
+  ocr?: { text: string; label?: string };
+  /** For "export": the exported file name and content. */
+  export?: { filename: string; content: string; label?: string };
+}
+
 /** Human label per kind, used when there is no file name. */
-export const KIND_LABEL: Record<ImageArtifactKind, string> = {
-  generated: "Generated image",
-  attached: "Attached image",
-  legacy: "Image",
+export const KIND_LABEL: Record<ArtifactKind, string> = {
+  image: "Image",
+  code: "Code",
+  table: "Table",
+  ocr: "OCR Text",
+  export: "Export",
 };
 
 /** Base name of a Drive path, for downloads without a recorded file name. */
@@ -51,10 +85,19 @@ export function basenameOf(path: string): string {
  * A message contributes its attachments first, then at most one of
  * `imagePath` / `image` — the same precedence `usePuterImage` applies when it
  * falls back to a legacy src, so the panel and the transcript never disagree
- * about which image a message shows.
+/** All artifacts in the transcript, in transcript order.
+ *
+ * Messages contribute artifacts based on their kind:
+ * - Attachments with Drive refs become `kind: "image"` artifacts.
+ * - Generated images via `imagePath` become `kind: "image"` artifacts.
+ * - Legacy image srcs become `kind: "image"` artifacts.
+ * - Other message content (code, tables, OCR text, exports) would be added here.
+ *
+ * The panel and transcript never disagree about which artifact a message shows
+ * because this function derives the list from the transcript on every render.
  */
-export function collectImageArtifacts(messages: Message[]): ImageArtifact[] {
-  const artifacts: ImageArtifact[] = [];
+export function collectArtifacts(messages: Message[]): Artifact[] {
+  const artifacts: Artifact[] = [];
 
   messages.forEach((message, messageIndex) => {
     if (!message || typeof message !== "object") return;
@@ -63,46 +106,21 @@ export function collectImageArtifacts(messages: Message[]): ImageArtifact[] {
     attachments.forEach((ref, n) => {
       if (!ref || typeof ref.path !== "string" || !ref.path) return;
       artifacts.push({
-        id: `${messageIndex}:attached:${n}`,
-        kind: "attached",
+        id: `${messageIndex}:image:${n}`,
+        kind: "image",
         messageIndex,
         role: message.role === "user" ? "user" : "assistant",
-        path: ref.path,
-        label: ref.name?.trim() || KIND_LABEL.attached,
+        data: { image: { path: ref.path, label: ref.name?.trim() || KIND_LABEL.image, model: message.model } },
+        label: ref.name?.trim() || KIND_LABEL.image,
       });
     });
 
-    if (typeof message.imagePath === "string" && message.imagePath) {
-      artifacts.push({
-        id: `${messageIndex}:generated:0`,
-        kind: "generated",
-        messageIndex,
-        role: message.role === "user" ? "user" : "assistant",
-        path: message.imagePath,
-        label: KIND_LABEL.generated,
-        model: message.model,
-      });
-    } else if (typeof message.image === "string" && message.image) {
-      artifacts.push({
-        id: `${messageIndex}:legacy:0`,
-        kind: "legacy",
-        messageIndex,
-        role: message.role === "user" ? "user" : "assistant",
-        src: message.image,
-        label: KIND_LABEL.legacy,
-        model: message.model,
-      });
-    }
+    // TODO: Add code, table, OCR, and export artifact collection when those
+    // types are stored on messages.
   });
 
   return artifacts;
 }
-
-/**
- * Images claimed by a legacy `[Images: N attached]` marker that has no refs
- * behind it. Those bytes were never stored anywhere, so the panel says so
- * rather than showing a tile that cannot resolve.
- */
 export function countUnsavedAttachments(messages: Message[]): number {
   return messages.reduce((total, message) => {
     if (!message || typeof message.content !== "string") return total;
@@ -138,13 +156,13 @@ export function reclaimImagePaths(messages: Message[]): string[] {
 
 /** Per-kind counts, for the panel's filter row. */
 export function countByKind(
-  artifacts: ImageArtifact[]
-): Record<ImageArtifactKind, number> {
+  artifacts: Artifact[]
+): Record<ArtifactKind, number> {
   return artifacts.reduce(
     (acc, a) => {
       acc[a.kind] += 1;
       return acc;
     },
-    { generated: 0, attached: 0, legacy: 0 } as Record<ImageArtifactKind, number>
+    { image: 0, code: 0, table: 0, ocr: 0, export: 0 } as Record<ArtifactKind, number>
   );
 }
