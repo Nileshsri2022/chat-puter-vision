@@ -45,6 +45,13 @@ export const ImageLightbox = ({ src, alt, caption, onClose }: ImageLightboxProps
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  // No image, no overlay. An `src` that never resolved (a Drive read still in
+  // flight, a failed one) would otherwise paint an empty <img> — the browser
+  // shows its broken-image glyph next to the alt text, over the whole app.
+  // Callers pass a nullable URL for exactly that reason, so refusing here is
+  // what keeps a preview from appearing before there is something to preview.
+  if (!src) return null;
+
   return (
     <div
       className="lightbox"
