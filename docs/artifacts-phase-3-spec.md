@@ -1,6 +1,6 @@
 # Artifacts, Phase 3 — Technical Spec
 
-**Status:** draft for review · **Branch:** `arena/d627f263-chat-puter-vision`
+**Status:** approved in #67 · **3a implemented** (see §13.1) · 3b and 3c not started · **Branch:** `arena/d627f263-chat-puter-vision`
 **Builds on:** [`image-artifacts-panel-spec.md`](image-artifacts-panel-spec.md) (Phase 1, shipped in #63; Phase 2 items in #64–#66)
 **Scope chosen:** code + tables + OCR text (OCR for new messages only) · exports deferred · library as a "This chat / All chats" switch in the existing panel · using a text artifact inserts editable text into the composer
 
@@ -541,6 +541,21 @@ Phase 1 tests pass unedited, with two exceptions: the strings renamed in §6.1, 
 | **3c** | Scope switch, `groupConversations`, `collectLibrary` with idle indexing, search, locating in another chat, `useInView`, read concurrency, the bounded cache | Better to land #7 first. |
 
 Each PR updates `README.md` (Features and the test list) and the status line of this spec.
+
+### 13.1 Notes from 3a
+
+Where 3a departs from the text above, and what 3b and 3c inherit:
+
+- **Empty state.** The second line names only what 3a collects: "Images, code blocks and tables collect here so you can jump back to them." 3b restores the §6.2 line once text from images is collected.
+- **Row layout.** "message N" sits on the row's bottom line, with the actions over its right end, instead of at the top right. Actions are always visible on touch, and this way they can never cover text.
+- **Spoken table size.** A table row's accessible name says "Table, 5 rows, 3 columns" rather than reading "5 × 3" aloud.
+- **Pending tile.** It shows under All and Generated, not under Attached.
+- **Empty fences** are not collected: they have nothing to copy or reuse.
+- **Block flash.** Code blocks and tables flash with an animated outline. Their own children paint over the message flash's inset ring. The rule has its own reduced-motion override.
+- **Not yet exported.** `resolveBlob` and `filenameFor` stay private to `ArtifactTile.tsx`, because exporting helpers from a component file breaks Fast Refresh (lint). When 3b needs them for "use", move them to a `lib/` module instead.
+- **New file.** `hooks/useTextArtifactActions.ts` holds copy and download for a text artifact, shared by its row and by `TextPreviewDialog`. 3b's "use" action can sit beside them.
+- **Tests.** Extraction and format tests live in `tests/artifactBlocks.test.ts` rather than `tests/artifacts.test.ts`, which is already past 500 lines.
+- **Fixed on the way.** A Phase 1 tile hid its actions from keyboard users: the reveal targeted the focused button inside a transparent group. A second locate within the flash window also left the first element outlined under reduced motion.
 
 ## 14. Risks
 

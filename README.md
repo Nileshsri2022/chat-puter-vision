@@ -38,7 +38,7 @@ Built with React and TypeScript, the app supports light and dark themes, a docke
 | **Rich messages** | Render Markdown, tables, fenced code blocks, and generated images; copy messages or individual code blocks. |
 | **Conversation organization** | Search titles and message content, rename and pin chats, and delete individual or multiple conversations. |
 | **Find in chat** | Search the active transcript with highlighted matches, a match counter, and previous/next navigation. |
-| **Image index** | Open the panel on the right for every image in the conversation — attached and generated — filtered by kind. Click a thumbnail to jump to the message that produced it, or preview, copy, or download it directly. Attached and generated images are stored in your Puter Drive, so they survive a reload and follow you to another device; deleting a message or a chat reclaims them. |
+| **Artifacts panel** | Open the panel on the right for what the conversation produced: every image (attached and generated) plus the code blocks and tables in the model's answers, filtered by kind. Click an entry to jump to the message, or straight to the code block or table, or preview, copy, or download it directly: code as a source file, a table as CSV or as a table that pastes into documents. Attached and generated images are stored in your Puter Drive, so they survive a reload and follow you to another device; deleting a message or a chat reclaims them. |
 | **Image tools** | Attach up to four images to a vision-capable model. Attachments are converted to a supported format when needed and shrunk before sending (long edge ≤ 1568 px, ≈1.2 MB each), then sent as data URLs inside `image_url` blocks. Extract text with OCR or generate an image from a prompt. |
 | **Voice tools** | Click the microphone to start recording and click again to stop — a recording always stays stoppable, including while a reply streams. The elapsed time is shown, recordings stop automatically after five minutes, and the audio is decoded to 16 kHz mono WAV before transcription. Review the transcription before sending. Read assistant replies aloud. |
 | **Export and sharing** | Export the active conversation as Markdown, copy content, or use native sharing where supported. |
@@ -76,7 +76,7 @@ Open **http://localhost:8080**. The Puter SDK is loaded by `index.html`; no prov
 3. Type a message, dictate a draft, or attach images, then send. **Enter** sends a message; **Shift + Enter** adds a new line.
 4. Use the message actions to copy, regenerate, read aloud, share, or delete a reply.
 5. Use the header's search control to find text in the current chat, or its export menu to download Markdown.
-6. Use the header's images control to open the image index for the chat and jump back to any picture you attached or the model generated.
+6. Use the header's artifacts control (the stacked-layers icon) to open the artifacts panel for the chat and jump back to any picture, code block, or table.
 
 ## Development
 
@@ -90,10 +90,10 @@ Open **http://localhost:8080**. The Puter SDK is loaded by `index.html`; no prov
 | `npm run build:dev` | Build using Vite's development mode. |
 | `npm run preview` | Serve the production bundle locally after building. |
 | `npm run lint` | Run ESLint across the repository. |
-| `npx tsc --noEmit -p tsconfig.app.json` | Type-check the application without emitting files. |
+| `npm run typecheck` | Type-check the application without emitting files (`tsc --noEmit -p tsconfig.app.json`). |
 | `npm test` | Run the Bun test suite; Bun must be installed. |
 
-Tests in [`tests/`](tests/) cover streaming, model metadata, media helpers, attachment preparation (`tests/attachments.test.ts`), image conversion and downscaling (`tests/imageConversion.test.ts`), recording/transcription helpers (`tests/audio.test.ts`), account APIs, cloud-sync merging, text-to-speech, Drive export helpers, the image-artifact index (`tests/artifacts.test.ts` and the panel render smoke test `tests/artifactsPanel.test.tsx`), and responsive-layout guards. SDK calls are mocked, and storage tests use an in-memory `localStorage` shim; these are not live-provider integration tests.
+Tests in [`tests/`](tests/) cover streaming, model metadata, media helpers, attachment preparation (`tests/attachments.test.ts`), image conversion and downscaling (`tests/imageConversion.test.ts`), recording/transcription helpers (`tests/audio.test.ts`), account APIs, cloud-sync merging, text-to-speech, Drive export helpers, the artifacts index (images in `tests/artifacts.test.ts`, code-block and table extraction plus CSV and clipboard formats in `tests/artifactBlocks.test.ts`, and the panel render smoke test `tests/artifactsPanel.test.tsx`), and responsive-layout guards. SDK calls are mocked, and storage tests use an in-memory `localStorage` shim; these are not live-provider integration tests.
 
 **Known baseline failures:** the existing Drive export test expects the old folder name ([#55](https://github.com/Nileshsri2022/chat-puter-vision/issues/55)), and ESLint reports two blocking violations ([#56](https://github.com/Nileshsri2022/chat-puter-vision/issues/56)). When submitting a change, distinguish these existing failures from any new regressions rather than disabling checks.
 
@@ -114,7 +114,7 @@ The [Android APK workflow](.github/workflows/android-apk.yml) builds release APK
 ```text
 src/
 ├── components/              # Composer, messages, sidebar, model picker, UI primitives
-├── hooks/                   # Toast notifications and media-query subscriptions
+├── hooks/                   # Toast notifications, media-query subscriptions, artifacts-panel state
 ├── lib/
 │   ├── backend.ts           # Typed Puter SDK and authentication helpers
 │   ├── streamingHandler.ts  # Streaming response handling and reasoning-block cleanup
@@ -122,6 +122,9 @@ src/
 │   ├── puterModels.generated.ts # Bundled picker catalog and category metadata
 │   ├── sync.ts              # KV synchronization, merge logic, deletion tombstones
 │   ├── attachments.ts       # Image attachments: format conversion, downscaling, data URLs
+│   ├── artifacts.ts         # The artifacts panel's index: images, code blocks, tables
+│   ├── artifactBlocks.ts    # Code-block and table extraction from model answers
+│   ├── artifactFormats.ts   # CSV, clipboard and download formats for code and tables
 │   ├── audio.ts             # Recorder container selection, WAV encoding, duration helpers
 │   ├── dataUrl.ts           # data: URL encode/decode helpers shared by attachments and speech
 │   ├── images.ts            # Image generation
