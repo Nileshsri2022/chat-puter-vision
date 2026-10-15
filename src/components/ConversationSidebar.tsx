@@ -1,16 +1,7 @@
-import { Plus, PanelLeftClose, Trash2, Search, MoreHorizontal, Pencil, Pin, Share2, ListChecks, X, CircleUserRound, ChevronsUpDown, LogOut } from "lucide-react";
+import { Plus, PanelLeftClose, Trash2, Search, MoreHorizontal, Pencil, Pin, Share2, ListChecks, X, CircleUserRound, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { ProfileInfo } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { useState, useRef, useEffect, useMemo } from "react";
@@ -35,10 +26,15 @@ interface ConversationSidebarProps {
   onRenameConversation: (id: string, title: string) => void;
   onTogglePin: (id: string) => void;
   onShareConversation: (id: string) => void;
-  /** Account block pinned to the bottom of the rail. */
+  /**
+   * Account block pinned to the bottom of the rail. The name/picture are the
+   * effective identity (app profile → Puter profile → username); the click
+   * opens the profile section.
+   */
   isAuthenticated: boolean;
-  profile: ProfileInfo | null;
-  onSignOut: () => void;
+  accountName: string;
+  accountPicture: string | null;
+  onOpenAccount: () => void;
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -58,8 +54,9 @@ export const ConversationSidebar = ({
   onTogglePin,
   onShareConversation,
   isAuthenticated,
-  profile,
-  onSignOut,
+  accountName,
+  accountPicture,
+  onOpenAccount,
 }: ConversationSidebarProps) => {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -406,40 +403,27 @@ export const ConversationSidebar = ({
         </ScrollArea>
 
         {/* Account — pinned to the bottom of the rail, above the select bar
-            when that mode is active. */}
+            when that mode is active. Opens the profile section, which carries
+            the account details, the editable name/bio/picture, and sign out. */}
         {isAuthenticated && (
           <div className="sidebar-footer">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="sidebar-account-btn"
-                  title={profile?.name ?? "Account"}
-                  aria-label={`Account menu: ${profile?.name ?? "Account"}`}
-                >
-                  {profile?.picture ? (
-                    <img src={profile.picture} alt="" className="sidebar-account-img" />
-                  ) : (
-                    <span className="sidebar-account-avatar" aria-hidden="true">
-                      <CircleUserRound className="sidebar-account-avatar-icon" />
-                    </span>
-                  )}
-                  <span className="sidebar-account-name">{profile?.name ?? "Account"}</span>
-                  <ChevronsUpDown className="sidebar-account-chevron" aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-              {/* Opens upward: the trigger sits at the very bottom of the rail. */}
-              <DropdownMenuContent align="start" side="top" className="sidebar-account-menu">
-                <DropdownMenuLabel className="sidebar-account-label">
-                  {profile?.name ?? "Account"}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onSignOut} className="gap-2">
-                  <LogOut className="sidebar-account-menu-icon" aria-hidden="true" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              type="button"
+              className="sidebar-account-btn"
+              onClick={onOpenAccount}
+              title={accountName}
+              aria-label={`Open profile: ${accountName}`}
+            >
+              {accountPicture ? (
+                <img src={accountPicture} alt="" className="sidebar-account-img" />
+              ) : (
+                <span className="sidebar-account-avatar" aria-hidden="true">
+                  <CircleUserRound className="sidebar-account-avatar-icon" />
+                </span>
+              )}
+              <span className="sidebar-account-name">{accountName}</span>
+              <ChevronsUpDown className="sidebar-account-chevron" aria-hidden="true" />
+            </button>
           </div>
         )}
 

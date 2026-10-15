@@ -1,7 +1,14 @@
 import { test, expect } from "bun:test";
-import { mockPuter, throwsMsg } from "./helpers";
+import { mockPuter, installLocalStorage, throwsMsg } from "./helpers";
 import { getCreditBalance, formatCredits } from "../src/lib/usage";
-import { getProfileInfo } from "../src/lib/profile";
+import {
+  getProfileInfo,
+  loadAppProfile,
+  saveAppProfile,
+  cleanProfileField,
+  prepareAvatarDataUrl,
+  type AppProfile,
+} from "../src/lib/profile";
 import { extractText } from "../src/lib/ocr";
 
 // ---- usage ----
@@ -51,19 +58,20 @@ test("formatCredits formats dollars", () => {
 
 // ---- profile ----
 
-test("getProfileInfo maps picture and display name", async () => {
+test("getProfileInfo maps picture, display name and bio", async () => {
   mockPuter({
     auth: {
       getProfile: async () => ({
         picture: "https://pic/x.png",
         displayName: "Ada",
-        bio: null,
+        bio: "Mathematician",
       }),
     },
   });
   expect(await getProfileInfo()).toEqual({
     name: "Ada",
     picture: "https://pic/x.png",
+    bio: "Mathematician",
   });
 });
 
@@ -84,6 +92,113 @@ test("getProfileInfo is null when unavailable", async () => {
 test("getProfileInfo is null without the SDK", async () => {
   mockPuter({ auth: {} });
   expect(await getProfileInfo()).toBeNull();
+});
+
+// ---- app profile (this app's KV-backed profile) ----
+
+const sampleProfile = (over: Partial<AppProfile> = {}): AppProfile => ({
+  version: 1,
+  displayName: "Ada",
+  bio: "Mathematician",
+  picture: "data:image/png;base64,AAAA",
+  updatedAt: 42,
+  ...over,
+});
+
+/** In-memory KV store shaped like puter.kv (string values). */
+function mockKV() {
+  const store = new Map<string, string>();
+  mockPuter({
+    auth: { isSignedIn: () => true },
+    kv: {
+      get: async (k: string) => (store.has(k) ? store.get(k)! : null),
+      set: async (k: string, v: string) => {
+        store.set(k, v);
+        return true;
+      },
+    },
+  });
+  return store;
+}
+
+test("app profile round-trips through KV", async () => {
+  installLocalStorage();
+  mockKV();
+  const saved = sampleProfile();
+  expect(await saveAppProfile(saved)).toBe(true);
+  expect(await loadAppProfile()).toEqual(saved);
+});
+
+test("app profile load prefers KV over a stale cache", async () => {
+  installLocalStorage();
+  const store = mockKV();
+  // An old local cache…
+  await saveAppProfile(sampleProfile({ displayName: "Old", updatedAt: 1 }));
+  // …superseded by a newer remote write from another device.
+  const remote = sampleProfile({ displayName: "New", updatedAt: 2 });
+  store.forEach((_, k) => store.set(k, JSON.stringify(remote)));
+  expect((await loadAppProfile())!.displayName).toBe("New");
+});
+
+test("app profile entries of the wrong shape are ignored", async () => {
+  installLocalStorage();
+  const store = mockKV();
+  store.set("aichat:profile:v1", JSON.stringify({ version: 2, displayName: "X" }));
+  expect(await loadAppProfile()).toBeNull();
+});
+
+test("saveAppProfile falls back to a plain set when the options form rejects", async () => {
+  installLocalStorage();
+  const store = new Map<string, string>();
+  let calls = 0;
+  mockPuter({
+    auth: { isSignedIn: () => true },
+    kv: {
+      get: async (k: string) => (store.has(k) ? store.get(k)! : null),
+      set: async (k: string, v: string, opts?: unknown) => {
+        calls++;
+        if (opts !== undefined) throw { code: "bad_request" }; // old SDK build
+        store.set(k, v);
+        return true;
+      },
+    },
+  });
+  expect(await saveAppProfile(sampleProfile())).toBe(true);
+  expect(calls).toBe(2);
+});
+
+test("saveAppProfile keeps the local cache when KV is unreachable", async () => {
+  installLocalStorage();
+  mockPuter({
+    auth: { isSignedIn: () => true },
+    kv: {
+      get: async () => null,
+      set: async () => {
+        throw new Error("offline");
+      },
+    },
+  });
+  const saved = sampleProfile();
+  expect(await saveAppProfile(saved)).toBe(false);
+  // Signed out afterwards, the cache still serves the saved profile.
+  mockPuter({ auth: { isSignedIn: () => false } });
+  expect(await loadAppProfile()).toEqual(saved);
+});
+
+test("cleanProfileField trims, clamps and empties to null", () => {
+  expect(cleanProfileField("  Ada Lovelace  ", "displayName")).toBe("Ada Lovelace");
+  expect(cleanProfileField("   ", "bio")).toBeNull();
+  expect(cleanProfileField("x".repeat(100), "displayName")).toHaveLength(64);
+  expect(cleanProfileField("y".repeat(300), "bio")).toHaveLength(280);
+});
+
+test("prepareAvatarDataUrl encodes a small image as a data URL", async () => {
+  // No `document` here, so downscale is a passthrough; the encoding path is
+  // what this covers (the byte cap is exercised via the size check).
+  mockPuter({});
+  const file = new File([new Uint8Array([1, 2, 3, 4])], "a.png", { type: "image/png" });
+  const url = await prepareAvatarDataUrl(file);
+  expect(url.startsWith("data:image/png;base64,")).toBe(true);
 });
 
 // ---- ocr ----
