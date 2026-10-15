@@ -81,7 +81,8 @@ attachment again later. The write is fired in the background of a send and
 resolves `false` instead of throwing: a Drive failure must never cost the user
 their message. Messages sent before this existed carry only the marker, which
 `countUnsavedAttachments()` (`src/lib/artifacts.ts`) reports rather than
-pretending to resolve. Attachments are still not re-sent on retry.
+pretending to resolve. A retry re-reads the refs from Drive and re-sends the
+images (see `handleRetryMessage` in `src/pages/Index.tsx`).
 
 Deleting the message, editing it, or deleting the conversation reclaims those
 files again (`reclaimImagePaths()` + `deleteImage()`); the two silent drops —
