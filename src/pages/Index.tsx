@@ -15,7 +15,7 @@ import {
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
 import { deleteImage, generateImage, newAttachmentPath, persistAttachment } from "@/lib/images";
-import { collectImageArtifacts, countUnsavedAttachments, reclaimImagePaths } from "@/lib/artifacts";
+import { collectArtifacts, countByKind, countUnsavedAttachments, reclaimImagePaths } from "@/lib/artifacts";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
@@ -277,7 +277,7 @@ const Index = () => {
    * go stale — recomputing is what keeps a tile aimed at the right message.
    */
   const imageArtifacts = useMemo(
-    () => collectImageArtifacts(currentConversation?.messages ?? []),
+    () => collectArtifacts(currentConversation?.messages ?? []),
     [currentConversation]
   );
   /** Attachments claimed by a legacy marker whose bytes were never stored. */
@@ -711,29 +711,62 @@ const Index = () => {
       if (messages[i].role === "user") { questionIdx = i; break; }
     }
     if (questionIdx < 0) return;
-    // Images aren't stored on messages, so regeneration is text-only; strip
-    // the "[Images: N attached]" marker the send flow appends.
-    const rawPrompt = messages[questionIdx].content;
-    const hadImages = hasImageMarker(rawPrompt);
-    const prompt = stripImageMarker(rawPrompt).trim();
-    if (!prompt) {
-      // The question *was* the image; retrying would send an empty prompt.
-      toast({
-        title: "Cannot retry this message",
-        description:
-          "It was about an attached image, and retries send text only. Attach the image again and resend.",
-        variant: "destructive",
-        duration: 6000,
-      });
-      return;
+    // Images may be stored as Drive refs on the original user message.
+    // If so, reload them and re-send as image_url blocks instead of
+    // sending text only.
+    const userMsg = messages[questionIdx];
+    let imageUrls: string[] = [];
+    let attachmentRefs: AttachmentRef[] = [];
+    if (userMsg.attachments && Array.isArray(userMsg.attachments)) {
+      try {
+        ({ dataUrls: imageUrls, refs: attachmentRefs } =
+          await prepareAndStoreAttachments(
+            userMsg.attachments.map((ref) => ({
+              file: {} as File, // placeholder; prepareAndStore will use the path
+              ...ref,
+            } as unknown as File[])),
+            undefined
+          ));
+      } catch (error) {
+        toast({
+          title: "Failed to reload images",
+          description: error instanceof Error ? error.message : "Unknown error",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    } else {
+      // Fall back to the original text-only retry behavior.
+      // Images aren't stored on messages, so regeneration is text-only; strip
+      // the "[Images: N attached]" marker the send flow appends.
+      const rawPrompt = userMsg.content;
+      const hadImages = hasImageMarker(rawPrompt);
+      const prompt = stripImageMarker(rawPrompt).trim();
+      if (!prompt) {
+        // The question *was* the image; retrying would send an empty prompt.
+        toast({
+          title: "Cannot retry this message",
+          description:
+            "It was about an attached image, and retries send text only. Attach the image again and resend.",
+          variant: "destructive",
+          duration: 6000,
+        });
+        return;
+      }
+      if (hadImages) {
+        toast({
+          title: "Retrying without the image",
+          description:
+            "Retries send text only. The attachment stays in the images panel — re-attach it to include it in a new message.",
+          duration: 5000,
+        });
+      }
     }
-    if (hadImages) {
-      toast({
-        title: "Retrying without the image",
-        description:
-          "Retries send text only. The attachment stays in the images panel — re-attach it to include it in a new message.",
-        duration: 5000,
-      });
+    // Build the message content: include image marker if we have image URLs.
+    let messageContent = stripImageMarker(userMsg.content);
+    if (imageUrls.length > 0) {
+      messageContent = appendImageMarker(messageContent, imageUrls.length);
     }
     // In-place retry: nothing is removed; the finished answer replaces the
     // old one at aiIndex. History is the conversation up to the question.
@@ -741,12 +774,12 @@ const Index = () => {
       baseMessages: messages,
       rollbackMessages: messages,
       history: toHistory(messages.slice(0, questionIdx)),
-      prompt,
+      prompt: messageContent,
       modelId: selectedModel,
       replaceIndex: aiIndex,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
   };
-
   const handleGenerateImage = async (prompt: string) => {
     if (!currentConversation) return;
     if (!isAuthenticated) {

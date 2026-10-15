@@ -1,4 +1,5 @@
 import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
+import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
 import {
@@ -502,27 +503,12 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
           </div>
         </div>
       )}
-      {previewOpen && imageSrc && (
-        <div
-          className="msg-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image preview"
-          onClick={() => setPreviewOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setPreviewOpen(false);
-          }}
-          tabIndex={-1}
-          autoFocus
-        >
-          <img
-            src={imageSrc}
-            alt="Image preview"
-            className="msg-lightbox-img"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
+      <ImageLightbox
+        src={imageSrc}
+        alt="Image preview"
+        onClose={() => setPreviewOpen(false)}
+      />
+
     </>
   );
 };
