@@ -14,8 +14,8 @@ import {
   type CompactionItem,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
-import { deleteImage, generateImage, newAttachmentPath, persistAttachment } from "@/lib/images";
-import { collectArtifacts, countByKind, countUnsavedAttachments, reclaimImagePaths } from "@/lib/artifacts";
+import { deleteImage, generateImage, loadImageBlob, newAttachmentPath, persistAttachment } from "@/lib/images";
+import { collectImageArtifacts, countUnsavedAttachments, reclaimImagePaths } from "@/lib/artifacts";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
@@ -277,7 +277,7 @@ const Index = () => {
    * go stale — recomputing is what keeps a tile aimed at the right message.
    */
   const imageArtifacts = useMemo(
-    () => collectArtifacts(currentConversation?.messages ?? []),
+    () => collectImageArtifacts(currentConversation?.messages ?? []),
     [currentConversation]
   );
   /** Attachments claimed by a legacy marker whose bytes were never stored. */
@@ -702,7 +702,7 @@ const Index = () => {
     abortRef.current?.abort();
   };
 
-  const handleRetryMessage = (aiIndex: number) => {
+  const handleRetryMessage = async (aiIndex: number) => {
     if (isStreaming || !currentConversation) return;
     const aiMsg = messages[aiIndex];
     if (!aiMsg || aiMsg.role !== "assistant") return;
@@ -712,21 +712,23 @@ const Index = () => {
     }
     if (questionIdx < 0) return;
     // Images may be stored as Drive refs on the original user message.
-    // If so, reload them and re-send as image_url blocks instead of
-    // sending text only.
+    // If so, read them back from Drive and re-send as image_url blocks
+    // instead of sending text only. The refs already point at stored files,
+    // so nothing is uploaded again.
     const userMsg = messages[questionIdx];
     let imageUrls: string[] = [];
-    let attachmentRefs: AttachmentRef[] = [];
     if (userMsg.attachments && Array.isArray(userMsg.attachments)) {
       try {
-        ({ dataUrls: imageUrls, refs: attachmentRefs } =
-          await prepareAndStoreAttachments(
-            userMsg.attachments.map((ref) => ({
-              file: {} as File, // placeholder; prepareAndStore will use the path
-              ...ref,
-            } as unknown as File[])),
-            undefined
-          ));
+        const files = await Promise.all(
+          userMsg.attachments.map(async (ref) => {
+            const blob = await loadImageBlob(ref.path);
+            return new File([blob], ref.name || "image", {
+              type: ref.mimeType || blob.type,
+            });
+          })
+        );
+        const prepared = await prepareImageAttachments(files);
+        imageUrls = prepared.map((attachment) => attachment.dataUrl);
       } catch (error) {
         toast({
           title: "Failed to reload images",
