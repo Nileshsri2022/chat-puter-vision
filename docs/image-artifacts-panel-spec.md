@@ -490,6 +490,8 @@ sign out and confirm the toggle is gone.
 | 2 | Markdown-embedded images; swap `ChatMessage` to the shared lightbox (fixes #48); unblock image-only retries now that attachments are stored (#32, #33); an issue for the quota fallback silently discarding conversations |
 | 3 | Non-image artifacts (code, tables, OCR text, exports) behind a `kind` union; cross-conversation library; "attach to next prompt" |
 
+Phase 3 is specified in [`artifacts-phase-3-spec.md`](artifacts-phase-3-spec.md); exports moved to a later phase there.
+
 ## 12. Risks
 
 | Risk | Mitigation |
