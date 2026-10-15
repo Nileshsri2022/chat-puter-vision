@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Maximize2, Copy, Download, Check, Sparkles, Paperclip, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { usePuterImage } from "@/hooks/usePuterImage";
+import { useToast } from "@/hooks/use-toast";
 import { basenameOf, KIND_LABEL, type ImageArtifact, type ImageArtifactKind } from "@/lib/artifacts";
 import { loadImageBlob } from "@/lib/images";
 import { copyToClipboard, dataUrlToBlob, downloadBlob } from "@/lib/utils/export";
+
+// One image in the artifacts panel, with the helpers its copy and download
+// share. Styles live in ArtifactsPanel.css, which the panel imports.
 
 /** Kind badge copy. `legacy` reads as an attachment: that is what it was. */
 const KIND_BADGE: Record<ImageArtifactKind, string> = {

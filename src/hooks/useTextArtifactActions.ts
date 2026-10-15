@@ -1,80 +1,69 @@
-import { useState } from "react";
+// Copy and download for one code block or table, shared by its row in the
+// artifacts panel and by TextPreviewDialog so the two never disagree.
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { TextArtifact } from "@/lib/artifacts";
-import { artifactFileName, tableToCsv, tableToHtml } from "@/lib/artifactFormats";
-import { copyToClipboard, downloadBlob } from "@/lib/utils/export";
+import { copyTextArtifact, downloadTextArtifact } from "@/lib/artifactFormats";
 
-/** The Nth block of its kind in its message, 1-based. Encoded in the id. */
-function ordinalOf(artifact: TextArtifact): number {
-  return Number(artifact.id.split(":")[2]) + 1;
-}
-
-/**
- * Copy and download for a code or table artifact.
- *
- * Copy is honest (#45): it resolves to what the clipboard actually did, and a
- * refusal shows "Copy failed" rather than a check mark.
- */
-async function copyArtifact(artifact: TextArtifact): Promise<boolean> {
-  if (artifact.kind === "table") {
-    const clipboard = navigator.clipboard as Clipboard | undefined;
-    if (clipboard && typeof clipboard.write === "function" && typeof ClipboardItem !== "undefined") {
-      try {
-        await clipboard.write([
-          new ClipboardItem({
-            "text/html": new Blob([tableToHtml(artifact.header, artifact.rows)], { type: "text/html" }),
-            "text/plain": new Blob([artifact.text], { type: "text/plain" }),
-          }),
-        ]);
-        return true;
-      } catch {
-        // Rich copy refused: fall through to plain Markdown.
-      }
-    }
-  }
-  return copyToClipboard(artifact.text);
-}
+const NOUN: Record<TextArtifact["kind"], string> = { code: "Code", table: "Table" };
 
 export function useTextArtifactActions(artifact: TextArtifact) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const fileName = artifactFileName(
-    artifact.kind,
-    artifact.messageIndex + 1,
-    ordinalOf(artifact),
-    artifact.kind === "code" ? artifact.language : undefined
+  const timer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    []
   );
 
-  const copy = async () => {
-    if (busy) return;
+  // Copy is honest (#45): the check mark and the success toast only follow a
+  // write the clipboard actually accepted.
+  const copy = useCallback(async () => {
     setBusy(true);
     try {
-      const ok = await copyArtifact(artifact);
-      if (!ok) {
+      const ok = await copyTextArtifact(artifact).catch(() => false);
+      if (ok) {
+        setCopied(true);
+        if (timer.current !== null) window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(() => {
+          setCopied(false);
+          timer.current = null;
+        }, 1500);
+        toast({ title: `${NOUN[artifact.kind]} copied`, duration: 2000 });
+      } else {
         toast({
           title: "Copy failed",
           description: "The clipboard rejected the request.",
           variant: "destructive",
           duration: 5000,
         });
-        return;
       }
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-      toast({ title: artifact.kind === "table" ? "Table copied" : "Code copied", duration: 2000 });
     } finally {
       setBusy(false);
     }
-  };
+  }, [artifact, toast]);
 
-  const download = () => {
-    const isTable = artifact.kind === "table";
-    const content = isTable ? tableToCsv(artifact.header, artifact.rows) : artifact.text;
-    const type = isTable ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8";
-    downloadBlob(fileName, new Blob([content], { type }));
-    toast({ title: "Downloaded", description: fileName, duration: 2000 });
-  };
+  const download = useCallback(() => {
+    try {
+      downloadTextArtifact(artifact);
+      toast({
+        title: artifact.kind === "table" ? "Table downloaded as CSV" : "Code downloaded",
+        duration: 2000,
+      });
+    } catch {
+      toast({
+        title: "Download failed",
+        description: "The file could not be created.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  }, [artifact, toast]);
 
-  return { copy, download, copied, busy, fileName };
+  return { copied, busy, copy, download };
 }

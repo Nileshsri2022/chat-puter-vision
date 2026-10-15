@@ -1,202 +1,288 @@
-// Code blocks and tables from assistant answers (Phase 3a, spec §12).
+// Text artifacts: code blocks and tables collected from assistant answers.
 //
-// Kept apart from artifacts.test.ts, which pins the Phase 1 image index: these
-// fixtures parse Markdown, and a parser change should not touch the image
-// guarantees.
+// What these pin: the panel lists exactly the blocks the transcript renders
+// (same parser, same string), the Phase 1 image collection is untouched by
+// the union, extraction never throws during render (#24), and the exported
+// formats treat model output as untrusted.
 
 import { test, expect } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import type { Message } from "../src/lib/backend";
 import {
   collectArtifacts,
   collectImageArtifacts,
   countArtifactKinds,
   isImageArtifact,
   type Artifact,
-} from "@/lib/artifacts";
-import { blocksForMessage, parseAnswerBlocks, languageName } from "@/lib/artifactBlocks";
-import { artifactFileName, escapeHtml, extensionFor, tableToCsv, tableToHtml } from "@/lib/artifactFormats";
-import type { Message } from "@/lib/backend";
+  type CodeArtifact,
+  type TableArtifact,
+} from "../src/lib/artifacts";
+import { BLOCK_HINT, extractTextBlocks, languageName } from "../src/lib/artifactBlocks";
+import {
+  csvField,
+  extensionFor,
+  tableToCsv,
+  tableToHtml,
+  textArtifactFilename,
+} from "../src/lib/artifactFormats";
+import { splitThinkBlocks } from "../src/lib/streamingHandler";
 
-const ANSWER = [
-  "Here is the script:",
-  "",
-  "```python",
-  "def fetch_rates(base=\"INR\"):",
-  "    return {}",
-  "```",
-  "",
-  "| Item | Price |",
-  "|------|-------|",
-  "| `tea` | 20 |",
-  "| coffee | 45 |",
-  "",
-  "~~~bash",
-  "make build",
-  "~~~",
-].join("\n");
+const code = (artifacts: Artifact[]) => artifacts.filter((a): a is CodeArtifact => a.kind === "code");
+const tables = (artifacts: Artifact[]) => artifacts.filter((a): a is TableArtifact => a.kind === "table");
 
-const assistant = (content: string, extra: Partial<Message> = {}): Message =>
-  ({ role: "assistant", content, ...extra }) as Message;
+// ---- golden: the union leaves the image collection exactly as it was ----
+
+// The Phase 1 fixture shapes (tests/artifacts.test.ts and the panel test),
+// plus one where the same messages also carry code and a table.
+const PHASE1_FIXTURES: Message[][] = [
+  [
+    { role: "user", content: "draw a sunset" },
+    { role: "assistant", content: "", imagePath: "freetalk-abc.png", model: "gpt-4o" },
+  ],
+  [
+    {
+      role: "user",
+      content: "What is in these?\n\n[Images: 2 attached]",
+      attachments: [
+        { path: "freetalk-upload-1.jpg", name: "receipt.jpg", mimeType: "image/jpeg" },
+        { path: "freetalk-upload-2.png", name: "diagram.png" },
+      ],
+    },
+  ],
+  [{ role: "user", content: "hi", attachments: [{ path: "freetalk-upload-1.png" }] }],
+  [
+    { role: "assistant", content: "", image: "data:image/png;base64,AAAA" },
+    { role: "assistant", content: "", image: "https://cdn.test/a.png" },
+  ],
+  [{ role: "assistant", content: "", image: "data:image/png;base64,AAAA", imagePath: "freetalk-abc.png" }],
+  [
+    { role: "user", content: "first", attachments: [{ path: "u1.png" }] },
+    { role: "assistant", content: "no image here" },
+    { role: "assistant", content: "", imagePath: "g1.png" },
+    { role: "user", content: "two more", attachments: [{ path: "u2.png" }, { path: "u3.png" }] },
+  ],
+  [
+    { role: "user", content: "hello" },
+    { role: "assistant", content: "hi", model: "gpt-4o" },
+  ],
+  [
+    {
+      role: "user",
+      content: "x",
+      attachments: [{ path: "" }, { noPath: true }, { path: "ok.png" }],
+    },
+  ] as unknown as Message[],
+  [
+    { role: "user", content: "And this one?\n\n[Images: 1 attached]" },
+    null as unknown as Message,
+    { role: "assistant", content: "```py\nprint(1)\n```", imagePath: "g2.png", model: "gpt-4o" },
+    { role: "assistant", content: "| a | b |\n| - | - |\n| 1 | 2 |", image: "data:image/png;base64,BBBB" },
+  ],
+];
+
+test("golden: the images in collectArtifacts are exactly collectImageArtifacts", () => {
+  for (const fixture of PHASE1_FIXTURES) {
+    expect(collectArtifacts(fixture).filter(isImageArtifact)).toEqual(collectImageArtifacts(fixture));
+  }
+});
+
+test("a message lists its images first, then its blocks in document order", () => {
+  const artifacts = collectArtifacts(PHASE1_FIXTURES[8]);
+  expect(artifacts.map((a) => a.id)).toEqual(["2:generated:0", "2:code:0", "3:legacy:0", "3:table:0"]);
+  expect(countArtifactKinds(artifacts)).toEqual({ generated: 1, attached: 0, legacy: 1, code: 1, table: 1 });
+});
 
 // ---- code ----
 
-test("backtick and tilde fences both become code artifacts with language and lines", () => {
-  const found = collectArtifacts([assistant(ANSWER)]).filter((a) => a.kind === "code");
-  expect(found.map((a) => a.label)).toEqual(["Python · 2 lines", "Bash · 1 line"]);
-  expect(found[0]).toMatchObject({ kind: "code", language: "python", lines: 2 });
-  expect(found[0].kind === "code" && found[0].text).toBe('def fetch_rates(base="INR"):\n    return {}');
+test("backtick and tilde fences are both code (#50), with language, label and lines", () => {
+  const artifacts = collectArtifacts([
+    {
+      role: "assistant",
+      content: "Two ways:\n\n```python title=rates.py\nimport requests\n\nprint(1)\n```\n\n~~~ts\nconst x = 1;\n~~~",
+      model: "gpt-4o",
+    },
+  ]);
+  expect(code(artifacts).map(({ language, lines, label, text }) => ({ language, lines, label, text }))).toEqual([
+    { language: "python", lines: 3, label: "Python · 3 lines", text: "import requests\n\nprint(1)" },
+    { language: "ts", lines: 1, label: "TypeScript · 1 line", text: "const x = 1;" },
+  ]);
+  expect(artifacts[0]).toMatchObject({ role: "assistant", messageIndex: 0, model: "gpt-4o" });
 });
 
-test("indented code and an unclosed fence are found, as the transcript renders them", () => {
-  const indented = parseAnswerBlocks("Intro\n\n    x = 1\n    y = 2\n");
-  expect(indented).toHaveLength(1);
-  expect(indented[0]).toMatchObject({ kind: "code", language: undefined, lines: 2 });
-
-  const unclosed = parseAnswerBlocks("Stopped mid-reply\n\n```ts\nconst a = 1");
-  expect(unclosed).toHaveLength(1);
-  expect(unclosed[0]).toMatchObject({ kind: "code", language: "ts", lines: 1 });
+test("indented code and an unclosed fence are code, as they render", () => {
+  const indented = collectArtifacts([{ role: "assistant", content: "Run:\n\n    npm ci\n    npm test\n" }]);
+  expect(code(indented).map((a) => [a.text, a.label])).toEqual([["npm ci\nnpm test", "Code · 2 lines"]]);
+  // A stopped reply leaves its fence open; it still renders as code to the end.
+  const stopped = collectArtifacts([{ role: "assistant", content: "Here:\n\n```js\nconst a = 1;\nconst b =" }]);
+  expect(code(stopped).map((a) => [a.text, a.lines])).toEqual([["const a = 1;\nconst b =", 2]]);
 });
 
-test("inline code, think blocks and user messages produce nothing", () => {
-  expect(collectArtifacts([assistant("Use `npm test` to run it.")])).toEqual([]);
-  expect(
-    collectArtifacts([assistant("<think>```js\nlet a\n```</think>\n\nThe answer is 4.")])
-  ).toEqual([]);
-  const userCode: Message = { role: "user", content: "```py\nprint(1)\n```" } as Message;
-  expect(collectArtifacts([userCode])).toEqual([]);
+test("inline code, thinking, user messages and empty fences produce nothing", () => {
+  const artifacts = collectArtifacts([
+    { role: "user", content: "```js\nmine()\n```" },
+    { role: "assistant", content: "<think>```js\nhidden()\n```</think>Use `npm ci`, then:\n\n```\n```" },
+  ]);
+  expect(artifacts).toEqual([]);
 });
 
-test("a language tag without a known name is capitalized, and no tag reads as Code", () => {
+test("language labels: known names, a capitalized unknown tag, and Code without one", () => {
+  expect(languageName("py")).toBe("Python");
+  expect(languageName("TS")).toBe("TypeScript");
   expect(languageName("elixir")).toBe("Elixir");
   expect(languageName(undefined)).toBe("Code");
-  const [block] = collectArtifacts([assistant("```\nhi\n```")]);
-  expect(block.kind === "code" && block.label).toBe("Code · 1 line");
+  expect(languageName("  ")).toBe("Code");
 });
 
-test("artifact ids are unique and messageIndex follows the transcript", () => {
-  const transcript = [
-    { role: "user", content: "hi" } as Message,
-    assistant(ANSWER),
-    assistant("```js\na\n```\n\n```js\nb\n```"),
+test("ids are unique and indices follow the transcript after a deletion", () => {
+  const messages: Message[] = [
+    { role: "user", content: "q1" },
+    { role: "assistant", content: "```a\n1\n```\n\n```b\n2\n```" },
+    { role: "user", content: "q2" },
+    { role: "assistant", content: "```c\n3\n```" },
   ];
-  const ids = collectArtifacts(transcript).map((a) => a.id);
-  expect(new Set(ids).size).toBe(ids.length);
-  expect(collectArtifacts(transcript).filter((a) => a.kind !== "generated").map((a) => a.messageIndex))
-    .toEqual([1, 1, 1, 2, 2]);
-  // Remove the first message: the indices move with the transcript, not stale.
-  const shifted = collectArtifacts(transcript.slice(1));
-  expect(shifted.map((a) => a.messageIndex)[0]).toBe(0);
+  const before = collectArtifacts(messages);
+  expect(new Set(before.map((a) => a.id)).size).toBe(before.length);
+  expect(before.map((a) => a.id)).toEqual(["1:code:0", "1:code:1", "3:code:0"]);
+  // Deleting splices the array: the cached parse is reused, the index is not.
+  const after = collectArtifacts([messages[2], messages[3]]);
+  expect(after.map((a) => [a.id, a.messageIndex])).toEqual([["1:code:0", 1]]);
 });
 
 // ---- tables ----
 
-test("a table gives header, rows and size, and its text is the source slice", () => {
-  const table = collectArtifacts([assistant(ANSWER)]).find((a) => a.kind === "table");
-  expect(table).toBeDefined();
-  if (!table || table.kind !== "table") throw new Error("expected a table");
-  expect(table.label).toBe("Table · 2 × 2");
-  expect(table.header).toEqual(["Item", "Price"]);
+const TABLE_ANSWER = [
+  "Prices:",
+  "",
+  "| Item | `Qty` | Price |",
+  "| --- | ---: | --- |",
+  "| Rice \\| basmati | 2 | ₹120 |",
+  "| Dal | 1 |",
+  "| Tea | 3 | ₹40 | extra |",
+  "",
+  "Done.",
+].join("\n");
+
+test("a table yields its header, rows and size, normalized to the header width", () => {
+  const [table] = tables(collectArtifacts([{ role: "assistant", content: TABLE_ANSWER }]));
+  // Inline code and escaped pipes are unwrapped; short rows are padded and
+  // long rows cut, exactly as the rendered table shows them.
+  expect(table.header).toEqual(["Item", "Qty", "Price"]);
   expect(table.rows).toEqual([
-    ["tea", "20"],
-    ["coffee", "45"],
+    ["Rice | basmati", "2", "₹120"],
+    ["Dal", "1", ""],
+    ["Tea", "3", "₹40"],
   ]);
-  expect(table.text).toBe(ANSWER.slice(table.at, table.at + table.text.length));
-  expect(table.text.startsWith("| Item | Price |")).toBe(true);
-  // Inline code is unwrapped in cells.
-  expect(table.rows[0][0]).toBe("tea");
+  expect(table.label).toBe("Table · 3 × 3");
 });
 
-test("a pipe table inside a fence is code, not a table", () => {
-  const fenced = "```md\n| a | b |\n|---|---|\n| 1 | 2 |\n```";
-  const found = collectArtifacts([assistant(fenced)]);
-  expect(found.map((a) => a.kind)).toEqual(["code"]);
+test("a table's text is the exact Markdown slice at its offset", () => {
+  const content = `<think>plan</think>${TABLE_ANSWER}`;
+  const [table] = tables(collectArtifacts([{ role: "assistant", content }]));
+  const { answer } = splitThinkBlocks(content);
+  expect(answer.slice(table.at, table.at + table.text.length)).toBe(table.text);
+  expect(table.text.startsWith("| Item |")).toBe(true);
+  expect(table.text.endsWith("| Tea | 3 | ₹40 | extra |")).toBe(true);
 });
 
-// ---- guards ----
-
-test("the golden test: image artifacts are unchanged by the union", () => {
-  const messages: Message[] = [
-    { role: "user", content: "look\n\n[Images: 1 attached]", attachments: [{ path: "a.jpg", name: "a.jpg" }] } as Message,
-    assistant(ANSWER, { imagePath: "gen.png", model: "m" }),
-    { role: "user", content: "and this?\n\n[Images: 1 attached]" } as Message,
-    assistant("```js\nx\n```", { image: "data:image/png;base64,AAAA" }),
-  ];
-  const all: Artifact[] = collectArtifacts(messages);
-  expect(all.filter(isImageArtifact)).toEqual(collectImageArtifacts(messages));
-  expect(countArtifactKinds(all)).toMatchObject({ generated: 1, attached: 1, legacy: 1, code: 3, table: 1 });
+test("a table inside a fence is code, not a table", () => {
+  const artifacts = collectArtifacts([{ role: "assistant", content: "```\n| a | b |\n| - | - |\n| 1 | 2 |\n```" }]);
+  expect(artifacts.map((a) => a.kind)).toEqual(["code"]);
 });
 
-test("defensive: null messages, non-string content and odd fields produce no artifacts and no throw", () => {
+// ---- defensive (#24) and cache ----
+
+test("bad input yields no artifacts and never throws", () => {
+  const throwing = {
+    role: "assistant",
+    get content(): string {
+      throw new Error("boom");
+    },
+  } as unknown as Message;
   const messages = [
     null,
-    undefined,
-    { role: "assistant", content: 42 },
-    { role: "assistant", content: null },
+    42,
+    { role: "assistant", content: 7 },
     { role: "assistant" },
-    "not a message",
+    throwing,
   ] as unknown as Message[];
   expect(() => collectArtifacts(messages)).not.toThrow();
   expect(collectArtifacts(messages)).toEqual([]);
 });
 
-test("the cache returns the same parse for the same message object", () => {
-  const message = assistant(ANSWER);
-  expect(blocksForMessage(message)).toBe(blocksForMessage(message));
-  // A replaced message object is parsed afresh.
-  expect(blocksForMessage({ ...message })).not.toBe(blocksForMessage(message));
+test("each message object is parsed once; a replaced object is parsed again", () => {
+  const message: Message = { role: "assistant", content: TABLE_ANSWER };
+  const first = extractTextBlocks(message);
+  expect(extractTextBlocks(message)).toBe(first);
+  // Through the collector too: the second collect reuses the cached cells.
+  const [a] = tables(collectArtifacts([message]));
+  const [b] = tables(collectArtifacts([message]));
+  expect(b.rows).toBe(a.rows);
+  // Updates replace message objects, so a copy is a fresh parse.
+  const copy = { ...message };
+  expect(extractTextBlocks(copy)).not.toBe(first);
+  expect(extractTextBlocks(copy)).toEqual(first);
 });
 
-test("the prefilter skips prose without a parse", () => {
-  expect(parseAnswerBlocks("Quantum computers use qubits.")).toEqual([]);
+test("the prefilter skips plain prose and catches every block form", () => {
+  expect(BLOCK_HINT.test("Just prose.\nNo blocks at all, only words.")).toBe(false);
+  for (const sample of [
+    "```js\nx\n```",
+    "~~~\nx\n~~~",
+    "text\n\n    indented",
+    "- item\n\n      nested in a list",
+    "text\n\n\ttab-indented",
+    "a | b\n--- | ---\n1 | 2",
+  ]) {
+    expect(`${JSON.stringify(sample)}: ${BLOCK_HINT.test(sample)}`).toBe(`${JSON.stringify(sample)}: true`);
+  }
 });
 
 // ---- formats ----
 
-test("CSV quotes fields, uses CRLF and starts with a BOM", () => {
-  const csv = tableToCsv(["Name", "Note"], [['Ana "A"', "a, b"], ["x", "line1\nline2"]]);
-  expect(csv.startsWith("\uFEFF")).toBe(true);
-  expect(csv.slice(1)).toBe('Name,Note\r\n"Ana ""A""","a, b"\r\nx,"line1\nline2"\r\n');
+test("CSV fields are quoted per RFC 4180", () => {
+  expect(csvField("plain")).toBe("plain");
+  expect(csvField("a,b")).toBe('"a,b"');
+  expect(csvField('say "hi"')).toBe('"say ""hi"""');
+  expect(csvField("two\nlines")).toBe('"two\nlines"');
 });
 
-test("CSV neutralizes formula-looking cells but leaves plain numbers alone", () => {
-  const csv = tableToCsv(["v"], [["=SUM(A1)"], ["+3"], ["-12.5"], ["-2+3+cmd|x"], ["@cmd"], ["\tTAB"]]);
-  const lines = csv.slice(1).split("\r\n").filter(Boolean);
-  expect(lines).toEqual(["v", "'=SUM(A1)", "+3", "-12.5", "'-2+3+cmd|x", "'@cmd", "'\tTAB"]);
-});
-
-test("clipboard HTML escapes every cell", () => {
-  expect(escapeHtml(`<img src=x onerror="alert('1')">&`)).toBe(
-    "&lt;img src=x onerror=&quot;alert(&#39;1&#39;)&quot;&gt;&amp;"
-  );
-  const html = tableToHtml(["<b>"], [["<script>"]]);
-  expect(html).toContain("<th>&lt;b&gt;</th>");
-  expect(html).toContain("<td>&lt;script&gt;</td>");
-  expect(html).not.toContain("<script>");
-});
-
-test("file names follow the spec and unknown languages get txt", () => {
-  expect(artifactFileName("code", 4, 2, "python")).toBe("snippet-4-2.py");
-  expect(artifactFileName("code", 1, 1, "TypeScript")).toBe("snippet-1-1.ts");
-  expect(artifactFileName("code", 1, 1, "elixir")).toBe("snippet-1-1.txt");
-  expect(artifactFileName("code", 1, 1)).toBe("snippet-1-1.txt");
-  expect(artifactFileName("table", 6, 1)).toBe("table-6-1.csv");
-  expect(extensionFor("bash")).toBe("sh");
-});
-
-test("the artifacts reach the same offsets the renderer stamps", () => {
-  // Checked against the rendered markup in chatMessage.test.tsx; here the
-  // collector's offsets must slice back to the fence and the table source.
-  const [code, table] = collectArtifacts([assistant(ANSWER)]);
-  expect(ANSWER.slice(code.kind === "code" ? code.at : -1).startsWith("```python")).toBe(true);
-  expect(ANSWER.slice(table.kind === "table" ? table.at : -1).startsWith("| Item")).toBe(true);
-});
-
-test("the parser module declares its dependencies in package.json", () => {
-  const pkg = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"));
-  for (const dep of ["unified", "remark-parse", "mdast-util-to-string"]) {
-    expect(pkg.dependencies[dep]).toBeDefined();
+test("CSV neutralizes formulas but leaves plain numbers alone", () => {
+  for (const cell of ["=1+1", "+cmd", "-2+3+cmd|' /C calc'!A0", "@SUM(A1)", "\tx", "\rx", "-", "+"]) {
+    expect(csvField(cell).replace(/^"/, "").startsWith("'")).toBe(true);
   }
-  expect(pkg.devDependencies["@types/mdast"]).toBeDefined();
-  expect(pkg.scripts.typecheck).toContain("tsc --noEmit");
+  expect(csvField('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
+  for (const number of ["-12.5", "+3", "42", "-0.5", ".5", "1.25"]) {
+    expect(csvField(number)).toBe(number);
+  }
+});
+
+test("a CSV file has a BOM, CRLF line ends and keeps ₹ intact", () => {
+  const csv = tableToCsv(["Item", "Price"], [["Rice", "₹120"], ["Tea, masala", "-5"]]);
+  expect(csv).toBe('\uFEFFItem,Price\r\nRice,₹120\r\n"Tea, masala",-5\r\n');
+});
+
+test("the clipboard's HTML table escapes cell text", () => {
+  const html = tableToHtml(["<b>a</b>"], [[`x & "y" 'z'`]]);
+  expect(html).toBe(
+    "<table><thead><tr><th>&lt;b&gt;a&lt;/b&gt;</th></tr></thead>" +
+      "<tbody><tr><td>x &amp; &quot;y&quot; &#39;z&#39;</td></tr></tbody></table>"
+  );
+});
+
+test("download names use the message number, a per-kind count and the language", () => {
+  const artifacts = collectArtifacts([
+    { role: "user", content: "q" },
+    {
+      role: "assistant",
+      content: "```python\na\n```\n\n```\nb\n```\n\n| a |\n| - |\n| 1 |\n\n| b |\n| - |\n| 2 |",
+    },
+  ]);
+  expect(artifacts.map((a) => textArtifactFilename(a as CodeArtifact | TableArtifact))).toEqual([
+    "snippet-2-1.py",
+    "snippet-2-2.txt",
+    "table-2-1.csv",
+    "table-2-2.csv",
+  ]);
+  expect(["bash", "sh", "shell", "zsh"].map(extensionFor)).toEqual(["sh", "sh", "sh", "sh"]);
+  expect(extensionFor("TypeScript")).toBe("ts");
+  expect(extensionFor("brainfuck")).toBe("txt");
 });
