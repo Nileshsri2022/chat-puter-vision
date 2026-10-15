@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import { useArtifactsPanel } from "@/hooks/useArtifactsPanel";
-import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Images } from "lucide-react";
+import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -254,7 +254,7 @@ const Index = () => {
   }, [messages, streamingContent]);
 
   // The artifacts panel's open state, derived lists and locate (see the hook).
-  const { artifactsOpen, setArtifactsOpen, imageArtifacts, unsavedAttachments, locateMessage } =
+  const { artifactsOpen, setArtifactsOpen, artifacts, unsavedAttachments, locateMessage } =
     useArtifactsPanel({ scrollRef, conversation: currentConversation });
 
   const searchTerm = searchQuery.trim().toLowerCase();
@@ -1135,24 +1135,24 @@ const Index = () => {
               </button>
             ))}
           <div className="app-header-group app-header-group-end">
-            {/* Conversation-level actions: the image index, share/export and
-                theme. The account lives in the sidebar footer now. */}
+            {/* Conversation-level actions: the artifacts panel, share/export
+                and theme. The account lives in the sidebar footer now. */}
             {isAuthenticated && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="app-icon-btn app-header-artifacts"
                 onClick={() => setArtifactsOpen((open) => !open)}
-                title="Images in this conversation"
-                aria-label={`Images in this conversation${
-                  imageArtifacts.length > 0 ? ` (${imageArtifacts.length})` : ""
+                title="Artifacts in this conversation"
+                aria-label={`Artifacts in this conversation${
+                  artifacts.length > 0 ? ` (${artifacts.length})` : ""
                 }`}
                 aria-expanded={artifactsOpen}
               >
-                <Images className="app-header-icon" aria-hidden="true" />
-                {imageArtifacts.length > 0 && (
+                <Layers className="app-header-icon" aria-hidden="true" />
+                {artifacts.length > 0 && (
                   <span className="app-header-artifacts-count" aria-hidden="true">
-                    {imageArtifacts.length}
+                    {artifacts.length}
                   </span>
                 )}
               </Button>
@@ -1337,11 +1337,11 @@ const Index = () => {
         )}
       </main>
 
-      {/* Image index for the open conversation. Docked at `xl`, an overlay
-          below it — the same split the sidebar uses at `lg`. */}
+      {/* Artifacts panel for the open conversation. Docked at `xl`, an
+          overlay below it — the same split the sidebar uses at `lg`. */}
       {isAuthenticated && (
         <ArtifactsPanel
-          artifacts={imageArtifacts}
+          artifacts={artifacts}
           unsavedAttachments={unsavedAttachments}
           isGeneratingImage={isGeneratingImage}
           isOpen={artifactsOpen}

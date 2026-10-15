@@ -153,19 +153,30 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a
   // response can never inject markup/scripts.
-  const CodeBlock = ({ children }: { children?: ReactNode }) => {
+  // `at`: the block's offset in the answer, stamped for the artifacts panel's
+  // block-level locate (see answerComponents below).
+  const CodeBlock = ({ children, at }: { children?: ReactNode; at?: number }) => {
     const [codeCopied, setCodeCopied] = useState(false);
     const preRef = useRef<HTMLPreElement>(null);
 
+    // Honest copy (#45): only an accepted write earns the check mark.
     const handleCopyCode = async () => {
       const text = preRef.current?.querySelector("code")?.innerText ?? "";
-      await copyToClipboard(text);
+      if (!(await copyToClipboard(text))) {
+        toast({
+          title: "Copy failed",
+          description: "The clipboard rejected the request.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
       setCodeCopied(true);
       setTimeout(() => setCodeCopied(false), 1500);
     };
 
     return (
-      <div className="msg-codeblock group/code">
+      <div className="msg-codeblock group/code" data-artifact-at={at}>
         <pre
           ref={preRef}
           className="msg-codeblock-pre"
@@ -267,6 +278,21 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
         alt={alt ?? ""}
         className="md-img"
       />
+    ),
+  };
+
+  // The answer stamps each code block and table with its offset in `answer`
+  // (`data-artifact-at`), matching what lib/artifactBlocks.ts computes, so
+  // the artifacts panel can locate one block rather than the whole message.
+  // Thinking renders a different string through `markdownComponents`, so
+  // its offsets would collide; it stays unstamped.
+  const answerComponents: Components = {
+    ...markdownComponents,
+    pre: ({ node, children }) => <CodeBlock at={node?.position?.start.offset}>{children}</CodeBlock>,
+    table: ({ node, children }) => (
+      <div className="md-table-wrap" data-artifact-at={node?.position?.start.offset}>
+        <table className="md-table">{children}</table>
+      </div>
     ),
   };
 
@@ -404,7 +430,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             <div className="msg-answer" data-search-text>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
+                components={answerComponents}
               >
                 {answer}
               </ReactMarkdown>

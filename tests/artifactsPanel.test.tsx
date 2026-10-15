@@ -11,7 +11,7 @@ import { test, expect } from "bun:test";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ArtifactsPanel } from "@/components/ArtifactsPanel";
-import { collectImageArtifacts, countUnsavedAttachments } from "@/lib/artifacts";
+import { collectArtifacts, collectImageArtifacts, countUnsavedAttachments } from "@/lib/artifacts";
 import type { Message } from "@/lib/backend";
 
 const MESSAGES: Message[] = [
@@ -88,7 +88,7 @@ test("attachments that predate Drive persistence are reported, not tiled", () =>
 
 test("an empty transcript explains what collects here", () => {
   const html = render({ artifacts: [], unsavedAttachments: 0 });
-  expect(html).toContain("No images in this chat yet");
+  expect(html).toContain("Nothing collected in this chat yet");
   expect(html).toContain("artifacts-empty");
 });
 
@@ -97,7 +97,7 @@ test("an in-flight generation shows a pending tile", () => {
   expect(html).toContain("Generating…");
   expect(html).toContain('role="status"');
   // The pending tile must not suppress the empty state's replacement.
-  expect(html).not.toContain("No images in this chat yet");
+  expect(html).not.toContain("Nothing collected in this chat yet");
 });
 
 test("the scrim only exists while the panel is open", () => {
@@ -106,7 +106,7 @@ test("the scrim only exists while the panel is open", () => {
   // Closed still means mounted (that is what makes it slide), so the panel and
   // its label are in the markup either way.
   expect(render({ isOpen: false })).toContain("artifacts-panel-closed");
-  expect(render({ isOpen: false })).toContain('aria-label="Images in this conversation"');
+  expect(render({ isOpen: false })).toContain('aria-label="Artifacts in this conversation"');
 });
 
 test("each tile offers preview, copy and download", () => {
@@ -115,4 +115,65 @@ test("each tile offers preview, copy and download", () => {
   expect(html.match(/title="Copy image"/g)).toHaveLength(3);
   expect(html.match(/title="Download image"/g)).toHaveLength(3);
   expect(html.match(/title="Show in chat — /g)).toHaveLength(3);
+});
+
+// ---- Phase 3: code blocks and tables ----
+
+const MIXED: Message[] = [
+  { role: "user", content: "Rates in a table, and the script" },
+  {
+    role: "assistant",
+    content:
+      "Here:\n\n| Item | Qty | Price |\n| --- | --- | --- |\n| Rice | 2 | ₹120 |\n\n" +
+      "```python\nimport requests\n\nprint(requests.get(URL))\n```",
+    model: "gpt-4o",
+  },
+  { role: "assistant", content: "", imagePath: "freetalk-gen.png" },
+];
+
+const headingsOf = (html: string) =>
+  [...html.matchAll(/<h3 class="artifacts-section-title">([^<]*)/g)].map((m) => m[1]);
+
+test("an image-only chat renders no section headings, exactly as in Phase 1", () => {
+  expect(render()).not.toContain("artifacts-section-title");
+});
+
+test("a mixed chat renders Images, Code and Tables in order, with chips for what is present", () => {
+  const html = render({ artifacts: collectArtifacts(MIXED), unsavedAttachments: 0 });
+  expect(headingsOf(html)).toEqual(["Images", "Code", "Tables"]);
+  // No attachments in this chat, so no Attached chip.
+  const chips = [...html.matchAll(/class="artifacts-filter[^"]*"[^>]*>([^<]*)<span/g)].map((m) => m[1]);
+  expect(chips).toEqual(["All", "Generated", "Code", "Tables"]);
+  expect(html).toContain('aria-label="Artifacts in this conversation"');
+});
+
+test("text rows read their kind, size and message, preview, and offer their actions", () => {
+  const html = render({ artifacts: collectArtifacts(MIXED), unsavedAttachments: 0 });
+  expect(html).toContain('aria-label="Python, 3 lines, message 2. Show in chat."');
+  expect(html).toContain('aria-label="Table, 1 row, 3 columns, message 2. Show in chat."');
+  // Code previews its first three non-empty lines; a table previews its header.
+  expect(html).toContain("import requests\nprint(requests.get(URL))<");
+  expect(html).toContain("Item · Qty · Price");
+  // Preview, copy and download on each row, each with an expanded touch target.
+  expect(html.match(/class="[^"]*artifact-row-action [^"]*tap-expand/g)).toHaveLength(6);
+  expect(html).toContain('title="Copy code"');
+  expect(html).toContain('title="Download CSV"');
+});
+
+test("a single text kind needs neither chips nor headings", () => {
+  const onlyCode = collectArtifacts([MIXED[1]]).filter((a) => a.kind === "code");
+  const html = render({ artifacts: onlyCode, unsavedAttachments: 0 });
+  expect(html).not.toContain("artifacts-filters");
+  expect(html).not.toContain("artifacts-section-title");
+  expect(html).toContain("artifact-row-btn");
+});
+
+test("a pending generation opens the Images group beside text", () => {
+  const html = render({
+    artifacts: collectArtifacts([MIXED[1]]),
+    unsavedAttachments: 0,
+    isGeneratingImage: true,
+  });
+  expect(headingsOf(html)).toEqual(["Images", "Code", "Tables"]);
+  expect(html).toContain("Generating…");
 });

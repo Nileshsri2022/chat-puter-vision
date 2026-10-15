@@ -26,6 +26,8 @@ const stylesheets = [
   "components/ErrorBoundary.css",
   "components/ArtifactsPanel.css",
   "components/ImageLightbox.css",
+  "components/ArtifactRow.css",
+  "components/TextPreviewDialog.css",
 ];
 
 const allCss = stylesheets.map(read).join("\n");
@@ -56,6 +58,7 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     "components/ChatInput.css",
     "components/ChatMessage.css",
     "components/ArtifactsPanel.css",
+    "components/ArtifactRow.css",
   ]) {
     expect(read(file)).toContain("@media (hover: hover) and (pointer: fine)");
     // The reveal must be re-hidden *inside* that guard, not merely present.
@@ -72,6 +75,7 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     ".msg-codeblock-copy",
     ".artifacts-tile-action",
     ".artifacts-close-btn",
+    ".artifact-row-action",
   ]) {
     expect(allCss).toContain(cls);
   }
@@ -91,6 +95,8 @@ test("icon buttons expand their touch target on coarse pointers", () => {
     ".app-icon-btn",
     ".artifacts-tile-action",
     ".artifacts-close-btn",
+    ".artifact-row-action",
+    ".text-preview-action",
   ]) {
     expect(allCss).toMatch(new RegExp(`${cls.replace(".", "\\.")}\\s*\\{[^}]*tap-expand`));
   }
@@ -354,7 +360,7 @@ test("artifacts panel width has a single source of truth and cannot exceed the v
   );
 });
 
-test("the images panel is reachable at every width and announces its state", () => {
+test("the artifacts panel is reachable at every width and announces its state", () => {
   const css = read("pages/Index.css");
   // It is the only way to reach the panel, so it cannot shed like search does.
   const toggleRule = /\.app-header-artifacts\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
@@ -362,9 +368,9 @@ test("the images panel is reachable at every width and announces its state", () 
   expect(toggleRule).not.toContain("hidden");
 
   const page = read("pages/Index.tsx");
-  expect(page).toContain("Images in this conversation");
+  expect(page).toContain("Artifacts in this conversation");
   expect(page).toContain("aria-expanded={artifactsOpen}");
-  expect(page).toContain('title="Images in this conversation"');
+  expect(page).toContain('title="Artifacts in this conversation"');
   // The count is a badge: the accessible name carries it instead.
   expect(page).toContain('className="app-header-artifacts-count" aria-hidden="true"');
 });
@@ -391,6 +397,62 @@ test("locating an image scrolls the Radix viewport and flashes the message", () 
   expect(css).toMatch(
     /prefers-reduced-motion[\s\S]*?\[data-artifact-flash\]\s*\{[^}]*outline:/
   );
+});
+
+test("a code block or table locates itself, inside the answer only", () => {
+  const hookSrc = read("hooks/useArtifactsPanel.ts");
+  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(hookSrc)?.[0] ?? "";
+  // Offsets are stamped on the answer only; thinking renders another string,
+  // so a lookup outside .msg-answer could land on the wrong block.
+  expect(locate).toContain('.msg-answer [data-artifact-at=');
+  // A block that is no longer rendered falls back to the whole message.
+  expect(locate).toMatch(/block \?\? message/);
+
+  // Blocks flash with an outline (children paint over an inset ring), and the
+  // more specific block rule must still stand down for reduced motion.
+  const css = read("pages/Index.css");
+  expect(css).toMatch(/\.msg-answer \[data-artifact-at\]\[data-artifact-flash\]\s*\{[^}]*animation:\s*artifact-block-flash/);
+  expect(css).toMatch(
+    /prefers-reduced-motion[\s\S]*?\.msg-answer \[data-artifact-at\]\[data-artifact-flash\]\s*\{[^}]*animation:\s*none/
+  );
+
+  const message = read("components/ChatMessage.tsx");
+  expect(message).toContain('className="msg-codeblock group/code" data-artifact-at={at}');
+  expect(message).toContain("components={answerComponents}");
+  expect(message).toContain("components={markdownComponents}");
+});
+
+test("the chip row scrolls sideways instead of wrapping", () => {
+  const css = read("components/ArtifactsPanel.css");
+  const row = /\.artifacts-filters\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(row).toContain("overflow-x-auto");
+  expect(row).not.toContain("flex-wrap");
+  const chip = /\.artifacts-filter\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(chip).toContain("shrink-0");
+  expect(chip).toContain("whitespace-nowrap");
+});
+
+test("the text preview fits the dynamic viewport", () => {
+  const rule = /\.text-preview-panel\s*\{([^}]*)\}/.exec(read("components/TextPreviewDialog.css"))?.[1] ?? "";
+  // vh is the fallback; dvh, declared after it, is the one that wins.
+  const vhAt = rule.indexOf("max-height: calc(100vh - 2rem);");
+  const dvhAt = rule.indexOf("max-height: calc(100dvh - 2rem);");
+  expect(vhAt).toBeGreaterThanOrEqual(0);
+  expect(dvhAt).toBeGreaterThan(vhAt);
+});
+
+test("the artifacts panel never mints attachments of its own", () => {
+  // Attachment refs are created in exactly one place (Index's send and edit
+  // flows); a panel that wrote its own would orphan Drive files.
+  for (const file of [
+    "hooks/useArtifactsPanel.ts",
+    "components/ArtifactsPanel.tsx",
+    "components/ArtifactTile.tsx",
+    "components/ArtifactRow.tsx",
+  ]) {
+    const src = read(file);
+    expect(`${file}: ${/newAttachmentPath|persistAttachment/.test(src)}`).toBe(`${file}: false`);
+  }
 });
 
 test("a closed panel leaves the tab order instead of trapping focus off-screen", () => {

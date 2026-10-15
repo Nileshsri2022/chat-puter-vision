@@ -1,0 +1,68 @@
+/* ArtifactRow styles — one code block or table in the artifacts panel.
+   Same touch rule as the image tile in ArtifactsPanel.css: the actions are
+   visible by default and hover-revealed for fine pointers only. */
+
+.artifact-row {
+  @apply relative overflow-hidden rounded-lg border border-border bg-muted/30;
+}
+
+.artifact-row-btn {
+  @apply flex w-full min-w-0 flex-col gap-1.5 px-2.5 pb-1 pt-2 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset;
+}
+
+.artifact-row-head {
+  @apply flex min-w-0 items-center gap-1.5 text-xs;
+}
+
+.artifact-row-icon {
+  @apply size-3.5 shrink-0 text-muted-foreground;
+}
+
+.artifact-row-label {
+  @apply min-w-0 flex-1 truncate font-medium text-foreground;
+}
+
+/* As tall as the actions pill, which sits over its right end: the pill can
+   never cover text, and the line is not empty on desktop while the actions
+   are hidden. */
+.artifact-row-foot {
+  @apply flex h-9 items-center text-[11px] tabular-nums text-muted-foreground;
+}
+
+/* Long lines are clipped with a fade rather than wrapped: the preview is a
+   glance, and the dialog is where the block is read. */
+.artifact-row-preview {
+  @apply block overflow-hidden font-mono text-[11px] leading-snug text-muted-foreground;
+  white-space: pre;
+  -webkit-mask-image: linear-gradient(to right, #000 70%, transparent);
+  mask-image: linear-gradient(to right, #000 70%, transparent);
+}
+
+.artifact-row-preview-table {
+  @apply font-sans;
+}
+
+.artifact-row-actions {
+  @apply absolute bottom-1.5 right-2 flex items-center gap-0.5 rounded-full border border-border bg-background/95 p-0.5 opacity-100 shadow-sm transition-opacity;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .artifact-row-actions {
+    opacity: 0;
+  }
+
+  /* :focus-within on the container: a child cannot be more opaque than its
+     parent, so revealing only the focused button would leave it invisible. */
+  .artifact-row:hover .artifact-row-actions,
+  .artifact-row-actions:focus-within {
+    opacity: 1;
+  }
+}
+
+.artifact-row-action {
+  @apply size-7 tap-expand text-muted-foreground hover:text-foreground;
+}
+
+.artifact-row-action-icon {
+  @apply size-3.5;
+}

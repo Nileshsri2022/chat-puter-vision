@@ -11,6 +11,7 @@ import { test, expect } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { collectArtifacts, isImageArtifact } from "@/lib/artifacts";
 
 test("a text-only answer opens no overlay", () => {
   const html = renderToStaticMarkup(
@@ -66,4 +67,46 @@ test("the overlay renders the image it was given", () => {
   expect(html).toContain('role="dialog"');
   expect(html).toContain('src="data:image/png;base64,AAAA"');
   expect(html).toContain("receipt.jpg");
+});
+
+// ---- Phase 3: block-level locate ----
+//
+// The artifacts panel locates a code block or table by the offset the
+// collector computed; the transcript has to stamp the very same number.
+
+const BLOCKS = [
+  "<think>Plan:\n\n```js\nthinking()\n```\n\n| t | u |\n| - | - |\n| 1 | 2 |</think>Here is the script:",
+  "",
+  "```python",
+  "print('hi')",
+  "```",
+  "",
+  "| Item | Price |",
+  "| --- | --- |",
+  "| Tea | ₹40 |",
+  "",
+  "- then run:",
+  "",
+  "      indented()",
+].join("\n");
+
+test("the answer's code blocks and tables carry the collector's offsets", () => {
+  const html = renderToStaticMarkup(<ChatMessage role="assistant" content={BLOCKS} />);
+  const stamped = [...html.matchAll(/data-artifact-at="(\d+)"/g)].map((m) => Number(m[1]));
+  const expected = collectArtifacts([{ role: "assistant", content: BLOCKS }]).flatMap((a) =>
+    isImageArtifact(a) ? [] : [a.at]
+  );
+  // Fenced code, a table and code indented inside a list item.
+  expect(expected).toHaveLength(3);
+  expect(stamped).toEqual(expected);
+});
+
+test("blocks in the thinking section carry no offsets", () => {
+  const html = renderToStaticMarkup(<ChatMessage role="assistant" content={BLOCKS} />);
+  const thinking = /class="msg-think-body"[\s\S]*?class="msg-answer"/.exec(html)?.[0] ?? "";
+  // Rendered (thinking opens expanded), with its own code and table...
+  expect(thinking).toContain("thinking()");
+  expect(thinking).toContain("md-table-wrap");
+  // ...but unstamped: its offsets index a different string.
+  expect(thinking).not.toContain("data-artifact-at");
 });

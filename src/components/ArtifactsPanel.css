@@ -58,13 +58,15 @@
   @apply size-4;
 }
 
-/* Filter row. Rendered only when more than one kind is present. */
+/* Filter row. Rendered only when more than one kind is present. One line
+   that scrolls sideways: with up to five chips, wrapping would push the
+   content down on a narrow panel. */
 .artifacts-filters {
-  @apply flex shrink-0 gap-1 border-b border-border px-3 py-2;
+  @apply flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 py-2;
 }
 
 .artifacts-filter {
-  @apply inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
 }
 
 .artifacts-filter-active {
@@ -84,8 +86,28 @@
   display: block !important;
 }
 
+/* The padding lives on the wrapper, not the grid, so an image-only chat keeps
+   the Phase 1 spacing exactly. */
+.artifacts-sections {
+  @apply flex flex-col gap-4 p-3;
+}
+
+/* Only rendered when two or more groups have items. */
+.artifacts-section-title {
+  @apply mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground;
+}
+
+.artifacts-section-count {
+  @apply rounded-full bg-muted px-1.5 text-[10px] font-medium normal-case tabular-nums tracking-normal;
+}
+
 .artifacts-grid {
-  @apply grid grid-cols-2 gap-2 p-3;
+  @apply grid grid-cols-2 gap-2;
+}
+
+/* Code and table rows: full width, one per line. */
+.artifacts-list {
+  @apply flex flex-col gap-2;
 }
 
 .artifacts-tile {

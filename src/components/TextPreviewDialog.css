@@ -1,0 +1,60 @@
+/* TextPreviewDialog styles — the full-screen read of a code block or table.
+   Same stacking level as ImageLightbox (z-50), so it covers the artifacts
+   panel (z-40) whether that is docked or an overlay. */
+
+.text-preview {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4;
+  /* Clear the notch and the home bar on a phone. */
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.text-preview-panel {
+  @apply flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl;
+  /* vh is the fallback and dvh wins where supported: vh measures the
+     chrome-hidden viewport and would push the panel under the browser UI. */
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+}
+
+.text-preview-header {
+  @apply flex shrink-0 items-center gap-1 border-b border-border py-2 pl-3 pr-2;
+}
+
+.text-preview-title-icon {
+  @apply size-4 shrink-0 text-muted-foreground;
+}
+
+.text-preview-title {
+  @apply ml-1 min-w-0 flex-1 truncate text-sm font-semibold text-foreground;
+}
+
+.text-preview-action {
+  @apply size-8 shrink-0 tap-expand text-muted-foreground hover:text-foreground;
+}
+
+.text-preview-action-icon {
+  @apply size-4;
+}
+
+.text-preview-body {
+  @apply min-h-0 flex-1 overflow-auto;
+}
+
+/* Code keeps its lines: it scrolls sideways instead of wrapping. */
+.text-preview-pre {
+  @apply m-0 p-4 font-mono text-xs leading-relaxed text-foreground;
+  white-space: pre;
+}
+
+.text-preview-table {
+  @apply w-full border-collapse text-xs;
+}
+
+.text-preview-table th {
+  @apply sticky top-0 border-b border-border bg-muted px-3 py-2 text-left font-semibold text-foreground;
+}
+
+.text-preview-table td {
+  @apply border-b border-border px-3 py-1.5 align-top text-foreground;
+}

@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMediaQuery, ARTIFACTS_DOCK_QUERY } from "@/hooks/useMediaQuery";
-import { collectImageArtifacts, countUnsavedAttachments } from "@/lib/artifacts";
+import { collectArtifacts, countUnsavedAttachments, type LocateOptions } from "@/lib/artifacts";
 import type { Conversation } from "@/pages/Index";
 
 interface UseArtifactsPanelOptions {
@@ -38,12 +38,14 @@ export function useArtifactsPanel({ scrollRef, conversation }: UseArtifactsPanel
   }, [artifactsOpen]);
 
   /**
-   * Images in the open conversation, derived on every render. Messages are
-   * index-keyed and deleting one splices the array, so a stored pointer would
-   * go stale — recomputing is what keeps a tile aimed at the right message.
+   * Artifacts in the open conversation (images, code blocks, tables), derived
+   * on every render. Messages are index-keyed and deleting one splices the
+   * array, so a stored pointer would go stale — recomputing is what keeps an
+   * entry aimed at the right message. Parses are cached per message object
+   * (lib/artifactBlocks.ts), so this stays cheap while a reply streams.
    */
-  const imageArtifacts = useMemo(
-    () => collectImageArtifacts(conversation?.messages ?? []),
+  const artifacts = useMemo(
+    () => collectArtifacts(conversation?.messages ?? []),
     [conversation]
   );
   /** Attachments claimed by a legacy marker whose bytes were never stored. */
@@ -53,6 +55,10 @@ export function useArtifactsPanel({ scrollRef, conversation }: UseArtifactsPanel
   );
 
   const flashTimer = useRef<number | null>(null);
+  // The element currently flashing, so a second locate inside the 1.4s window
+  // can clear it. Otherwise it keeps the attribute, and under reduced motion
+  // its outline never goes away.
+  const flashed = useRef<HTMLElement | null>(null);
   useEffect(
     () => () => {
       if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
@@ -61,29 +67,43 @@ export function useArtifactsPanel({ scrollRef, conversation }: UseArtifactsPanel
   );
 
   /**
-   * Scroll the transcript to a message and flash it. `scrollIntoView` rather
-   * than scrollTop: the scroller is Radix's viewport, not the element the ref
-   * is attached to (issue #34) — find-in-chat does the same.
+   * Scroll the transcript to a message, or to one code block or table in it,
+   * and flash it. `scrollIntoView` rather than scrollTop: the scroller is
+   * Radix's viewport, not the element the ref is attached to (issue #34) —
+   * find-in-chat does the same.
    */
   const locateMessage = useCallback(
-    (messageIndex: number) => {
+    (messageIndex: number, opts?: LocateOptions) => {
       if (!artifactsDocked) setArtifactsOpen(false);
       // Next frame, so the panel's own close has been committed first.
       window.setTimeout(() => {
-        const el = scrollRef.current?.querySelector<HTMLElement>(
+        const message = scrollRef.current?.querySelector<HTMLElement>(
           `[data-message-index="${messageIndex}"]`
         );
-        if (!el) return;
+        if (!message) return;
+        // A block is looked up inside the answer only: ChatMessage stamps
+        // offsets there and nowhere else (thinking renders a different
+        // string). A block that is gone falls back to the whole message.
+        const block =
+          typeof opts?.at === "number"
+            ? message.querySelector<HTMLElement>(`.msg-answer [data-artifact-at="${opts.at}"]`)
+            : null;
+        const el = block ?? message;
         el.scrollIntoView({ block: "center", behavior: "smooth" });
+        if (flashed.current && flashed.current !== el) {
+          flashed.current.removeAttribute("data-artifact-flash");
+        }
         // Remove-then-set with a reflow between: locating the same image twice
         // would otherwise leave the one-shot animation finished and invisible.
         el.removeAttribute("data-artifact-flash");
         void el.offsetWidth;
         el.setAttribute("data-artifact-flash", "");
+        flashed.current = el;
         if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
         flashTimer.current = window.setTimeout(() => {
           el.removeAttribute("data-artifact-flash");
           flashTimer.current = null;
+          flashed.current = null;
         }, 1400);
       }, 0);
     },
@@ -94,7 +114,7 @@ export function useArtifactsPanel({ scrollRef, conversation }: UseArtifactsPanel
     artifactsDocked,
     artifactsOpen,
     setArtifactsOpen,
-    imageArtifacts,
+    artifacts,
     unsavedAttachments,
     locateMessage,
   };
