@@ -83,6 +83,11 @@ their message. Messages sent before this existed carry only the marker, which
 `countUnsavedAttachments()` (`src/lib/artifacts.ts`) reports rather than
 pretending to resolve. Attachments are still not re-sent on retry.
 
+Deleting the message, editing it, or deleting the conversation reclaims those
+files again (`reclaimImagePaths()` + `deleteImage()`); the two silent drops —
+the localStorage quota fallback and a tombstone arriving from another device —
+deliberately do not, because the conversation may still be alive elsewhere.
+
 ### 4. AI SDK Interaction
 - The messages array is passed through to the API as-is.
 - Streaming chunks are parsed per the documented shape:

@@ -34,6 +34,9 @@ the work.
    toggle.
 5. Follow the repo's existing responsive, a11y and persistence conventions —
    including the static guards in `tests/responsive.test.ts`.
+6. Reclaim the Drive files behind a message, chat, or edit the user
+   deliberately destroys — which also stops the leak generated images have had
+   all along (§6.2).
 
 ## 3. Non-goals (v1)
 
@@ -43,7 +46,6 @@ the work.
 | A library across **all** conversations | Requires indexing every conversation's messages on load and a Drive-side listing; out of scope. |
 | Attaching an artifact into the next prompt | Different feature ("reference as context"), needs composer changes. |
 | Images embedded in Markdown answers (`![](...)`) | Model-emitted URLs are usually expired or CORS-blocked, so copy/download cannot be promised. Phase 2 (§11). |
-| Deleting Drive files when a message is deleted | `BackendFS` types only `write`/`read`; generated images already leak the same way. Phase 2. |
 | Backfilling attachments from existing conversations | The bytes were never stored anywhere. The panel says so instead of silently omitting (§8.4). |
 
 ## 4. Data model
@@ -151,6 +153,9 @@ export function newAttachmentPath(mimeType?: string): string; // freetalk-upload
 /** Best-effort write of one attachment. Resolves false; never throws. */
 export function persistAttachment(blob: Blob, path: string): Promise<boolean>;
 
+/** Best-effort delete + cache eviction. Feature-detected; resolves false. */
+export function deleteImage(path: string): Promise<boolean>;
+
 /** Resolves to the stored Blob (cached per path). */
 export function loadImageBlob(path: string): Promise<Blob>;
 ```
@@ -203,6 +208,52 @@ instead of issuing a read that cannot succeed, and the send path toasts
 *"Image not saved to your library — <name> was sent, but could not be stored"*.
 The send itself still succeeded: this is a warning, not an error, and it is what
 stops a silently missing image from looking like a panel bug.
+
+### 6.2 Reclaim — and the two drops that must not
+
+`reclaimImagePaths(messages)` (`lib/artifacts.ts`) returns the Drive paths a set
+of messages owns: attachment refs plus `imagePath`. Legacy `image` srcs are
+excluded — a data URI is inline in the message and a hosted URL belongs to
+somebody else's server, so neither is ours to delete.
+
+`deleteImage(path)` is feature-detected (`typeof fs.delete === "function"`,
+declared optional on `BackendFS`) and best-effort: an SDK without delete, or a
+refused one, degrades to "the file stays" instead of breaking the delete that
+asked for it. It evicts both caches without revoking the object URL, so a tile
+still mounted keeps showing what it already resolved.
+
+Wired into the four **deliberate** local deletions:
+
+| Call site | What it drops |
+| --- | --- |
+| `handleDeleteMessage` | that message |
+| `handleEditMessage` | the edited message and the truncated tail — **only once the edit has stuck** |
+| a send that rolled back | the attachments it had just stored |
+| `handleDeleteConversation` | every message in the chat |
+| `handleDeleteConversations` | every message in each selected chat |
+
+**Two of those are conditional, because both can be undone.**
+`runAssistantReply` returns whether the reply stuck: an error rolls the
+transcript back to the messages it started from, refs and all, while a user
+abort keeps whatever streamed (and so keeps its refs). The edit path therefore
+reclaims only `if (delivered)` — reclaiming first would delete files the
+restored messages still point at — and a rolled-back send reclaims the
+attachments it had stored a moment earlier, because after the rollback nothing
+references them any more.
+
+And deliberately **not** wired into the two silent drops, because in both the
+conversation may still be alive in KV and on screen on another device — deleting
+its files would break images that are still in use somewhere:
+
+| Silent drop | Why it must not reclaim |
+| --- | --- |
+| `saveConversations` quota fallback (`slice(-10)`) | Discards chats wholesale with no user intent; they still exist in KV. |
+| `mergeDocs` applying a tombstone | Another device's decision; the local copy is a replica, not the owner. |
+
+That asymmetry is the whole rule, so `tests/artifacts.test.ts` asserts both
+halves of it against the source: every deliberate delete calls
+`reclaimMessages(`, and neither `lib/utils/storage.ts` nor `lib/sync.ts`
+mentions it.
 
 ## 7. Layout
 
@@ -404,6 +455,13 @@ No new dependency: `react-dom` is already present.
 - `persistAttachment` — `true` on a successful `fs.write`; `false` when the SDK
   is absent; `false` (does **not** throw) when the write rejects.
 - `mergeDocs` round-trip preserves `attachments` on a normalized conversation.
+- Reads versus background writes: a read waits out an in-flight write, a failed
+  write reports storage instead of issuing a doomed read, and a settled write is
+  forgotten so later reads go to Drive.
+- Reclaim: `reclaimImagePaths` lists only Drive paths this app wrote (never a
+  data URI or a hosted URL), `deleteImage` evicts its caches, is a no-op without
+  `fs.delete`, and never throws — plus both halves of the §6.2 asymmetry
+  asserted against the source.
 
 `tests/responsive.test.ts` (extended, house style — static guards):
 
@@ -428,15 +486,15 @@ sign out and confirm the toggle is gone.
 
 | Phase | Contents |
 | --- | --- |
-| **1 (this PR)** | `AttachmentRef` + optimistic Drive persistence, `lib/artifacts.ts`, `ArtifactsPanel`, `ImageLightbox`, header toggle, locate + flash, copy/download/preview, tests |
-| 2 | Markdown-embedded images; Drive cleanup on message delete; swap `ChatMessage` to the shared lightbox (fixes #48); unblock image-only retries now that attachments are stored (#32, #33) |
+| **1 (this PR)** | `AttachmentRef` + optimistic Drive persistence, reads that wait writes out, reclaim on deliberate deletes, `lib/artifacts.ts`, `ArtifactsPanel`, `ImageLightbox`, header toggle, locate + flash, copy/download/preview, tests |
+| 2 | Markdown-embedded images; swap `ChatMessage` to the shared lightbox (fixes #48); unblock image-only retries now that attachments are stored (#32, #33); an issue for the quota fallback silently discarding conversations |
 | 3 | Non-image artifacts (code, tables, OCR text, exports) behind a `kind` union; cross-conversation library; "attach to next prompt" |
 
 ## 12. Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| Drive storage grows with every attachment | Normalized ≤1.2 MB files, same folder as generated images which already behave this way; Phase 2 adds cleanup. Deleting a message, editing one, or deleting a conversation orphans its files — nothing reclaims them today, and `BackendFS` types only `write`/`read` |
+| Drive storage grows with every attachment | Normalized ≤1.2 MB files, same folder as generated images. Deliberate deletes reclaim their files (§6.2); what remains is live data the user can still see, plus anything orphaned by the two silent drops, which is accepted because reclaiming there would break other devices |
 | Uploads now land in the user's Drive | New behaviour: an attachment used to be ephemeral. It is the account's own storage, the same place generated images already go, and it is what makes attachments survive a reload and follow the user to another device — but it is a change worth announcing in release notes |
 | A background write fails silently | It does not: reads wait the write out, a failed write throws a storage error rather than 404ing, and the send path toasts (§6.1) |
 | A tile reads before the upload lands | `pendingWrites` makes the read wait instead of racing (§6.1) |

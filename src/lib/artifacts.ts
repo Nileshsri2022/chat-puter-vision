@@ -112,6 +112,30 @@ export function countUnsavedAttachments(messages: Message[]): number {
   }, 0);
 }
 
+/**
+ * The Drive paths a set of messages owns — everything to reclaim when those
+ * messages are deliberately destroyed.
+ *
+ * Legacy `image` srcs are excluded on purpose: a data URI is inline in the
+ * message itself, and a hosted URL belongs to somebody else's server. Only
+ * files this app wrote are ours to delete.
+ */
+export function reclaimImagePaths(messages: Message[]): string[] {
+  const paths = new Set<string>();
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    if (Array.isArray(message.attachments)) {
+      for (const ref of message.attachments) {
+        if (ref && typeof ref.path === "string" && ref.path) paths.add(ref.path);
+      }
+    }
+    if (typeof message.imagePath === "string" && message.imagePath) {
+      paths.add(message.imagePath);
+    }
+  }
+  return [...paths];
+}
+
 /** Per-kind counts, for the panel's filter row. */
 export function countByKind(
   artifacts: ImageArtifact[]

@@ -8,6 +8,8 @@
 // storage failure can never cost the user their message.
 
 import { test, expect } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { mockPuter } from "./helpers";
 import type { Message } from "../src/lib/backend";
 import {
@@ -15,8 +17,10 @@ import {
   collectImageArtifacts,
   countByKind,
   countUnsavedAttachments,
+  reclaimImagePaths,
 } from "../src/lib/artifacts";
 import {
+  deleteImage,
   loadImageBlob,
   newAttachmentPath,
   newImagePath,
@@ -399,4 +403,139 @@ test("attachment refs survive normalization of a remote-newer conversation", () 
   const messages = (merged.conversations[0] as unknown as TestConv).messages;
   expect((messages[0] as Message).attachments?.[0].path).toBe("freetalk-upload-1.jpg");
   expect((messages[0] as Message).attachments?.[0].name).toBe("receipt.jpg");
+});
+
+// ---- reclaiming stored images ----
+
+const RECLAIM_MESSAGES: Message[] = [
+  { role: "user", content: "x", attachments: [{ path: "up-1.png" }, { path: "up-2.jpg" }] },
+  { role: "assistant", content: "", imagePath: "gen-1.png" },
+  // Neither of these is ours to delete: a data URI is inline in the message and
+  // a hosted URL belongs to somebody else's server.
+  { role: "assistant", content: "", image: "data:image/png;base64,AAAA" },
+  { role: "assistant", content: "", image: "https://cdn.test/a.png" },
+  { role: "user", content: "no image at all" },
+];
+
+test("reclaim lists only the Drive paths this app wrote", () => {
+  expect(reclaimImagePaths(RECLAIM_MESSAGES)).toEqual(["up-1.png", "up-2.jpg", "gen-1.png"]);
+});
+
+test("reclaim dedupes and ignores malformed refs", () => {
+  const messages = [
+    {
+      role: "user",
+      content: "x",
+      attachments: [{ path: "same.png" }, { path: "" }, { nope: true }],
+      imagePath: "same.png",
+    },
+  ] as unknown as Message[];
+  expect(reclaimImagePaths(messages)).toEqual(["same.png"]);
+});
+
+test("reclaim of a transcript with nothing stored is empty", () => {
+  expect(reclaimImagePaths([])).toEqual([]);
+  expect(reclaimImagePaths([{ role: "user", content: "hi" }])).toEqual([]);
+});
+
+test("deleteImage removes the file and evicts its cached blob", async () => {
+  let reads = 0;
+  const deleted: string[] = [];
+  mockPuter({
+    fs: {
+      read: async () => {
+        reads += 1;
+        return BLOB;
+      },
+      delete: async (path: string) => {
+        deleted.push(path);
+        return true;
+      },
+    },
+  });
+  await loadImageBlob("evict.png");
+  await loadImageBlob("evict.png");
+  expect(reads).toBe(1); // cached
+  expect(await deleteImage("evict.png")).toBe(true);
+  expect(deleted).toEqual(["evict.png"]);
+  await loadImageBlob("evict.png");
+  expect(reads).toBe(2); // cache was dropped, so this is a real read
+});
+
+test("deleteImage is a no-op without fs.delete and never throws", async () => {
+  // Feature-detected: an SDK that does not expose delete must degrade to "the
+  // file stays", not break the delete that triggered it.
+  mockPuter({ fs: { read: async () => BLOB } });
+  expect(await deleteImage("no-delete-api.png")).toBe(false);
+  mockPuter(undefined);
+  expect(await deleteImage("no-sdk.png")).toBe(false);
+  mockPuter({
+    fs: {
+      delete: async () => {
+        throw new Error("permission_denied");
+      },
+    },
+  });
+  expect(await deleteImage("denied.png")).toBe(false);
+});
+
+// ---- where reclaim is, and is not, wired ----
+
+const readSrc = (rel: string) => readFileSync(join(import.meta.dir, "..", "src", rel), "utf8");
+
+test("every deliberate delete reclaims the images it drops", () => {
+  const page = readSrc("pages/Index.tsx");
+  for (const fn of [
+    "handleDeleteMessage",
+    "handleEditMessage",
+    "handleDeleteConversation",
+    "handleDeleteConversations",
+  ]) {
+    const body = new RegExp(`const ${fn} = [\\s\\S]*?^\\s{2}\\};`, "m").exec(page)?.[0] ?? "";
+    // The call itself in the message: a whole handler body is unreadable here.
+    const call = /reclaimMessages\([^)]*\)/.exec(body)?.[0];
+    expect(`${fn} → ${call ?? "no reclaim call"}`).toContain("reclaimMessages(");
+  }
+  // And the rule itself is written down where the next reader will find it.
+  expect(page).toContain("function reclaimMessages(");
+  expect(page).toMatch(/quota fallback[\s\S]{0,400}reclaimMessages/);
+});
+
+test("a silent drop never deletes files another device may still show", () => {
+  // The localStorage quota fallback discards conversations wholesale, and a
+  // tombstone arriving over KV discards them from another device's decision.
+  // In both cases the conversation may still be alive in KV and on screen
+  // elsewhere, so reclaiming there would break images that are still in use.
+  for (const file of ["lib/utils/storage.ts", "lib/sync.ts"]) {
+    // Named in the assertion message: which file grew a reclaim call matters.
+    const src = readSrc(file);
+    const found = src.match(/deleteImage|reclaimImagePaths|reclaimMessages/g) ?? [];
+    expect(`${file} reclaims via: ${found.join(", ") || "nothing"}`).toBe(
+      `${file} reclaims via: nothing`
+    );
+  }
+});
+
+test("reclaim waits for an edit to stick, because a failed reply rolls back", () => {
+  const page = readSrc("pages/Index.tsx");
+  const edit = /const handleEditMessage[\s\S]*?^\s{2}\};/m.exec(page)?.[0] ?? "";
+  // A failed reply restores `messages` refs and all, so deleting their files
+  // first would leave the restored message pointing at nothing.
+  expect(edit).toMatch(
+    /if \(delivered\) reclaimMessages\(messages\.slice\(messageIndex\)\)/
+  );
+
+  // Which means the runner has to be able to say what happened: an error rolls
+  // back, a user abort keeps whatever streamed and so keeps its refs.
+  const runner = /const runAssistantReply[\s\S]*?^\s{2}\};/m.exec(page)?.[0] ?? "";
+  expect(runner).toContain("return !failed;");
+  expect(runner).toMatch(/const onError = \(error: Error\) => \{\s*failed = true;/);
+});
+
+test("a send that rolled back reclaims the attachments it had just stored", () => {
+  const page = readSrc("pages/Index.tsx");
+  const send = /const handleSendMessage[\s\S]*?^\s{2}\};/m.exec(page)?.[0] ?? "";
+  expect(send).toMatch(/if \(!delivered\) \{[\s\S]{0,140}deleteImage\(ref\.path\)/);
+  // ...and only a rollback: a stopped reply keeps the message and its images.
+  expect(page).toMatch(/a user abort keeps/);
 });

@@ -14,8 +14,8 @@ import {
   type CompactionItem,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
-import { generateImage, newAttachmentPath, persistAttachment } from "@/lib/images";
-import { collectImageArtifacts, countUnsavedAttachments } from "@/lib/artifacts";
+import { deleteImage, generateImage, newAttachmentPath, persistAttachment } from "@/lib/images";
+import { collectImageArtifacts, countUnsavedAttachments, reclaimImagePaths } from "@/lib/artifacts";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
@@ -91,6 +91,23 @@ async function prepareAndStoreAttachments(
     dataUrls: prepared.map((attachment) => attachment.dataUrl),
     refs,
   };
+}
+
+/**
+ * Reclaim the Drive files owned by messages that are being deliberately
+ * destroyed.
+ *
+ * Only explicit local deletion qualifies. The localStorage quota fallback
+ * (`saveConversations` dropping all but the last ten) and a tombstone arriving
+ * from another device both discard conversations that may still be alive in KV
+ * and on screen elsewhere — deleting their files would break images another
+ * device is still showing. Best-effort like the write: a failed delete must
+ * never break the delete that triggered it.
+ */
+function reclaimMessages(messages: Message[]): void {
+  for (const path of reclaimImagePaths(messages)) {
+    void deleteImage(path);
+  }
 }
 
 const Index = () => {
@@ -544,13 +561,19 @@ const Index = () => {
 
     // Prior turns go as conversation history (text only); the current
     // message carries the images via image_url content blocks.
-    runAssistantReply({
+    void runAssistantReply({
       baseMessages: updatedMessages,
       rollbackMessages: messages,
       history: toHistory(messages),
       prompt: content,
       modelId: selectedModelId,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+    }).then((delivered) => {
+      // Rolled back: the message carrying these refs is gone, so the files we
+      // stored for it a moment ago are ours to reclaim.
+      if (!delivered) {
+        for (const ref of attachmentRefs) void deleteImage(ref.path);
+      }
     });
   };
 
@@ -578,6 +601,10 @@ const Index = () => {
   }: ReplyRunnerArgs) => {
     const controller = new AbortController();
     abortRef.current = controller;
+    // Callers that stored something for this turn need to know whether the
+    // transcript kept it: an error rolls the messages back, a user abort keeps
+    // whatever streamed. Only the first orphans what was written.
+    let failed = false;
 
     setIsStreaming(true);
     setStreamingContent("");
@@ -634,6 +661,7 @@ const Index = () => {
     };
 
     const onError = (error: Error) => {
+      failed = true;
       console.error('Chat error:', error);
       toast({
         title: "Message failed to send",
@@ -667,6 +695,7 @@ const Index = () => {
     } catch (error) {
       onError(error instanceof Error ? error : new Error(`AI request failed: ${(error as Error)?.message || 'Unknown error'}`));
     }
+    return !failed;
   };
 
   const handleStop = () => {
@@ -775,6 +804,8 @@ const Index = () => {
 
   const handleDeleteConversation = (id: string) => {
     recordDelete(id);
+    const doomed = conversationsRef.current.find((conv) => conv.id === id);
+    if (doomed) reclaimMessages(doomed.messages);
     const remaining = conversations.filter((conv) => conv.id !== id);
     if (remaining.length === 0) {
       // If no conversations left, create a new one
@@ -822,6 +853,9 @@ const Index = () => {
 
   const handleDeleteConversations = (ids: string[]) => {
     ids.forEach((id) => recordDelete(id));
+    conversationsRef.current
+      .filter((conv) => ids.includes(conv.id))
+      .forEach((conv) => reclaimMessages(conv.messages));
     const remaining = conversationsRef.current.filter((conv) => !ids.includes(conv.id));
     if (remaining.length === 0) {
       const newConv: Conversation = {
@@ -903,7 +937,7 @@ const Index = () => {
       )
     );
 
-    await runAssistantReply({
+    const delivered = await runAssistantReply({
       baseMessages: updatedMessages,
       rollbackMessages: messages,
       history: toHistory(priorMessages),
@@ -911,6 +945,12 @@ const Index = () => {
       modelId: model || selectedModel,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
+    // Editing replaces this message and truncates the tail, so every image from
+    // messageIndex onwards loses its ref — but only once the edit has stuck. A
+    // failed reply rolls the transcript back to `messages`, refs and all, and
+    // deleting their files first would leave the restored messages pointing at
+    // nothing.
+    if (delivered) reclaimMessages(messages.slice(messageIndex));
   };
 
   const commitTitle = () => {
@@ -974,6 +1014,8 @@ const Index = () => {
   };
 
   const handleDeleteMessage = (messageIndex: number) => {
+    const removed = messages[messageIndex];
+    if (removed) reclaimMessages([removed]);
     setConversations(prev => prev.map(conv =>
       conv.id === currentConversationId
         ? {

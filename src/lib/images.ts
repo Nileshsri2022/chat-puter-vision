@@ -121,6 +121,27 @@ export function loadImageUrl(path: string): Promise<string> {
 }
 
 /**
+ * Delete a stored image and forget its cached blob.
+ *
+ * Best-effort and feature-detected: an SDK without `fs.delete` is a no-op, and
+ * a failed delete must never break the user action that asked for it. The cache
+ * entries are dropped without revoking the object URL, so a tile that is still
+ * mounted keeps showing the image it already resolved.
+ */
+export async function deleteImage(path: string): Promise<boolean> {
+  imageBlobCache.delete(path);
+  imageUrlCache.delete(path);
+  try {
+    const fs = window.puter?.fs;
+    if (!fs?.delete) return false;
+    await fs.delete(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Save an attachment to Drive so the conversation keeps a reference to it.
  *
  * Best-effort by design: this runs in the background of a send, and a Drive

@@ -166,6 +166,12 @@ export interface FSWriteOptions {
 interface BackendFS {
   write(path: string, data?: string | File | Blob | ArrayBuffer, options?: FSWriteOptions): Promise<FSItem>;
   read(path: string): Promise<Blob>;
+  /**
+   * Optional because it is only used to reclaim images this app wrote, and a
+   * missing delete must degrade to "the file stays" rather than break the
+   * delete that triggered it. Feature-detected at the call site.
+   */
+  delete?(path: string): Promise<unknown>;
 }
 
 interface BackendKV {
