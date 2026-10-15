@@ -339,7 +339,8 @@ test("the artifacts panel docks and overlays at one breakpoint", () => {
   const hook = read("hooks/useMediaQuery.ts");
   expect(hook).toContain("ARTIFACTS_DOCK_QUERY");
   expect(hook).toMatch(/ARTIFACTS_DOCK_QUERY = "\(min-width: 1280px\)"/);
-  expect(read("pages/Index.tsx")).toContain("useMediaQuery(ARTIFACTS_DOCK_QUERY)");
+  // The panel's wiring moved out of Index.tsx (Phase 3 spec §9.1).
+  expect(read("hooks/useArtifactsPanel.ts")).toContain("useMediaQuery(ARTIFACTS_DOCK_QUERY)");
 });
 
 test("artifacts panel width has a single source of truth and cannot exceed the viewport", () => {
@@ -369,8 +370,9 @@ test("the images panel is reachable at every width and announces its state", () 
 });
 
 test("locating an image scrolls the Radix viewport and flashes the message", () => {
-  const page = read("pages/Index.tsx");
-  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(page)?.[0] ?? "";
+  // Lives in the panel's hook since the Phase 3 move out of Index.tsx.
+  const hookSrc = read("hooks/useArtifactsPanel.ts");
+  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(hookSrc)?.[0] ?? "";
   expect(locate).toBeTruthy();
   // `scrollTop` on the ref'd root silently does nothing: the scroller is Radix's
   // viewport (issue #34). Find-in-chat already learned this.
@@ -421,5 +423,6 @@ test("the panel never claims an image it cannot resolve", () => {
   expect(artifacts).toContain("countUnsavedAttachments");
   const panel = read("components/ArtifactsPanel.tsx");
   expect(panel).toContain("unsavedAttachments");
-  expect(panel).toContain("Unavailable");
+  // The tile (and its "Unavailable" state) moved into its own file.
+  expect(read("components/ArtifactTile.tsx")).toContain("Unavailable");
 });
