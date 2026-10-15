@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { collectImageArtifacts, countUnsavedAttachments } from "@/lib/artifacts";
+import { collectArtifacts, countUnsavedAttachments } from "@/lib/artifacts";
 import { useMediaQuery, ARTIFACTS_DOCK_QUERY } from "@/hooks/useMediaQuery";
 import type { Message } from "@/lib/backend";
 
@@ -38,8 +38,8 @@ export function useArtifactsPanel({
    * index-keyed and deleting one splices the array, so a stored pointer would
    * go stale — recomputing is what keeps a tile aimed at the right message.
    */
-  const imageArtifacts = useMemo(
-    () => collectImageArtifacts(conversation?.messages ?? []),
+  const artifacts = useMemo(
+    () => collectArtifacts(conversation?.messages ?? []),
     [conversation]
   );
   /** Attachments claimed by a legacy marker whose bytes were never stored. */
@@ -62,13 +62,21 @@ export function useArtifactsPanel({
    * is attached to (issue #34) — find-in-chat does the same.
    */
   const locateMessage = useCallback(
-    (messageIndex: number) => {
+    (messageIndex: number, opts?: { at?: number }) => {
       if (!artifactsDocked) setArtifactsOpen(false);
       // Next frame, so the panel's own close has been committed first.
       window.setTimeout(() => {
-        const el = scrollRef.current?.querySelector<HTMLElement>(
-          `[data-message-index="${messageIndex}"]`
-        );
+        const root = scrollRef.current;
+        // A code block or table is located by its offset in the answer (§6.5).
+        // If the block is gone, the message flash is the fallback.
+        const block =
+          opts?.at === undefined
+            ? null
+            : root?.querySelector<HTMLElement>(
+                `[data-message-index="${messageIndex}"] .msg-answer [data-artifact-at="${opts.at}"]`
+              );
+        const el =
+          block ?? root?.querySelector<HTMLElement>(`[data-message-index="${messageIndex}"]`);
         if (!el) return;
         el.scrollIntoView({ block: "center", behavior: "smooth" });
         // Remove-then-set with a reflow between: locating the same image twice
@@ -90,7 +98,7 @@ export function useArtifactsPanel({
     artifactsDocked,
     artifactsOpen,
     setArtifactsOpen,
-    imageArtifacts,
+    artifacts,
     unsavedAttachments,
     locateMessage,
   };

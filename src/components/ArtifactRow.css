@@ -1,0 +1,65 @@
+/* A code or table row in the artifacts panel. Full width; the main button
+   locates the block and the actions sit beside it. */
+
+.artifact-row {
+  @apply flex items-stretch gap-1 rounded-lg border border-border bg-muted/40;
+}
+
+.artifact-row-main {
+  @apply flex min-w-0 flex-1 flex-col gap-1 rounded-lg px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset;
+}
+
+.artifact-row-head {
+  @apply flex min-w-0 items-center gap-1.5 text-xs;
+}
+
+.artifact-row-icon {
+  @apply size-3.5 shrink-0 text-muted-foreground;
+}
+
+.artifact-row-label {
+  @apply min-w-0 truncate font-medium text-foreground;
+}
+
+.artifact-row-position {
+  @apply ml-auto shrink-0 text-[11px] text-muted-foreground;
+}
+
+/* Three lines of monospace, faded at the bottom. `white-space: pre` keeps the
+   indentation the code had. */
+.artifact-row-preview {
+  @apply relative max-h-[4.5rem] overflow-hidden whitespace-pre font-mono text-[11px] leading-[1.5rem] text-muted-foreground;
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent);
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+
+.artifact-row-actions {
+  @apply flex shrink-0 flex-col items-center justify-center gap-0.5 pr-1 opacity-100 transition-opacity;
+}
+
+/* Visible on touch; hover-revealed for fine pointers only, the same rule as the
+   image tile, so no control depends on a hover a phone cannot make. */
+@media (hover: hover) and (pointer: fine) {
+  .artifact-row-actions {
+    opacity: 0;
+  }
+
+  .group:hover .artifact-row-actions,
+  .artifact-row-action:focus-visible {
+    opacity: 1;
+  }
+}
+
+.artifact-row-action {
+  @apply size-7 tap-expand text-muted-foreground hover:text-foreground;
+}
+
+.artifact-row-action-icon {
+  @apply size-3.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifact-row-actions {
+    transition: none;
+  }
+}

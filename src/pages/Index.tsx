@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import { useArtifactsPanel } from "@/hooks/useArtifactsPanel";
-import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Images } from "lucide-react";
+import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -257,7 +257,7 @@ const Index = () => {
   const {
     artifactsOpen,
     setArtifactsOpen,
-    imageArtifacts,
+    artifacts,
     unsavedAttachments,
     locateMessage,
   } = useArtifactsPanel({ scrollRef, conversation: currentConversation });
@@ -1148,16 +1148,16 @@ const Index = () => {
                 size="icon"
                 className="app-icon-btn app-header-artifacts"
                 onClick={() => setArtifactsOpen((open) => !open)}
-                title="Images in this conversation"
-                aria-label={`Images in this conversation${
-                  imageArtifacts.length > 0 ? ` (${imageArtifacts.length})` : ""
+                title="Artifacts in this conversation"
+                aria-label={`Artifacts in this conversation${
+                  artifacts.length > 0 ? ` (${artifacts.length})` : ""
                 }`}
                 aria-expanded={artifactsOpen}
               >
-                <Images className="app-header-icon" aria-hidden="true" />
-                {imageArtifacts.length > 0 && (
+                <Layers className="app-header-icon" aria-hidden="true" />
+                {artifacts.length > 0 && (
                   <span className="app-header-artifacts-count" aria-hidden="true">
-                    {imageArtifacts.length}
+                    {artifacts.length}
                   </span>
                 )}
               </Button>
@@ -1346,7 +1346,7 @@ const Index = () => {
           below it — the same split the sidebar uses at `lg`. */}
       {isAuthenticated && (
         <ArtifactsPanel
-          artifacts={imageArtifacts}
+          artifacts={artifacts}
           unsavedAttachments={unsavedAttachments}
           isGeneratingImage={isGeneratingImage}
           isOpen={artifactsOpen}

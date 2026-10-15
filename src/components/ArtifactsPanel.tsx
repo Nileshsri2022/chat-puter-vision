@@ -1,34 +1,63 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Images } from "lucide-react";
+import { X, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { cn } from "@/lib/utils";
-import { countByKind, type ImageArtifact, type ImageArtifactKind } from "@/lib/artifacts";
 import { ArtifactTile } from "@/components/ArtifactTile";
+import { ArtifactRow } from "@/components/ArtifactRow";
+import { TextPreviewDialog } from "@/components/TextPreviewDialog";
+import { cn } from "@/lib/utils";
+import {
+  countArtifactKinds,
+  isImageArtifact,
+  type Artifact,
+  type ImageArtifact,
+  type TextArtifact,
+} from "@/lib/artifacts";
 import "./ArtifactsPanel.css";
 
-type Filter = "all" | ImageArtifactKind;
+/** Options for locating an artifact. `at` targets a block within the message. */
+export interface LocateOptions {
+  at?: number;
+}
+
+/** Chips fold `legacy` into `attached`, as Phase 1 did. */
+type ChipKind = "generated" | "attached" | "code" | "table";
+type Filter = "all" | ChipKind;
 
 interface ArtifactsPanelProps {
-  /** Images in the open conversation, in transcript order. */
-  artifacts: ImageArtifact[];
+  /** Every artifact in the open conversation, in transcript order. */
+  artifacts: Artifact[];
   /** Attachments claimed by a legacy marker whose bytes were never stored. */
   unsavedAttachments: number;
   /** A `txt2img` call is in flight; the panel shows a pending tile. */
   isGeneratingImage?: boolean;
   isOpen: boolean;
   onToggle: () => void;
-  /** Scroll the transcript to this message and flash it. */
-  onLocate: (messageIndex: number) => void;
+  /** Scroll the transcript to a message (or a block in it) and flash it. */
+  onLocate: (messageIndex: number, opts?: LocateOptions) => void;
 }
 
+/** Chip order follows the spec: Generated · Attached · Code · Tables. */
+const CHIPS: { id: ChipKind; label: string }[] = [
+  { id: "generated", label: "Generated" },
+  { id: "attached", label: "Attached" },
+  { id: "code", label: "Code" },
+  { id: "table", label: "Tables" },
+];
+
+/** Legacy images are attachments, as they were in Phase 1. */
+const chipOf = (a: Artifact): ChipKind => (a.kind === "legacy" ? "attached" : a.kind);
+
+const GROUP_TITLE = { images: "Images", code: "Code", table: "Tables" } as const;
+
 /**
- * The right-hand image index for the open conversation.
+ * The artifacts index for the open conversation: images, code blocks and
+ * tables from assistant answers.
  *
  * Docked at `xl` and an overlay below it (see ARTIFACTS_DOCK_QUERY). Contents
  * are derived from the transcript on every render, so deleting a message can
- * never leave a tile pointing at the wrong one.
+ * never leave an entry pointing at the wrong one.
  */
 export const ArtifactsPanel = ({
   artifacts,
@@ -40,6 +69,7 @@ export const ArtifactsPanel = ({
 }: ArtifactsPanelProps) => {
   const [filter, setFilter] = useState<Filter>("all");
   const [preview, setPreview] = useState<{ src: string; label: string } | null>(null);
+  const [textPreview, setTextPreview] = useState<TextArtifact | null>(null);
   const panelRef = useRef<HTMLElement>(null);
 
   // A closed panel is translated off-screen but still mounted (that is what
@@ -52,31 +82,77 @@ export const ArtifactsPanel = ({
     else el.setAttribute("inert", "");
   }, [isOpen]);
 
-  const kinds = useMemo(() => countByKind(artifacts), [artifacts]);
-  // "attached" also covers legacy attachments, which is what `legacy` is.
-  const attachedCount = kinds.attached + kinds.legacy;
-  // Filters only earn their row when there is something to choose between:
-  // narrowing "All" down to the only kind present is noise.
-  const filters = useMemo(
-    () =>
-      kinds.generated > 0 && attachedCount > 0
-        ? [
-            { id: "all" as Filter, label: "All", count: artifacts.length },
-            { id: "generated" as Filter, label: "Generated", count: kinds.generated },
-            { id: "attached" as Filter, label: "Attached", count: attachedCount },
-          ]
-        : [],
-    [artifacts.length, kinds.generated, attachedCount]
+  const kinds = useMemo(() => countArtifactKinds(artifacts), [artifacts]);
+  const chipCounts: Record<ChipKind, number> = {
+    generated: kinds.generated,
+    attached: kinds.attached + kinds.legacy,
+    code: kinds.code,
+    table: kinds.table,
+  };
+  // Chips only earn their row when there is something to choose between: a
+  // single chip next to "All" is noise.
+  const chips = CHIPS.filter((c) => chipCounts[c.id] > 0);
+  const showFilters = chips.length >= 2;
+  // A stale filter, left over from a transcript that had that kind, shows all.
+  const active: Filter = showFilters && chips.some((c) => c.id === filter) ? filter : "all";
+
+  const visible = useMemo(
+    () => (active === "all" ? artifacts : artifacts.filter((a) => chipOf(a) === active)),
+    [artifacts, active]
   );
 
-  const visible = useMemo(() => {
-    // With nothing to choose between (or a stale filter left over from a
-    // transcript that did have both kinds) every image is shown.
-    if (filters.length === 0 || filter === "all") return artifacts;
-    return filter === "generated"
-      ? artifacts.filter((a) => a.kind === "generated")
-      : artifacts.filter((a) => a.kind !== "generated");
-  }, [artifacts, filter, filters.length]);
+  const images = visible.filter(isImageArtifact);
+  const texts = visible.filter((a): a is TextArtifact => !isImageArtifact(a));
+  const codes = texts.filter((a) => a.kind === "code");
+  const tables = texts.filter((a) => a.kind === "table");
+  const showPending = Boolean(isGeneratingImage) && (active === "all" || active === "generated");
+
+  // The pending tile is an image, so it belongs to the Images group.
+  const groups = [
+    { id: "images" as const, items: images, pending: showPending },
+    { id: "code" as const, items: codes, pending: false },
+    { id: "table" as const, items: tables, pending: false },
+  ].filter((g) => g.items.length > 0 || g.pending);
+  // Headings only when two or more groups exist, so an image-only chat looks
+  // exactly like the Phase 1 grid.
+  const headed = active === "all" && groups.length >= 2;
+  const nothingToShow = visible.length === 0 && !showPending;
+
+  const renderImages = (items: ImageArtifact[], pending: boolean) => (
+    <div className="artifacts-grid">
+      {items.map((artifact) => (
+        <ArtifactTile
+          key={artifact.id}
+          artifact={artifact}
+          position={`message ${artifact.messageIndex + 1}`}
+          onLocate={() => onLocate(artifact.messageIndex)}
+          onPreview={(src) => setPreview({ src, label: artifact.label })}
+        />
+      ))}
+      {pending && (
+        <div className="artifacts-tile artifacts-tile-pending" role="status">
+          <span className="artifacts-tile-missing">
+            <span className="artifacts-tile-spinner" aria-hidden="true" />
+            <span className="artifacts-tile-missing-text">Generating…</span>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderRows = (items: TextArtifact[]) => (
+    <div className="artifacts-rows">
+      {items.map((artifact) => (
+        <ArtifactRow
+          key={artifact.id}
+          artifact={artifact}
+          position={`message ${artifact.messageIndex + 1}`}
+          onLocate={() => onLocate(artifact.messageIndex, { at: artifact.at })}
+          onPreview={() => setTextPreview(artifact)}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <>
@@ -84,12 +160,12 @@ export const ArtifactsPanel = ({
       <aside
         ref={panelRef}
         className={cn("artifacts-panel", isOpen ? "artifacts-panel-open" : "artifacts-panel-closed")}
-        aria-label="Images in this conversation"
+        aria-label="Artifacts in this conversation"
       >
         <div className="artifacts-header">
           <div className="artifacts-title-row">
-            <Images className="artifacts-title-icon" aria-hidden="true" />
-            <h2 className="artifacts-title">Images</h2>
+            <Layers className="artifacts-title-icon" aria-hidden="true" />
+            <h2 className="artifacts-title">Artifacts</h2>
             {artifacts.length > 0 && (
               <span className="artifacts-count" aria-hidden="true">
                 {artifacts.length}
@@ -101,22 +177,25 @@ export const ArtifactsPanel = ({
             size="icon"
             className="artifacts-close-btn tap-expand"
             onClick={onToggle}
-            title="Close images panel"
-            aria-label="Close images panel"
+            title="Close artifacts panel"
+            aria-label="Close artifacts panel"
           >
             <X className="artifacts-close-icon" aria-hidden="true" />
           </Button>
         </div>
 
-        {filters.length > 0 && (
-          <div className="artifacts-filters" role="group" aria-label="Filter images">
-            {filters.map((f) => (
+        {showFilters && (
+          <div className="artifacts-filters" role="group" aria-label="Filter artifacts">
+            {[
+              { id: "all" as Filter, label: "All", count: artifacts.length },
+              ...chips.map((c) => ({ id: c.id as Filter, label: c.label, count: chipCounts[c.id] })),
+            ].map((f) => (
               <button
                 key={f.id}
                 type="button"
-                className={cn("artifacts-filter", filter === f.id && "artifacts-filter-active")}
+                className={cn("artifacts-filter", active === f.id && "artifacts-filter-active")}
                 onClick={() => setFilter(f.id)}
-                aria-pressed={filter === f.id}
+                aria-pressed={active === f.id}
               >
                 {f.label}
                 <span className="artifacts-filter-count" aria-hidden="true">
@@ -128,36 +207,26 @@ export const ArtifactsPanel = ({
         )}
 
         <ScrollArea className="artifacts-scroll">
-          {visible.length === 0 && !isGeneratingImage ? (
+          {nothingToShow ? (
             <div className="artifacts-empty">
               <span className="artifacts-empty-badge">
-                <Images className="artifacts-empty-icon" aria-hidden="true" />
+                <Layers className="artifacts-empty-icon" aria-hidden="true" />
               </span>
-              <p className="artifacts-empty-title">No images in this chat yet</p>
+              <p className="artifacts-empty-title">Nothing collected in this chat yet</p>
               <p className="artifacts-empty-sub">
-                Images you attach and images the model generates are collected
-                here so you can jump back to them.
+                Images, code blocks, tables and text you extract from images collect here.
               </p>
             </div>
           ) : (
-            <div className="artifacts-grid">
-              {visible.map((artifact) => (
-                <ArtifactTile
-                  key={artifact.id}
-                  artifact={artifact}
-                  position={`message ${artifact.messageIndex + 1}`}
-                  onLocate={() => onLocate(artifact.messageIndex)}
-                  onPreview={(src) => setPreview({ src, label: artifact.label })}
-                />
+            <div className="artifacts-body">
+              {groups.map((group) => (
+                <section key={group.id} className="artifacts-group">
+                  {headed && <h3 className="artifacts-group-title">{GROUP_TITLE[group.id]}</h3>}
+                  {group.id === "images"
+                    ? renderImages(group.items as ImageArtifact[], group.pending)
+                    : renderRows(group.items as TextArtifact[])}
+                </section>
               ))}
-              {isGeneratingImage && (
-                <div className="artifacts-tile artifacts-tile-pending" role="status">
-                  <span className="artifacts-tile-missing">
-                    <span className="artifacts-tile-spinner" aria-hidden="true" />
-                    <span className="artifacts-tile-missing-text">Generating…</span>
-                  </span>
-                </div>
-              )}
             </div>
           )}
         </ScrollArea>
@@ -177,6 +246,9 @@ export const ArtifactsPanel = ({
           caption={preview.label}
           onClose={() => setPreview(null)}
         />
+      )}
+      {textPreview && (
+        <TextPreviewDialog artifact={textPreview} onClose={() => setTextPreview(null)} />
       )}
     </>
   );

@@ -25,6 +25,8 @@ const stylesheets = [
   "components/CreditPill.css",
   "components/ErrorBoundary.css",
   "components/ArtifactsPanel.css",
+  "components/ArtifactRow.css",
+  "components/TextPreviewDialog.css",
   "components/ImageLightbox.css",
 ];
 
@@ -56,6 +58,7 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     "components/ChatInput.css",
     "components/ChatMessage.css",
     "components/ArtifactsPanel.css",
+    "components/ArtifactRow.css",
   ]) {
     expect(read(file)).toContain("@media (hover: hover) and (pointer: fine)");
     // The reveal must be re-hidden *inside* that guard, not merely present.
@@ -72,6 +75,7 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     ".msg-codeblock-copy",
     ".artifacts-tile-action",
     ".artifacts-close-btn",
+    ".artifact-row-action",
   ]) {
     expect(allCss).toContain(cls);
   }
@@ -91,6 +95,7 @@ test("icon buttons expand their touch target on coarse pointers", () => {
     ".app-icon-btn",
     ".artifacts-tile-action",
     ".artifacts-close-btn",
+    ".artifact-row-action",
   ]) {
     expect(allCss).toMatch(new RegExp(`${cls.replace(".", "\\.")}\\s*\\{[^}]*tap-expand`));
   }
@@ -362,9 +367,9 @@ test("the images panel is reachable at every width and announces its state", () 
   expect(toggleRule).not.toContain("hidden");
 
   const page = read("pages/Index.tsx");
-  expect(page).toContain("Images in this conversation");
+  expect(page).toContain("Artifacts in this conversation");
   expect(page).toContain("aria-expanded={artifactsOpen}");
-  expect(page).toContain('title="Images in this conversation"');
+  expect(page).toContain('title="Artifacts in this conversation"');
   // The count is a badge: the accessible name carries it instead.
   expect(page).toContain('className="app-header-artifacts-count" aria-hidden="true"');
 });
@@ -425,4 +430,53 @@ test("the panel never claims an image it cannot resolve", () => {
   expect(panel).toContain("unsavedAttachments");
   // The tile owns the "Unavailable" state since §9.1 moved it out of the panel.
   expect(read("components/ArtifactTile.tsx")).toContain("Unavailable");
+});
+
+// ---- Phase 3a: text artifacts (spec §12) ----
+
+test("the chip row scrolls sideways on one line instead of wrapping", () => {
+  const css = read("components/ArtifactsPanel.css");
+  const rule = /\.artifacts-filters\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(rule).toContain("overflow-x-auto");
+  expect(rule).not.toContain("flex-wrap");
+  expect(css).toMatch(/\.artifacts-filter\s*\{[^}]*whitespace-nowrap/);
+});
+
+test("the text preview dialog uses the vh to dvh fallback pair", () => {
+  const css = read("components/TextPreviewDialog.css");
+  const block = /\.text-preview\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(block.indexOf("height: 100vh;")).toBeGreaterThanOrEqual(0);
+  expect(block.indexOf("height: 100dvh;")).toBeGreaterThan(block.indexOf("height: 100vh;"));
+});
+
+test("copy reports what the clipboard did, and never shows a check on refusal", () => {
+  const hook = read("hooks/useTextArtifactActions.ts");
+  // The result is awaited and checked before the success state is set (#45).
+  expect(hook).toMatch(/const ok = await copyArtifact\(artifact\);\s*if \(!ok\)/);
+  expect(hook).toContain("Copy failed");
+  // The success state is set only after the check.
+  expect(hook.indexOf("setCopied(true)")).toBeGreaterThan(hook.indexOf("if (!ok)"));
+});
+
+test("the text artifact row and dialog never create attachments of their own", () => {
+  for (const file of [
+    "components/ArtifactsPanel.tsx",
+    "components/ArtifactTile.tsx",
+    "components/ArtifactRow.tsx",
+    "components/TextPreviewDialog.tsx",
+    "hooks/useArtifactsPanel.ts",
+    "hooks/useTextArtifactActions.ts",
+  ]) {
+    const src = read(file);
+    expect(src).not.toContain("newAttachmentPath");
+    expect(src).not.toContain("persistAttachment");
+  }
+});
+
+test("the parser's dependencies are declared, not imported by accident", () => {
+  const pkg = JSON.parse(readFileSync(join(SRC, "..", "package.json"), "utf8"));
+  expect(pkg.scripts.typecheck).toBeTruthy();
+  expect(pkg.dependencies.unified).toBeTruthy();
+  expect(pkg.dependencies["remark-parse"]).toBeTruthy();
+  expect(pkg.dependencies["mdast-util-to-string"]).toBeTruthy();
 });

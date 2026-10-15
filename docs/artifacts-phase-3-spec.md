@@ -1,6 +1,6 @@
 # Artifacts, Phase 3 — Technical Spec
 
-**Status:** draft for review · **Branch:** `arena/d627f263-chat-puter-vision`
+**Status:** PR 3a implemented on `arena/f576873a-chat-puter-vision` (moves, code and tables, chips, sections, rows, preview, copy, download, rename). PR 3b and 3c not started. · **Branch:** `arena/d627f263-chat-puter-vision`
 **Builds on:** [`image-artifacts-panel-spec.md`](image-artifacts-panel-spec.md) (Phase 1, shipped in #63; Phase 2 items in #64–#66)
 **Scope chosen:** code + tables + OCR text (OCR for new messages only) · exports deferred · library as a "This chat / All chats" switch in the existing panel · using a text artifact inserts editable text into the composer
 

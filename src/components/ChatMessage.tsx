@@ -153,7 +153,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a
   // response can never inject markup/scripts.
-  const CodeBlock = ({ children }: { children?: ReactNode }) => {
+  const CodeBlock = ({ children, at }: { children?: ReactNode; at?: number }) => {
     const [codeCopied, setCodeCopied] = useState(false);
     const preRef = useRef<HTMLPreElement>(null);
 
@@ -165,7 +165,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     };
 
     return (
-      <div className="msg-codeblock group/code">
+      <div className="msg-codeblock group/code" data-artifact-at={at}>
         <pre
           ref={preRef}
           className="msg-codeblock-pre"
@@ -267,6 +267,22 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
         alt={alt ?? ""}
         className="md-img"
       />
+    ),
+  };
+
+  // The answer alone stamps block offsets (spec §6.5). The collector computes
+  // them from the same answer string, so the artifacts panel can locate a
+  // block. The thinking section renders a different string, so it keeps the
+  // unstamped components: its offsets would collide with the answer's.
+  const answerComponents: Components = {
+    ...markdownComponents,
+    pre: ({ node, children }) => (
+      <CodeBlock at={node?.position?.start.offset}>{children}</CodeBlock>
+    ),
+    table: ({ node, children }) => (
+      <div className="md-table-wrap" data-artifact-at={node?.position?.start.offset}>
+        <table className="md-table">{children}</table>
+      </div>
     ),
   };
 
@@ -404,7 +420,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             <div className="msg-answer" data-search-text>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
+                components={answerComponents}
               >
                 {answer}
               </ReactMarkdown>
