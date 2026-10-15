@@ -29,6 +29,14 @@
   @apply lg:ml-0;
 }
 
+/* The images panel docks only at `xl`: at `lg` the sidebar already takes 260px,
+   so a 300px panel would leave a ~464px transcript. Below `xl` the panel
+   overlays instead, and this margin must not apply — hence the same `xl`
+   breakpoint ArtifactsPanel.css hides its scrim at. */
+.app-main-artifacts-open {
+  @apply xl:mr-[var(--artifacts-w)];
+}
+
 /* Header */
 /* A 3-column grid rather than justify-between: the centre title then occupies
    the leftover 1fr and truncates, instead of being absolutely positioned and
@@ -92,6 +100,16 @@
 
 .app-icon-btn {
   @apply size-8 tap-expand;
+}
+
+/* The images-panel toggle. Like the export menu it survives every width: it is
+   the only way to reach the panel, and there is nowhere else to put it. */
+.app-header-artifacts {
+  @apply relative inline-flex;
+}
+
+.app-header-artifacts-count {
+  @apply absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none tabular-nums text-primary-foreground;
 }
 
 .app-header-icon {
@@ -189,6 +207,40 @@
 
 .app-messages {
   @apply py-4;
+}
+
+/* Locating an image from the panel: a one-shot pulse on the message that owns
+   it. Kept off the search-match classes so find-in-chat and locate can both be
+   active without fighting over the same styling. */
+@keyframes artifact-flash {
+  0% {
+    background-color: hsl(var(--ring) / 0.3);
+    box-shadow: inset 0 0 0 2px hsl(var(--ring) / 0.85);
+  }
+  65% {
+    background-color: hsl(var(--ring) / 0.12);
+    box-shadow: inset 0 0 0 2px hsl(var(--ring) / 0.4);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
+/* An inset ring as well as a tint: the bubble covers most of a user message,
+   and neither alone reads clearly on both message kinds. Inset, so it never
+   shifts layout. */
+[data-artifact-flash] {
+  animation: artifact-flash 1.4s ease-out;
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-artifact-flash] {
+    animation: none;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
 }
 
 /* Composer area */

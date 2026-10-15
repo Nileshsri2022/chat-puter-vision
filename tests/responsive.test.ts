@@ -24,6 +24,8 @@ const stylesheets = [
   "components/ModelSelector.css",
   "components/CreditPill.css",
   "components/ErrorBoundary.css",
+  "components/ArtifactsPanel.css",
+  "components/ImageLightbox.css",
 ];
 
 const allCss = stylesheets.map(read).join("\n");
@@ -53,6 +55,7 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     "components/ConversationSidebar.css",
     "components/ChatInput.css",
     "components/ChatMessage.css",
+    "components/ArtifactsPanel.css",
   ]) {
     expect(read(file)).toContain("@media (hover: hover) and (pointer: fine)");
     // The reveal must be re-hidden *inside* that guard, not merely present.
@@ -67,6 +70,8 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     ".composer-preview-remove",
     ".composer-preview-ocr",
     ".msg-codeblock-copy",
+    ".artifacts-tile-action",
+    ".artifacts-close-btn",
   ]) {
     expect(allCss).toContain(cls);
   }
@@ -80,7 +85,13 @@ test("icon buttons expand their touch target on coarse pointers", () => {
     /@media \(pointer: coarse\)\s*\{\s*\.tap-expand::after\s*\{[^}]*max\(100%,\s*var\(--tap-size/
   );
   // Below the 44px iOS HIG minimum without the expansion.
-  for (const cls of [".msg-action-btn", ".composer-tool-btn", ".app-icon-btn"]) {
+  for (const cls of [
+    ".msg-action-btn",
+    ".composer-tool-btn",
+    ".app-icon-btn",
+    ".artifacts-tile-action",
+    ".artifacts-close-btn",
+  ]) {
     expect(allCss).toMatch(new RegExp(`${cls.replace(".", "\\.")}\\s*\\{[^}]*tap-expand`));
   }
 });
@@ -96,6 +107,7 @@ test("full-height regions use dvh rather than bare vh", () => {
   for (const [file, rule] of [
     ["pages/Index.css", ".app-root"],
     ["components/ConversationSidebar.css", ".sidebar"],
+    ["components/ArtifactsPanel.css", ".artifacts-panel"],
   ] as const) {
     const block = new RegExp(
       `${rule.replace(".", "\\.")}\\s*\\{([^}]*)\\}`,
@@ -119,6 +131,11 @@ test("notch and home-bar insets are respected", () => {
   }
   // The composer is the bottom-most region, so it must clear the home bar.
   expect(allCss).toMatch(/\.app-composer-wrap[^}]*safe-area-inset-bottom/);
+  // The artifacts panel is flush with the right edge: in landscape on a notched
+  // phone that edge is inside the notch.
+  expect(read("components/ArtifactsPanel.css")).toMatch(
+    /\.artifacts-panel\s*\{[^}]*safe-area-inset-right/
+  );
 });
 
 // ---- header ----
@@ -306,4 +323,103 @@ test("model picker adapts its chrome to the viewport", () => {
   expect(css).toContain("dvh");
   // The provider rail must not starve the model list.
   expect(css).toMatch(/width:\s*min\(11rem,\s*38vw\)/);
+});
+// ---- artifacts panel ----
+
+test("the artifacts panel docks and overlays at one breakpoint", () => {
+  const page = read("pages/Index.css");
+  const panel = read("components/ArtifactsPanel.css");
+  // Docked layout and scrim must agree, or the panel covers the transcript
+  // while the transcript is also inset for it — the bug the sidebar guard
+  // already catches on the left edge.
+  expect(page).toMatch(/\.app-main-artifacts-open\s*\{\s*@apply xl:mr-/);
+  expect(panel).toMatch(/\.artifacts-overlay\s*\{[^}]*xl:hidden/);
+  // And the JS side of that breakpoint lives beside DESKTOP_QUERY, so the CSS
+  // and the "close the overlay before locating" decision cannot drift.
+  const hook = read("hooks/useMediaQuery.ts");
+  expect(hook).toContain("ARTIFACTS_DOCK_QUERY");
+  expect(hook).toMatch(/ARTIFACTS_DOCK_QUERY = "\(min-width: 1280px\)"/);
+  expect(read("pages/Index.tsx")).toContain("useMediaQuery(ARTIFACTS_DOCK_QUERY)");
+});
+
+test("artifacts panel width has a single source of truth and cannot exceed the viewport", () => {
+  expect(read("index.css")).toContain("--artifacts-w");
+  expect(read("components/ArtifactsPanel.css")).toMatch(
+    /width:\s*min\(var\(--artifacts-w\),\s*\d+vw\)/
+  );
+  // The main column's inset must read the same token, not a hard-coded px value.
+  expect(read("pages/Index.css")).toMatch(
+    /\.app-main-artifacts-open\s*\{[^}]*var\(--artifacts-w\)/
+  );
+});
+
+test("the images panel is reachable at every width and announces its state", () => {
+  const css = read("pages/Index.css");
+  // It is the only way to reach the panel, so it cannot shed like search does.
+  const toggleRule = /\.app-header-artifacts\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(toggleRule).toContain("inline-flex");
+  expect(toggleRule).not.toContain("hidden");
+
+  const page = read("pages/Index.tsx");
+  expect(page).toContain("Images in this conversation");
+  expect(page).toContain("aria-expanded={artifactsOpen}");
+  expect(page).toContain('title="Images in this conversation"');
+  // The count is a badge: the accessible name carries it instead.
+  expect(page).toContain('className="app-header-artifacts-count" aria-hidden="true"');
+});
+
+test("locating an image scrolls the Radix viewport and flashes the message", () => {
+  const page = read("pages/Index.tsx");
+  const locate = /const locateMessage[\s\S]*?^\s{2}\);/m.exec(page)?.[0] ?? "";
+  expect(locate).toBeTruthy();
+  // `scrollTop` on the ref'd root silently does nothing: the scroller is Radix's
+  // viewport (issue #34). Find-in-chat already learned this.
+  expect(locate).toContain("scrollIntoView");
+  expect(locate).not.toContain("scrollTop");
+  expect(locate).toContain('data-message-index');
+  expect(locate).toContain('data-artifact-flash');
+
+  const css = read("pages/Index.css");
+  expect(css).toMatch(/@keyframes artifact-flash/);
+  expect(css).toMatch(/\[data-artifact-flash\]/);
+  // A motion-sensitive user still has to be told which message was found.
+  expect(css).toMatch(
+    /prefers-reduced-motion[\s\S]*?\[data-artifact-flash\]\s*\{[^}]*animation:\s*none/
+  );
+  expect(css).toMatch(
+    /prefers-reduced-motion[\s\S]*?\[data-artifact-flash\]\s*\{[^}]*outline:/
+  );
+});
+
+test("a closed panel leaves the tab order instead of trapping focus off-screen", () => {
+  const panel = read("components/ArtifactsPanel.tsx");
+  // The panel stays mounted so it can slide; aria-hidden alone would leave its
+  // buttons focusable while invisible.
+  expect(panel).toContain('setAttribute("inert"');
+  expect(panel).toContain('removeAttribute("inert")');
+  expect(panel).not.toContain("aria-hidden={!isOpen}");
+});
+
+test("attachments are persisted in the background and never block a send", () => {
+  const page = read("pages/Index.tsx");
+  const helper = /async function prepareAndStoreAttachments[\s\S]*?\n\}/.exec(page)?.[0] ?? "";
+  expect(helper).toBeTruthy();
+  expect(helper).toContain("newAttachmentPath(");
+  // Fire-and-forget: paths are minted locally, so the message carries them
+  // before the write lands, and a Drive failure cannot lose the message.
+  expect(helper).toContain("void persistAttachment(");
+  expect(helper).not.toMatch(/await persistAttachment/);
+  // Both send paths keep the refs, or an edited message loses its images.
+  expect(page.match(/attachments: attachmentRefs/g)?.length).toBe(2);
+});
+
+test("the panel never claims an image it cannot resolve", () => {
+  const artifacts = read("lib/artifacts.ts");
+  // A ref without a path would render a tile that can never load.
+  expect(artifacts).toContain('typeof ref.path !== "string" || !ref.path');
+  // Legacy markers whose bytes were never stored are counted, not tiled.
+  expect(artifacts).toContain("countUnsavedAttachments");
+  const panel = read("components/ArtifactsPanel.tsx");
+  expect(panel).toContain("unsavedAttachments");
+  expect(panel).toContain("Unavailable");
 });

@@ -49,6 +49,11 @@
     /* Single source of truth for the sidebar width. Both the fixed sidebar and
        the main column's offset read this so they can never desync. */
     --sidebar-w: 260px;
+
+    /* Same idea for the artifacts panel: the fixed panel and the main column's
+       right offset both read this. It docks at `xl`, wider than the sidebar's
+       `lg`, so the transcript is never squeezed from both sides at once. */
+    --artifacts-w: 300px;
   }
 
   .dark {

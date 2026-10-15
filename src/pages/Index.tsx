@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, type SetStateAction 
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
+import { ArtifactsPanel } from "@/components/ArtifactsPanel";
 import { AuthButton } from "@/components/AuthButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getProfileInfo, type ProfileInfo } from "@/lib/profile";
@@ -9,10 +10,12 @@ import {
   Message,
   checkAuthStatus,
   signOut,
+  type AttachmentRef,
   type CompactionItem,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
-import { generateImage } from "@/lib/images";
+import { deleteImage, generateImage, newAttachmentPath, persistAttachment } from "@/lib/images";
+import { collectImageArtifacts, countUnsavedAttachments, reclaimImagePaths } from "@/lib/artifacts";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
@@ -25,8 +28,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
-import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown } from "lucide-react";
+import { useMediaQuery, DESKTOP_QUERY, ARTIFACTS_DOCK_QUERY } from "@/hooks/useMediaQuery";
+import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -56,6 +59,56 @@ const SUGGESTIONS = [
   "Help me plan a 3-day trip to Goa",
   "Give me tips for better sleep",
 ];
+
+/**
+ * Prepare attachments for sending and mint a Drive reference for each, so the
+ * images panel can still show them after the send.
+ *
+ * The write is backgrounded on purpose: paths are minted locally, so the
+ * message can carry them immediately, and a Drive failure must never cost the
+ * user their message. Reads wait that write out (see loadImageBlob), so an
+ * open panel does not race the upload; `onStoreFailed` is how a write that
+ * genuinely failed reaches the user instead of leaving a tile stuck on
+ * "unavailable" with no reason.
+ */
+async function prepareAndStoreAttachments(
+  images: File[],
+  onStoreFailed?: (name: string) => void
+): Promise<{ dataUrls: string[]; refs: AttachmentRef[] }> {
+  const prepared = await prepareImageAttachments(images);
+  const refs: AttachmentRef[] = prepared.map((attachment) => ({
+    path: newAttachmentPath(attachment.mimeType),
+    name: attachment.file.name || undefined,
+    mimeType: attachment.mimeType,
+    bytes: attachment.bytes,
+  }));
+  prepared.forEach((attachment, i) => {
+    void persistAttachment(attachment.file, refs[i].path).then((stored) => {
+      if (!stored) onStoreFailed?.(attachment.file.name || "That image");
+    });
+  });
+  return {
+    dataUrls: prepared.map((attachment) => attachment.dataUrl),
+    refs,
+  };
+}
+
+/**
+ * Reclaim the Drive files owned by messages that are being deliberately
+ * destroyed.
+ *
+ * Only explicit local deletion qualifies. The localStorage quota fallback
+ * (`saveConversations` dropping all but the last ten) and a tombstone arriving
+ * from another device both discard conversations that may still be alive in KV
+ * and on screen elsewhere — deleting their files would break images another
+ * device is still showing. Best-effort like the write: a failed delete must
+ * never break the delete that triggered it.
+ */
+function reclaimMessages(messages: Message[]): void {
+  for (const path of reclaimImagePaths(messages)) {
+    void deleteImage(path);
+  }
+}
 
 const Index = () => {
   const [conversations, setConversationsRaw] = useState<Conversation[]>([
@@ -171,6 +224,26 @@ const Index = () => {
     prevIsDesktop.current = isDesktop;
     setSidebarOpen(isDesktop);
   }, [isDesktop]);
+
+  // ---- Artifacts panel: the image index for the open conversation ----
+  // Docked at `xl`; below that it overlays the transcript, so locating an image
+  // has to dismiss it first or the flash happens behind the panel.
+  const artifactsDocked = useMediaQuery(ARTIFACTS_DOCK_QUERY);
+
+  // Off by default: unlike the rail, this panel is a reference tool you open
+  // when you need it, and it costs transcript width on mid-size screens.
+  const [artifactsOpen, setArtifactsOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("artifacts_open");
+      if (saved !== null) return saved === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("artifacts_open", String(artifactsOpen));
+  }, [artifactsOpen]);
+
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
 
@@ -197,6 +270,59 @@ const Index = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, streamingContent]);
+
+  /**
+   * Images in the open conversation, derived on every render. Messages are
+   * index-keyed and deleting one splices the array, so a stored pointer would
+   * go stale — recomputing is what keeps a tile aimed at the right message.
+   */
+  const imageArtifacts = useMemo(
+    () => collectImageArtifacts(currentConversation?.messages ?? []),
+    [currentConversation]
+  );
+  /** Attachments claimed by a legacy marker whose bytes were never stored. */
+  const unsavedAttachments = useMemo(
+    () => countUnsavedAttachments(currentConversation?.messages ?? []),
+    [currentConversation]
+  );
+
+  const flashTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+    },
+    []
+  );
+
+  /**
+   * Scroll the transcript to a message and flash it. `scrollIntoView` rather
+   * than scrollTop: the scroller is Radix's viewport, not the element the ref
+   * is attached to (issue #34) — find-in-chat does the same.
+   */
+  const locateMessage = useCallback(
+    (messageIndex: number) => {
+      if (!artifactsDocked) setArtifactsOpen(false);
+      // Next frame, so the panel's own close has been committed first.
+      window.setTimeout(() => {
+        const el = scrollRef.current?.querySelector<HTMLElement>(
+          `[data-message-index="${messageIndex}"]`
+        );
+        if (!el) return;
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        // Remove-then-set with a reflow between: locating the same image twice
+        // would otherwise leave the one-shot animation finished and invisible.
+        el.removeAttribute("data-artifact-flash");
+        void el.offsetWidth;
+        el.setAttribute("data-artifact-flash", "");
+        if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+        flashTimer.current = window.setTimeout(() => {
+          el.removeAttribute("data-artifact-flash");
+          flashTimer.current = null;
+        }, 1400);
+      }, 0);
+    },
+    [artifactsDocked]
+  );
 
   const searchTerm = searchQuery.trim().toLowerCase();
 
@@ -386,13 +512,14 @@ const Index = () => {
     const selectedModelId = model || selectedModel;
 
     // Prepare the attachments: converted and shrunk where needed, then
-    // encoded as the data URLs the image_url blocks carry.
+    // encoded as the data URLs the image_url blocks carry — and each one gets
+    // a Drive reference so it stays visible in the images panel.
     let imageUrls: string[] = [];
+    let attachmentRefs: AttachmentRef[] = [];
     if (images && images.length > 0) {
       try {
-        imageUrls = (await prepareImageAttachments(images)).map(
-          (attachment) => attachment.dataUrl
-        );
+        ({ dataUrls: imageUrls, refs: attachmentRefs } =
+          await prepareAndStoreAttachments(images, notifyStoreFailed));
       } catch (error) {
         toast({
           title: "Image processing failed",
@@ -413,7 +540,11 @@ const Index = () => {
       messageContent = appendImageMarker(content, imageUrls.length);
     }
 
-    const userMessage: Message = { role: "user", content: messageContent };
+    const userMessage: Message = {
+      role: "user",
+      content: messageContent,
+      ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+    };
     const updatedMessages = [...messages, userMessage];
 
     setConversations((prev) =>
@@ -430,13 +561,19 @@ const Index = () => {
 
     // Prior turns go as conversation history (text only); the current
     // message carries the images via image_url content blocks.
-    runAssistantReply({
+    void runAssistantReply({
       baseMessages: updatedMessages,
       rollbackMessages: messages,
       history: toHistory(messages),
       prompt: content,
       modelId: selectedModelId,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+    }).then((delivered) => {
+      // Rolled back: the message carrying these refs is gone, so the files we
+      // stored for it a moment ago are ours to reclaim.
+      if (!delivered) {
+        for (const ref of attachmentRefs) void deleteImage(ref.path);
+      }
     });
   };
 
@@ -464,6 +601,10 @@ const Index = () => {
   }: ReplyRunnerArgs) => {
     const controller = new AbortController();
     abortRef.current = controller;
+    // Callers that stored something for this turn need to know whether the
+    // transcript kept it: an error rolls the messages back, a user abort keeps
+    // whatever streamed. Only the first orphans what was written.
+    let failed = false;
 
     setIsStreaming(true);
     setStreamingContent("");
@@ -520,6 +661,7 @@ const Index = () => {
     };
 
     const onError = (error: Error) => {
+      failed = true;
       console.error('Chat error:', error);
       toast({
         title: "Message failed to send",
@@ -553,6 +695,7 @@ const Index = () => {
     } catch (error) {
       onError(error instanceof Error ? error : new Error(`AI request failed: ${(error as Error)?.message || 'Unknown error'}`));
     }
+    return !failed;
   };
 
   const handleStop = () => {
@@ -578,7 +721,7 @@ const Index = () => {
       toast({
         title: "Cannot retry this message",
         description:
-          "It was about an attached image, and attachments are not kept in the conversation. Attach the image again and resend.",
+          "It was about an attached image, and retries send text only. Attach the image again and resend.",
         variant: "destructive",
         duration: 6000,
       });
@@ -588,7 +731,7 @@ const Index = () => {
       toast({
         title: "Retrying without the image",
         description:
-          "Attachments are not kept in the conversation, so this retry sends the text only.",
+          "Retries send text only. The attachment stays in the images panel — re-attach it to include it in a new message.",
         duration: 5000,
       });
     }
@@ -661,6 +804,8 @@ const Index = () => {
 
   const handleDeleteConversation = (id: string) => {
     recordDelete(id);
+    const doomed = conversationsRef.current.find((conv) => conv.id === id);
+    if (doomed) reclaimMessages(doomed.messages);
     const remaining = conversations.filter((conv) => conv.id !== id);
     if (remaining.length === 0) {
       // If no conversations left, create a new one
@@ -708,6 +853,9 @@ const Index = () => {
 
   const handleDeleteConversations = (ids: string[]) => {
     ids.forEach((id) => recordDelete(id));
+    conversationsRef.current
+      .filter((conv) => ids.includes(conv.id))
+      .forEach((conv) => reclaimMessages(conv.messages));
     const remaining = conversationsRef.current.filter((conv) => !ids.includes(conv.id));
     if (remaining.length === 0) {
       const newConv: Conversation = {
@@ -743,11 +891,11 @@ const Index = () => {
     if (!clean && (!images || images.length === 0)) return;
 
     let imageUrls: string[] = [];
+    let attachmentRefs: AttachmentRef[] = [];
     if (images && images.length > 0) {
       try {
-        imageUrls = (await prepareImageAttachments(images)).map(
-          (attachment) => attachment.dataUrl
-        );
+        ({ dataUrls: imageUrls, refs: attachmentRefs } =
+          await prepareAndStoreAttachments(images, notifyStoreFailed));
       } catch (error) {
         toast({
           title: "Image processing failed",
@@ -768,7 +916,14 @@ const Index = () => {
     }
 
     const priorMessages = messages.slice(0, messageIndex);
-    const updatedMessages: Message[] = [...priorMessages, { role: "user", content: messageContent }];
+    const updatedMessages: Message[] = [
+      ...priorMessages,
+      {
+        role: "user",
+        content: messageContent,
+        ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+      },
+    ];
 
     setConversations((prev) =>
       prev.map((conv) =>
@@ -782,7 +937,7 @@ const Index = () => {
       )
     );
 
-    await runAssistantReply({
+    const delivered = await runAssistantReply({
       baseMessages: updatedMessages,
       rollbackMessages: messages,
       history: toHistory(priorMessages),
@@ -790,6 +945,12 @@ const Index = () => {
       modelId: model || selectedModel,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
+    // Editing replaces this message and truncates the tail, so every image from
+    // messageIndex onwards loses its ref — but only once the edit has stuck. A
+    // failed reply rolls the transcript back to `messages`, refs and all, and
+    // deleting their files first would leave the restored messages pointing at
+    // nothing.
+    if (delivered) reclaimMessages(messages.slice(messageIndex));
   };
 
   const commitTitle = () => {
@@ -823,6 +984,19 @@ const Index = () => {
     });
   };
 
+  /**
+   * An attachment that reached the model but could not be stored: the send
+   * still succeeded, so this is a warning rather than an error, but staying
+   * quiet would leave the images panel short of an image with no explanation.
+   */
+  const notifyStoreFailed = useCallback((name: string) => {
+    toast({
+      title: "Image not saved to your library",
+      description: `${name} was sent, but could not be stored, so it will not appear in the images panel.`,
+      duration: 6000,
+    });
+  }, [toast]);
+
   const handleCopyMessage = async (content: string) => {
     const success = await copyToClipboard(content);
     if (success) {
@@ -840,6 +1014,8 @@ const Index = () => {
   };
 
   const handleDeleteMessage = (messageIndex: number) => {
+    const removed = messages[messageIndex];
+    if (removed) reclaimMessages([removed]);
     setConversations(prev => prev.map(conv =>
       conv.id === currentConversationId
         ? {
@@ -909,7 +1085,11 @@ const Index = () => {
       />
 
       <main
-        className={cn("app-main", sidebarOpen ? "app-main-sidebar-open" : "app-main-sidebar-closed")}
+        className={cn(
+          "app-main",
+          sidebarOpen ? "app-main-sidebar-open" : "app-main-sidebar-closed",
+          artifactsOpen && "app-main-artifacts-open"
+        )}
       >
         <header className="app-header">
           <div className="app-header-group app-header-group-start">
@@ -987,8 +1167,28 @@ const Index = () => {
               </button>
             ))}
           <div className="app-header-group app-header-group-end">
-            {/* Conversation-level actions: share/export and theme. The account
-                lives in the sidebar footer now. */}
+            {/* Conversation-level actions: the image index, share/export and
+                theme. The account lives in the sidebar footer now. */}
+            {isAuthenticated && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="app-icon-btn app-header-artifacts"
+                onClick={() => setArtifactsOpen((open) => !open)}
+                title="Images in this conversation"
+                aria-label={`Images in this conversation${
+                  imageArtifacts.length > 0 ? ` (${imageArtifacts.length})` : ""
+                }`}
+                aria-expanded={artifactsOpen}
+              >
+                <Images className="app-header-icon" aria-hidden="true" />
+                {imageArtifacts.length > 0 && (
+                  <span className="app-header-artifacts-count" aria-hidden="true">
+                    {imageArtifacts.length}
+                  </span>
+                )}
+              </Button>
+            )}
             {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1168,6 +1368,19 @@ const Index = () => {
           </>
         )}
       </main>
+
+      {/* Image index for the open conversation. Docked at `xl`, an overlay
+          below it — the same split the sidebar uses at `lg`. */}
+      {isAuthenticated && (
+        <ArtifactsPanel
+          artifacts={imageArtifacts}
+          unsavedAttachments={unsavedAttachments}
+          isGeneratingImage={isGeneratingImage}
+          isOpen={artifactsOpen}
+          onToggle={() => setArtifactsOpen((open) => !open)}
+          onLocate={locateMessage}
+        />
+      )}
     </div>
   );
 };

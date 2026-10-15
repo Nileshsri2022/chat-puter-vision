@@ -91,6 +91,16 @@ export function hasImageMarker(text: string): boolean {
   return IMAGE_MARKER_RE.test(text);
 }
 
+/**
+ * How many images the note claims, or 0 when there is none. Lets callers tell
+ * an attachment that was persisted (refs on the message) from one that only
+ * left this marker behind — the marker is the sole record of the latter.
+ */
+export function imageMarkerCount(text: string): number {
+  const match = /(?:\n\n|^)\[Images: (\d+) attached\]$/.exec(text);
+  return match ? Number.parseInt(match[1], 10) || 0 : 0;
+}
+
 /** The message text without the attachment note. */
 export function stripImageMarker(text: string): string {
   return text.replace(IMAGE_MARKER_RE, "");

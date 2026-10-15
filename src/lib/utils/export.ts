@@ -42,6 +42,31 @@ export function downloadFile(filename: string, content: string, mimeType: string
 }
 
 /**
+ * Download an existing Blob (a stored image, say) without re-encoding it.
+ * `downloadFile` keeps its string signature so its callers are untouched.
+ */
+export function downloadBlob(filename: string, blob: Blob): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/** Turn a `data:` URL back into a Blob; resolves null when it cannot. */
+export async function dataUrlToBlob(dataUrl: string): Promise<Blob | null> {
+    try {
+        const response = await fetch(dataUrl);
+        return await response.blob();
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Copy text to clipboard
  */
 export async function copyToClipboard(text: string): Promise<boolean> {

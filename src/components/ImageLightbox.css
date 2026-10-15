@@ -1,0 +1,30 @@
+/* ImageLightbox styles — the shared full-screen preview. */
+
+.lightbox {
+  @apply fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4;
+  /* The close button sits inside the top safe area on a notched phone. */
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+
+.lightbox-close {
+  @apply absolute right-3 top-3 size-9 rounded-full bg-white/10 text-white transition-colors hover:bg-white/20;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+}
+
+.lightbox-close-icon {
+  @apply mx-auto size-5;
+}
+
+.lightbox-figure {
+  @apply flex max-h-full cursor-default flex-col items-center gap-2;
+}
+
+.lightbox-img {
+  /* 90dvh, not 90vh: the vh unit measures the chrome-hidden viewport and would
+     push the top of the image under the browser UI. */
+  @apply max-h-[85vh] max-h-[85dvh] max-w-[90vw] rounded-xl object-contain shadow-2xl;
+}
+
+.lightbox-caption {
+  @apply max-w-[90vw] truncate text-xs text-white/80;
+}
