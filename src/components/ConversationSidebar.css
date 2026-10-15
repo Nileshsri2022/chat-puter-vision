@@ -238,18 +238,6 @@
   @apply size-4 shrink-0 text-muted-foreground;
 }
 
-.sidebar-account-menu {
-  @apply min-w-56;
-}
-
-.sidebar-account-label {
-  @apply max-w-56 truncate;
-}
-
-.sidebar-account-menu-icon {
-  @apply size-4;
-}
-
 /* Multi-select mode */
 .conv-check {
   @apply flex size-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground;

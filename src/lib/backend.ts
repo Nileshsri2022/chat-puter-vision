@@ -5,12 +5,24 @@
 // NOTE: `puter.auth.currentUser` is intentionally absent — it is not a
 // documented API. The documented sign-in check is `isSignedIn()`.
 
+/**
+ * The user object `getUser()` resolves to. Only `uuid` and `username` are
+ * guaranteed; the rest are the optional fields the docs list for `User`
+ * (https://docs.puter.com/Objects/user) and arrive only when the backend
+ * chooses to include them.
+ */
 export interface BackendUser {
   uuid: string;
   username: string;
   email?: string;
   requires_email_confirmation?: boolean;
   is_temp?: boolean;
+  /** Documented on `User`: whether the email address has been confirmed. */
+  email_confirmed?: boolean;
+  /** Documented on `User`: account creation, in seconds since the epoch. */
+  created_ts?: number;
+  /** Documented on `User`: whether the account is on a paid plan. */
+  subscribed?: boolean;
 }
 
 export interface SignInResult {
@@ -175,7 +187,7 @@ interface BackendFS {
 }
 
 interface BackendKV {
-  set(key: string, value: string): Promise<boolean>;
+  set(key: string, value: string, options?: { disableSharing?: boolean }): Promise<boolean>;
   get(key: string): Promise<unknown>;
   del(key: string): Promise<boolean>;
   list(pattern?: string): Promise<string[]>;

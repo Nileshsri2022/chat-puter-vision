@@ -195,11 +195,15 @@ test("the header sheds secondary actions before it can overflow", () => {
 
 test("the account menu lives in the sidebar, not the header", () => {
   const page = read("pages/Index.tsx");
-  // Sign-out is reachable only from the rail's footer now.
+  // Sign-out is reachable only through the profile section, which the rail's
+  // footer account button opens — never from the header.
   expect(page).not.toContain("Sign out");
   expect(page).toContain("onSignOut={handleSignOut}");
   const sidebar = read("components/ConversationSidebar.tsx");
-  expect(sidebar).toContain("Sign out");
+  // The footer keeps the trigger; the menu itself moved into the dialog.
+  expect(sidebar).not.toContain("Sign out");
+  expect(sidebar).toContain("onOpenAccount");
+  expect(read("components/ProfileDialog.tsx")).toContain("Sign out");
   expect(read("components/ConversationSidebar.css")).toContain(".sidebar-footer");
 });
 

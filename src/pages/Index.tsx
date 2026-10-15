@@ -5,12 +5,21 @@ import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { ArtifactsPanel } from "@/components/ArtifactsPanel";
 import { AuthButton } from "@/components/AuthButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getProfileInfo, type ProfileInfo } from "@/lib/profile";
+import { ProfileDialog, type ProfilePatch } from "@/components/ProfileDialog";
+import {
+  getProfileInfo,
+  loadAppProfile,
+  saveAppProfile,
+  type AppProfile,
+  type ProfileInfo,
+} from "@/lib/profile";
 import {
   Message,
   checkAuthStatus,
+  getCurrentUser,
   signOut,
   type AttachmentRef,
+  type BackendUser,
   type CompactionItem,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
@@ -233,6 +242,11 @@ const Index = () => {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  /** Signed-in user's account details (username, email, member since…). */
+  const [user, setUser] = useState<BackendUser | null>(null);
+  /** This app's editable profile, stored per-user in puter.kv. */
+  const [appProfile, setAppProfile] = useState<AppProfile | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
@@ -386,15 +400,25 @@ const Index = () => {
     if (isAuthenticated) void runSync();
   }, [isAuthenticated, runSync]);
 
-  // Load profile (avatar + display name) for the account menu.
+  // Load the identity for the account button and the profile section: the
+  // account details (getUser), the Puter profile, and this app's stored
+  // profile — each may arrive (or fail) on its own.
   useEffect(() => {
     if (!isAuthenticated) {
       setProfile(null);
+      setUser(null);
+      setAppProfile(null);
       return;
     }
     let alive = true;
     getProfileInfo().then((p) => {
       if (alive) setProfile(p);
+    });
+    getCurrentUser().then((u) => {
+      if (alive) setUser(u);
+    });
+    loadAppProfile().then((p) => {
+      if (alive) setAppProfile(p);
     });
     return () => {
       alive = false;
@@ -943,6 +967,7 @@ const Index = () => {
   const handleSignOut = () => {
     signOut();
     setIsAuthenticated(false);
+    setProfileOpen(false);
     // The account menu lives in the rail now: on the overlay layout signing out
     // would otherwise leave the rail covering the sign-in screen.
     if (!isDesktop) setSidebarOpen(false);
@@ -950,6 +975,32 @@ const Index = () => {
       title: "Signed out",
       duration: 2000,
     });
+  };
+
+  /**
+   * Persist an edited profile: the app-profile entry goes to puter.kv (with a
+   * localStorage cache), and the toast reports whether it synced or only
+   * saved locally. Never throws — the dialog closes either way.
+   */
+  const handleSaveProfile = async (patch: ProfilePatch) => {
+    const next: AppProfile = {
+      version: 1,
+      displayName: patch.displayName,
+      bio: patch.bio,
+      picture: patch.picture,
+      updatedAt: Date.now(),
+    };
+    setAppProfile(next);
+    const synced = await saveAppProfile(next);
+    if (synced) {
+      toast({ title: "Profile saved", duration: 2000 });
+    } else {
+      toast({
+        title: "Saved on this device",
+        description: "Your profile will sync to your Puter account when you're back online.",
+        duration: 4000,
+      });
+    }
   };
 
   /**
@@ -1046,11 +1097,26 @@ const Index = () => {
         onTogglePin={handleTogglePin}
         onShareConversation={handleShareConversation}
         isAuthenticated={isAuthenticated}
-        profile={profile}
-        onSignOut={handleSignOut}
+        accountName={
+          appProfile?.displayName ?? profile?.name ?? user?.username ?? "Account"
+        }
+        accountPicture={appProfile?.picture ?? profile?.picture ?? null}
+        onOpenAccount={() => setProfileOpen(true)}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
+
+      {/* Profile section — the account button's destination. */}
+      {isAuthenticated && profileOpen && (
+        <ProfileDialog
+          user={user}
+          puterProfile={profile}
+          appProfile={appProfile}
+          onClose={() => setProfileOpen(false)}
+          onSave={handleSaveProfile}
+          onSignOut={handleSignOut}
+        />
+      )}
 
       <main
         className={cn(
