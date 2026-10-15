@@ -81,6 +81,20 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
   }
 });
 
+test("a hover-revealed action group also opens for keyboard focus", () => {
+  // The group is what goes transparent, and a child can never be more opaque
+  // than its parent: revealing just the focused button leaves it invisible.
+  // The reveal has to target the group, while focus is anywhere inside it.
+  for (const [file, group] of [
+    ["components/ArtifactsPanel.css", ".artifacts-tile-actions"],
+    ["components/ArtifactRow.css", ".artifact-row-actions"],
+  ] as const) {
+    const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
+    const guard = /@media \(hover: hover\) and \(pointer: fine\)\s*\{([\s\S]*)\}/.exec(css)?.[1] ?? "";
+    expect(`${file}: ${guard.includes(`${group}:focus-within`)}`).toBe(`${file}: true`);
+  }
+});
+
 test("icon buttons expand their touch target on coarse pointers", () => {
   // Assert the rule is actually *defined*, not merely referenced by the
   // `@apply tap-expand` lines — otherwise renaming the definition slips past.

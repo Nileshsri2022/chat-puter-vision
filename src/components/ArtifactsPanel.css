@@ -162,8 +162,11 @@
     opacity: 0;
   }
 
+  /* :focus-within on the container: a child cannot be more opaque than its
+     parent, so revealing only the focused button left it invisible to a
+     keyboard user. */
   .group:hover .artifacts-tile-actions,
-  .artifacts-tile-action:focus-visible {
+  .artifacts-tile-actions:focus-within {
     opacity: 1;
   }
 }
