@@ -503,11 +503,16 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
           </div>
         </div>
       )}
-      <ImageLightbox
-        src={imageSrc}
-        alt="Image preview"
-        onClose={() => setPreviewOpen(false)}
-      />
+      {/* Only while open, and only with a URL: `imageSrc` is null until the
+          Drive read lands, and rendering the overlay against that null is what
+          put a broken "Image preview" over the app on first paint. */}
+      {previewOpen && imageSrc && (
+        <ImageLightbox
+          src={imageSrc}
+          alt="Image preview"
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
 
     </>
   );
