@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw, FolderPlus } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
@@ -60,8 +60,6 @@ interface ChatMessageProps {
   onCopy?: (content: string) => void;
   onDelete?: () => void;
   onEdit?: (content: string, images?: File[], model?: string) => void;
-  /** Add this message or image into the active Context Group. */
-  onAddToContext?: (payload: ContextDropPayload) => void;
   /** Model state shared with the bottom composer, so edit uses the same selector. */
   selectedModel?: string;
   onModelChange?: (model: string) => void;
@@ -82,7 +80,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, onAddToContext, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -223,8 +221,9 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
 
   /**
    * The part of the current window selection that sits inside this message,
-   * or "" when there is none. Used both by the add-to-context button and by
-   * its label, so the control tells the user exactly what it will add.
+   * or "" when there is none. Dragging the message into the Contexts panel
+   * is paused while a selection is live, so selecting text never starts a
+   * drag by accident.
    */
   const selectionInMessage = (): string => {
     const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
@@ -248,56 +247,18 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     return probe && visible.includes(probe) ? raw : "";
   };
 
-  // Pressing a button can collapse the selection before `click` runs (Firefox
-  // and some Chrome paths do), so snapshot the snippet on mousedown.
-  const pendingSelectionRef = useRef("");
-
-  const handleAddMessageToContext = () => {
-    if (!onAddToContext) return;
-    // A text selection wins: the user highlighted something, so add exactly
-    // that snippet (with its source, so → can jump back to it) instead of the
-    // whole message.
-    const selected = selectionInMessage() || pendingSelectionRef.current;
-    pendingSelectionRef.current = "";
-    const imgPayload = buildImagePayload();
-    if (selected) {
-      const selPayload = buildTextPayload(selected);
-      if (selPayload) {
-        onAddToContext(selPayload);
-        // Clear the selection so a second click doesn't re-add the same snippet.
-        try {
-          window.getSelection?.()?.removeAllRanges();
-        } catch {
-          // Nothing to clear.
-        }
-        setSelectionActive(false);
-        return;
-      }
-    }
-    if (imgPayload) onAddToContext(imgPayload);
-    const txtPayload = buildTextPayload();
-    if (txtPayload) onAddToContext(txtPayload);
-  };
-
-  // Track whether the live selection is inside this message, so the button can
-  // say "Add selected text to context" and light up while it applies.
+  // Track whether the live selection is inside this message, so the
+  // drag-to-context handles below stay inert while the user is selecting.
   const [selectionActive, setSelectionActive] = useState(false);
-  const [selectionPreview, setSelectionPreview] = useState("");
   useEffect(() => {
     const read = () => {
-      const text = selectionInMessage();
-      setSelectionActive(Boolean(text));
-      setSelectionPreview(text.split("\n")[0]?.slice(0, 40) ?? "");
+      setSelectionActive(Boolean(selectionInMessage()));
     };
     document.addEventListener("selectionchange", read);
     return () => document.removeEventListener("selectionchange", read);
     // The listener only re-reads the DOM through a stable ref, so mounting it
     // once is correct: a new one per render would churn every message anyway.
   }, []);
-
-  const addToContextLabel = selectionActive
-    ? `Add selected text to context${selectionPreview ? `: “${selectionPreview}”` : ""}`
-    : "Add message to context";
 
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a
@@ -482,7 +443,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
   // proper \"table\" item (with source.at for block-level locate). The text we
   // drag is the Markdown the artifacts panel extracts — but for the ad-hoc drag
   // we reconstruct a simple pipe table from the rendered cells; it's enough for
-  // context injection and the row preview.
+  // context injection.
   const TableWrap = ({ at, children }: { at?: number; children: React.ReactNode }) => {
     const wrapRef = useRef<HTMLDivElement>(null);
     const handleTableDragStart = (e: React.DragEvent) => {
@@ -617,7 +578,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                   {content}
                 </div>
               </div>
-              {(onCopy || onEdit || onAddToContext) && (
+              {(onCopy || onEdit) && (
                 <div className="msg-user-actions">
                   {onCopy && (
                     <Button
@@ -641,21 +602,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                       aria-label="Edit message"
                     >
                       <Pencil className="msg-action-icon" aria-hidden="true" />
-                    </Button>
-                  )}
-                  {onAddToContext && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleAddMessageToContext}
-                      onMouseDown={() => {
-                        pendingSelectionRef.current = selectionInMessage();
-                      }}
-                      className={cn("msg-action-btn", selectionActive && "msg-action-btn-selected")}
-                      title={addToContextLabel}
-                      aria-label={addToContextLabel}
-                    >
-                      <FolderPlus className="msg-action-icon" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
@@ -793,7 +739,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {!isStreaming && (speakable || onCopy || onDelete || onShareExchange || onRetry || onAddToContext) && (
+            {!isStreaming && (speakable || onCopy || onDelete || onShareExchange || onRetry) && (
               <div className="msg-actions">
                 {speakable && (
                   <Button
@@ -824,21 +770,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                     aria-label={copied ? "Copied" : "Copy message"}
                   >
                     {copied ? <Check className="msg-action-icon" aria-hidden="true" /> : <Copy className="msg-action-icon" aria-hidden="true" />}
-                  </Button>
-                )}
-                {onAddToContext && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddMessageToContext}
-                    onMouseDown={() => {
-                      pendingSelectionRef.current = selectionInMessage();
-                    }}
-                    className={cn("msg-action-btn", selectionActive && "msg-action-btn-selected")}
-                    title={addToContextLabel}
-                    aria-label={addToContextLabel}
-                  >
-                    <FolderPlus className="msg-action-icon" aria-hidden="true" />
                   </Button>
                 )}
                 {onRetry && (

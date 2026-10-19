@@ -113,7 +113,7 @@ test("collapsed context groups show only their title row and quick inject button
   expect(html).toContain("Inject into input");
 });
 
-test("text, code, and table rows can be previewed, and rows without a source say so instead of hiding the arrow", () => {
+test("text, code, and table rows have no eye preview (the arrow shows the text in chat), and rows without a source say so instead of hiding the arrow", () => {
   let group = createContextGroup(undefined, OCT_19);
   group = addItemToContextGroup(
     group,
@@ -157,8 +157,11 @@ test("text, code, and table rows can be previewed, and rows without a source say
     />
   );
 
-  // Every row offers a preview of the exact text it will inject.
-  expect(html.match(/aria-label="Preview [^"]*"/g)).toHaveLength(2);
+  // No eye/preview control any more: the `→` arrow already shows the saved
+  // text in the chat, so a separate preview dialog would duplicate it.
+  expect(html).not.toContain('aria-label="Preview ');
+  expect(html).not.toContain("context-preview");
+  expect(html).not.toContain("Preview text");
   // The row with provenance keeps its locate arrow; the one without renders a
   // disabled placeholder rather than silently dropping the control.
   expect(html.match(/aria-label="Show [^"]* in chat"/g)).toHaveLength(1);

@@ -181,10 +181,6 @@
   @apply min-w-0 flex-1 truncate;
 }
 
-.context-item-label-btn {
-  @apply min-w-0 flex-1 truncate text-left hover:text-foreground hover:underline focus-visible:outline-none;
-}
-
 .context-item-kind-icon {
   @apply size-3 shrink-0 text-muted-foreground;
 }
@@ -238,53 +234,4 @@
 
 .context-empty-sub {
   @apply text-xs leading-relaxed text-muted-foreground text-pretty;
-}
-
-/* Text preview dialog triggered from a context row label/eye */
-.context-preview-scrim {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm;
-}
-
-.context-preview-panel {
-  @apply flex max-h-[80vh] max-h-[80dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl;
-}
-
-.context-preview-header {
-  @apply flex shrink-0 items-center gap-2 border-b border-border px-3 py-2;
-}
-
-.context-preview-title-icon {
-  @apply size-4 shrink-0 text-muted-foreground;
-}
-
-.context-preview-title {
-  @apply min-w-0 flex-1 truncate text-sm font-semibold text-foreground;
-}
-
-.context-preview-action {
-  @apply size-7 shrink-0 tap-expand text-muted-foreground hover:text-foreground;
-}
-
-.context-preview-action-icon {
-  @apply size-3.5;
-}
-
-.context-preview-body {
-  @apply min-h-0 flex-1 overflow-y-auto p-4;
-}
-
-.context-preview-pre {
-  @apply overflow-x-auto whitespace-pre-wrap break-words rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground;
-}
-
-.context-preview-text {
-  @apply whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground;
-}
-
-.context-preview-footer {
-  @apply flex shrink-0 justify-end border-t border-border px-3 py-2;
-}
-
-.context-preview-footer-icon {
-  @apply size-3.5;
 }

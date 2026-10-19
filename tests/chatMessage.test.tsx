@@ -27,6 +27,34 @@ test("a user message opens no overlay", () => {
   expect(html).not.toContain('role="dialog"');
 });
 
+test("messages render no add-to-context (FolderPlus) button", () => {
+  // Adding to a context happens by dragging into the Contexts panel (or via
+  // the artifacts panel); the per-message button was removed, so neither
+  // message kind may render it even with every other action wired up.
+  const noop = () => {};
+  const user = renderToStaticMarkup(
+    <ChatMessage role="user" content="A man dancing in water" onCopy={noop} onEdit={noop} />
+  );
+  const assistant = renderToStaticMarkup(
+    <ChatMessage
+      role="assistant"
+      content="Quantum computers use qubits."
+      onCopy={noop}
+      onDelete={noop}
+      onRetry={noop}
+      onShareExchange={noop}
+    />
+  );
+  for (const html of [user, assistant]) {
+    expect(html).not.toContain("Add message to context");
+    expect(html).not.toContain("Add selected text to context");
+  }
+  // The remaining actions still render.
+  expect(user).toContain('aria-label="Copy message"');
+  expect(user).toContain('aria-label="Edit message"');
+  expect(assistant).toContain('aria-label="Copy message"');
+});
+
 test("an image answer previews only once the image is opened", () => {
   const html = renderToStaticMarkup(
     <ChatMessage role="assistant" content="" image="data:image/png;base64,AAAA" />

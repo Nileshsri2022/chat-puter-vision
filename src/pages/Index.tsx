@@ -1587,11 +1587,6 @@ const Index = () => {
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content, images, model) => handleEditMessage(index, content, images, model) : undefined}
-                      onAddToContext={(payload) => {
-                        addItem(payload);
-                        setArtifactsOpen(false);
-                        setContextsOpen(true);
-                      }}
                       selectedModel={selectedModel}
                       onModelChange={setSelectedModel}
                       modelCatalog={modelCatalog}
