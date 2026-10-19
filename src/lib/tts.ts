@@ -17,7 +17,7 @@ export const TTS_CHAR_LIMIT = 3000;
  */
 export function stripMarkdownForSpeech(md: string): string {
   return stripThinkBlocks(md)
-    .replace(/```[\s\S]*?```/g, " [code omitted] ")
+    .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, " [code omitted] ")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/^>\s?/gm, "")
