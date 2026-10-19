@@ -240,3 +240,59 @@ test("artifactToContextPayload and drag payload round-trip preserve source prove
     expect(decoded?.source?.messageIndex).toBe(0);
   }
 });
+
+test("resolveContextGroupForTask skips images it cannot make sendable and counts them", async () => {
+  let group = createContextGroup(undefined, OCT_19);
+  // A live data URL, a Drive path that resolves, and a stale reference whose
+  // read fails (e.g. the file was deleted or an older build wrote a bare path
+  // with refKind "data").
+  group = addItemToContextGroup(
+    group,
+    {
+      kind: "image",
+      ref: "data:image/png;base64,AAAA",
+      refKind: "data",
+      origin: "generated",
+      label: "Inline image",
+    },
+    OCT_19
+  ).group;
+  group = addItemToContextGroup(
+    group,
+    {
+      kind: "image",
+      ref: "freetalk-upload-a.png",
+      refKind: "data", // wrong kind, older build: must be repaired by reading Drive
+      origin: "attachment",
+      label: "Repairable image",
+    },
+    OCT_19
+  ).group;
+  group = addItemToContextGroup(
+    group,
+    {
+      kind: "image",
+      ref: "freetalk-missing.png",
+      refKind: "drive",
+      origin: "generated",
+      label: "Missing image",
+    },
+    OCT_19
+  ).group;
+
+  const resolved = await resolveContextGroupForTask(group, async (path) => {
+    if (path === "freetalk-missing.png") throw new Error("not found");
+    return `data:image/png;base64,${path}`;
+  });
+
+  expect(resolved.imageDataUrls).toEqual([
+    "data:image/png;base64,AAAA",
+    "data:image/png;base64,freetalk-upload-a.png",
+  ]);
+  expect(resolved.missingImages).toBe(1);
+  // Provenance follows the first image that actually resolved.
+  expect(resolved.primaryImageBase).toEqual({
+    src: "data:image/png;base64,AAAA",
+    origin: "generated",
+  });
+});

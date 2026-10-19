@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   ArrowRight,
   ChevronDown,
   ChevronRight,
+  Code2,
+  Copy,
+  Check,
+  Eye,
   Pencil,
   Plus,
+  Table2,
   Trash2,
   X,
 } from "lucide-react";
@@ -13,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/utils/export";
 import {
   CONTEXT_DRAG_MIME,
   decodeContextDragPayload,
@@ -40,6 +47,11 @@ interface ContextsPanelProps {
   onRenameGroup: (groupId: string, newTitle: string) => void;
   onInjectGroup: (group: ContextGroup) => void;
   onLocateItem: (source: ContextSourceRef) => void;
+  /**
+   * Best-effort provenance for a plain-text drop: which message in the open
+   * transcript holds it, so the row gets a working `→` locate button.
+   */
+  resolveTextSource?: (text: string) => ContextSourceRef | undefined;
 }
 
 const ContextThumb = ({
@@ -106,6 +118,7 @@ export const ContextsPanel = ({
   onRenameGroup,
   onInjectGroup,
   onLocateItem,
+  resolveTextSource,
 }: ContextsPanelProps) => {
   const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +126,8 @@ export const ContextsPanel = ({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
+  const [previewItem, setPreviewItem] = useState<import("@/lib/contextGroups").ContextTextItem | null>(null);
+  const [previewCopied, setPreviewCopied] = useState(false);
 
   useEffect(() => {
     const el = panelRef.current;
@@ -120,6 +135,21 @@ export const ContextsPanel = ({
     if (isOpen) el.removeAttribute("inert");
     else el.setAttribute("inert", "");
   }, [isOpen]);
+
+  // The item preview is a dialog: Escape closes it, and switching items resets
+  // the copy confirmation instead of showing it on the next snippet.
+  useEffect(() => {
+    if (!previewItem) return;
+    setPreviewCopied(false);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setPreviewItem(null);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [previewItem]);
 
   const handleDropData = (e: React.DragEvent, targetGroupId?: string) => {
     e.preventDefault();
@@ -144,11 +174,16 @@ export const ContextsPanel = ({
     const plainText = e.dataTransfer.getData("text/plain")?.trim();
     if (plainText) {
       const firstLine = plainText.split("\n")[0]?.trim().slice(0, 36) || "Text snippet";
+      // The custom MIME is primary, but if the browser dropped it we still try
+      // to work out where the snippet came from — otherwise the new row would
+      // have no `→` button and the user could never get back to the source.
+      const source = resolveTextSource?.(plainText);
       onAddItem(
         {
           kind: "text",
           text: plainText,
           label: firstLine.length < plainText.length ? `${firstLine}…` : firstLine,
+          ...(source ? { source } : {}),
         },
         targetGroupId
       );
@@ -343,37 +378,66 @@ export const ContextsPanel = ({
 
                         {texts.length > 0 && (
                           <div className="context-items-list">
-                            {texts.map((item) => (
-                              <div key={item.id} className="context-item-row">
-                                <span className="context-item-label" title={item.text}>
-                                  {item.label}
-                                </span>
-                                <div className="context-item-actions">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="context-item-action tap-expand"
-                                    onClick={() => onRemoveItem(group.id, item.id)}
-                                    title={`Remove ${item.label}`}
-                                    aria-label={`Remove ${item.label}`}
+                            {texts.map((item) => {
+                              const KindIcon =
+                                item.kind === "code" ? Code2 : item.kind === "table" ? Table2 : Eye;
+                              return (
+                                <div key={item.id} className="context-item-row">
+                                  <KindIcon className="context-item-kind-icon" aria-hidden="true" />
+                                  <button
+                                    type="button"
+                                    className="context-item-label context-item-label-btn"
+                                    title={`${item.text.slice(0, 120)} (click to preview)`}
+                                    onClick={() => setPreviewItem(item)}
+                                    aria-label={`Show the full text of ${item.label}`}
                                   >
-                                    <X className="context-item-action-icon" aria-hidden="true" />
-                                  </Button>
-                                  {item.source && (
+                                    {item.label}
+                                  </button>
+                                  <div className="context-item-actions">
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className="context-item-action tap-expand"
-                                      onClick={() => onLocateItem(item.source!)}
-                                      title={`Show ${item.label} in chat`}
-                                      aria-label={`Show ${item.label} in chat`}
+                                      onClick={() => setPreviewItem(item)}
+                                      title="Preview text"
+                                      aria-label={`Preview ${item.label}`}
                                     >
-                                      <ArrowRight className="context-item-action-icon" aria-hidden="true" />
+                                      <Eye className="context-item-action-icon" aria-hidden="true" />
                                     </Button>
-                                  )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="context-item-action tap-expand"
+                                      onClick={() => onRemoveItem(group.id, item.id)}
+                                      title={`Remove ${item.label}`}
+                                      aria-label={`Remove ${item.label}`}
+                                    >
+                                      <X className="context-item-action-icon" aria-hidden="true" />
+                                    </Button>
+                                    {item.source ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="context-item-action tap-expand"
+                                        onClick={() => onLocateItem(item.source!)}
+                                        title={`Show ${item.label} in chat`}
+                                        aria-label={`Show ${item.label} in chat`}
+                                      >
+                                        <ArrowRight className="context-item-action-icon" aria-hidden="true" />
+                                      </Button>
+                                    ) : (
+                                      <span
+                                        className="context-item-action context-item-action-disabled"
+                                        title="No source — dragged from outside the chat"
+                                        aria-hidden="true"
+                                      >
+                                        <ArrowRight className="context-item-action-icon opacity-30" aria-hidden="true" />
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
 
@@ -441,6 +505,95 @@ export const ContextsPanel = ({
             if (fileInputRef.current) fileInputRef.current.value = "";
           }}
         />
+
+        {/* Preview dialog for a text/code/table/ocr context item — clicking the
+            label (or the eye icon) shows the exact text that will be injected,
+            matching how an image thumbnail opens its own preview. Rendered in a
+            portal because the panel is transformed (slide-in), which would
+            otherwise trap a `fixed` overlay inside the panel's box. */}
+        {previewItem &&
+          createPortal(
+            <div
+              className="context-preview-scrim"
+              role="dialog"
+              aria-modal="true"
+              aria-label={previewItem.label}
+              onClick={() => setPreviewItem(null)}
+            >
+              <div
+                className="context-preview-panel"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="context-preview-header">
+                  {previewItem.kind === "code" ? (
+                    <Code2 className="context-preview-title-icon" aria-hidden="true" />
+                  ) : previewItem.kind === "table" ? (
+                    <Table2 className="context-preview-title-icon" aria-hidden="true" />
+                  ) : (
+                    <Eye className="context-preview-title-icon" aria-hidden="true" />
+                  )}
+                  <h2 className="context-preview-title">{previewItem.label}</h2>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="context-preview-action tap-expand"
+                    onClick={async () => {
+                      if (await copyToClipboard(previewItem.text)) {
+                        setPreviewCopied(true);
+                        window.setTimeout(() => setPreviewCopied(false), 1500);
+                      }
+                    }}
+                    title="Copy text"
+                    aria-label="Copy text"
+                  >
+                    {previewCopied ? (
+                      <Check className="context-preview-action-icon" aria-hidden="true" />
+                    ) : (
+                      <Copy className="context-preview-action-icon" aria-hidden="true" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="context-preview-action tap-expand"
+                    onClick={() => setPreviewItem(null)}
+                    title="Close preview"
+                    aria-label="Close preview"
+                  >
+                    <X className="context-preview-action-icon" aria-hidden="true" />
+                  </Button>
+                </div>
+                <div className="context-preview-body">
+                  {previewItem.kind === "code" ? (
+                    <pre className="context-preview-pre">
+                      <code>{previewItem.text}</code>
+                    </pre>
+                  ) : previewItem.kind === "table" ? (
+                    <pre className="context-preview-pre">{previewItem.text}</pre>
+                  ) : (
+                    <p className="context-preview-text">{previewItem.text}</p>
+                  )}
+                </div>
+                {previewItem.source && (
+                  <div className="context-preview-footer">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const source = previewItem.source!;
+                        setPreviewItem(null);
+                        onLocateItem(source);
+                      }}
+                    >
+                      <ArrowRight className="context-preview-footer-icon" aria-hidden="true" />
+                      Show in chat
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body
+          )}
       </aside>
     </>
   );

@@ -112,3 +112,55 @@ test("collapsed context groups show only their title row and quick inject button
   // And the `← Inject into input` button is rendered
   expect(html).toContain("Inject into input");
 });
+
+test("text, code, and table rows can be previewed, and rows without a source say so instead of hiding the arrow", () => {
+  let group = createContextGroup(undefined, OCT_19);
+  group = addItemToContextGroup(
+    group,
+    {
+      kind: "text",
+      text: "When you measure a qubit, it stops being in superposition.",
+      label: "When you measure a qubit…",
+      source: {
+        conversationId: "conv-1",
+        messageIndex: 0,
+        highlightText: "When you measure a qubit",
+      },
+    },
+    OCT_19
+  ).group;
+  group = addItemToContextGroup(
+    group,
+    {
+      // Dropped from outside the chat: no provenance, so no `→` to offer.
+      kind: "text",
+      text: "Pasted reference notes",
+      label: "Pasted reference notes",
+    },
+    OCT_19
+  ).group;
+
+  const html = renderToStaticMarkup(
+    <ContextsPanel
+      contextGroups={[group]}
+      expandedGroupId={group.id}
+      isOpen
+      onToggle={() => {}}
+      onExpandGroup={() => {}}
+      onCreateGroup={() => {}}
+      onAddItem={() => {}}
+      onRemoveItem={() => {}}
+      onDeleteGroup={() => {}}
+      onRenameGroup={() => {}}
+      onInjectGroup={() => {}}
+      onLocateItem={() => {}}
+    />
+  );
+
+  // Every row offers a preview of the exact text it will inject.
+  expect(html.match(/aria-label="Preview [^"]*"/g)).toHaveLength(2);
+  // The row with provenance keeps its locate arrow; the one without renders a
+  // disabled placeholder rather than silently dropping the control.
+  expect(html.match(/aria-label="Show [^"]* in chat"/g)).toHaveLength(1);
+  expect(html).toContain("context-item-action-disabled");
+});

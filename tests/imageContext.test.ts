@@ -415,3 +415,18 @@ test("the composer shows the explicit injected context pill and attachment hint 
   expect(input).not.toContain("Editing the last image in this chat.");
   expect(input).toContain('aria-live="polite"');
 });
+
+test("a stored image with a generic MIME is coerced to an image data URI", async () => {
+  // A Drive read can hand back a Blob typed application/octet-stream (or with
+  // no type at all). That used to become `data:application/octet-stream;...`,
+  // which the chat path rejects as "Attached images must be data: or https:
+  // URLs" — the send failed instead of attaching the context image.
+  mockPuter({
+    fs: {
+      read: async () =>
+        new Blob([new Uint8Array([1, 2, 3])], { type: "application/octet-stream" }),
+    },
+  });
+  const url = await loadImageDataUrl("freetalk-upload-abc.jpg");
+  expect(url.startsWith("data:image/jpeg;base64,")).toBe(true);
+});

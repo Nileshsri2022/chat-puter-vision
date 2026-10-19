@@ -8,6 +8,7 @@
 
 import type { ImageOrigin } from "./backend";
 import { isImageArtifact, type Artifact } from "./artifacts";
+import { isImageUrl } from "./dataUrl";
 
 export const MAX_CONTEXT_IMAGES = 10;
 export const MAX_CONTEXT_TEXT_ITEMS = 20;
@@ -424,6 +425,8 @@ export interface ResolvedContextInput {
   contextText: string;
   /** Data URIs (`data:image/...;base64,...`) resolved from the group's images (up to 10). */
   imageDataUrls: string[];
+  /** Images that could not be resolved to a sendable URL (deleted file, stale ref). */
+  missingImages: number;
   /** Provenance for `Message.editedFrom` when used in image-generation mode. */
   primaryImageBase: { src: string; origin: ImageOrigin } | null;
 }
@@ -443,14 +446,29 @@ export async function resolveContextGroupForTask(
     .filter(isContextTextItem)
     .slice(0, MAX_CONTEXT_TEXT_ITEMS);
 
-  const imageDataUrls = await Promise.all(
-    imageItems.map((item) =>
-      item.refKind === "data" ? Promise.resolve(item.ref) : loadDataUrl(item.ref)
-    )
+  // One broken image must never take the whole turn down: the chat API only
+  // accepts `data:`/`https:` image URLs, and a stale entry (a `refKind` written
+  // by an older build, a Drive file deleted behind our back) would otherwise
+  // surface as "Attached images must be data: or https: URLs" and lose the
+  // message. Resolve what we can, count the rest, and let the caller say so.
+  const resolved = await Promise.all(
+    imageItems.map(async (item) => {
+      try {
+        if (isImageUrl(item.ref)) return item.ref;
+        // A stale or mis-typed reference: treat it as a Drive path and try to
+        // read it. This also repairs old entries saved with the wrong refKind.
+        const dataUrl = await loadDataUrl(item.ref);
+        return isImageUrl(dataUrl) ? dataUrl : null;
+      } catch {
+        return null;
+      }
+    })
   );
+  const imageDataUrls = resolved.filter((url): url is string => Boolean(url));
 
   const contextText = textItems.map(formatTextItemBlock).join("\n\n").trim();
-  const firstImage = imageItems[0];
+  const firstImageIndex = resolved.findIndex((url) => url !== null);
+  const firstImage = imageItems[firstImageIndex] ?? undefined;
   const primaryImageBase = firstImage
     ? { src: firstImage.ref, origin: firstImage.origin }
     : null;
@@ -458,6 +476,7 @@ export async function resolveContextGroupForTask(
   return {
     contextText,
     imageDataUrls,
+    missingImages: imageItems.length - imageDataUrls.length,
     primaryImageBase,
   };
 }
