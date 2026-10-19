@@ -16,6 +16,8 @@ import {
 } from "@/lib/audio";
 import { extractText } from "@/lib/ocr";
 import { checkAuthStatus } from "@/lib/backend";
+import { usePuterImage } from "@/hooks/usePuterImage";
+import { isContextImageItem, type ContextGroup } from "@/lib/contextGroups";
 import "./ChatInput.css";
 
 
@@ -40,11 +42,12 @@ interface ChatInputProps {
   onModelChange?: (model: string) => void;
   modelCatalog?: ModelCatalog | null;
   /**
-   * The conversation holds an image a follow-up image prompt would edit.
-   * The composer says so, instead of letting the user guess what the next
-   * prompt will apply to.
+   * Explicit Context Group injected from the Contexts panel via `← Inject into input`.
+   * Displayed as a dismissible pill above the composer box.
    */
-  hasEditableImage?: boolean;
+  injectedContext?: ContextGroup | null;
+  /** Clears the currently injected Context Group pill. */
+  onClearInjectedContext?: () => void;
   /** Prefills the textarea (inline edit mode). */
   initialValue?: string;
   /** Compact rendering for inline editing (shorter box, no outer padding). */
@@ -69,7 +72,7 @@ function microphoneErrorMessage(error: unknown): string {
     : "Allow microphone access to use voice input.";
 }
 
-export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, hasEditableImage, initialValue, compact, onCancel }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, injectedContext, onClearInjectedContext, initialValue, compact, onCancel }: ChatInputProps) => {
   const [input, setInput] = useState(initialValue ?? "");
   // Attachments live in one array so the preview at index N is always the file
   // at index N — the OCR button and the remove button act on what they show.
@@ -431,20 +434,25 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const hasMessage = input.trim().length > 0;
   const canSubmit = imageGenerationMode
     ? hasMessage && Boolean(onGenerateImage)
-    : hasMessage || (modelSupportsImages && pendingImages.length > 0);
+    : hasMessage ||
+      (modelSupportsImages && pendingImages.length > 0) ||
+      Boolean(injectedContext && injectedContext.items.length > 0);
 
-  // What the next image prompt will act on. Saying it out loud is the
-  // difference between "the model ignored my picture" and "the model edited
-  // exactly this picture".
-  const editHint = imageGenerationMode
-    ? pendingImages.length > 0
+  const primaryContextImage = injectedContext?.items.find(isContextImageItem);
+  const { src: injectedContextThumb } = usePuterImage(
+    primaryContextImage?.refKind === "drive" ? primaryContextImage.ref : undefined,
+    primaryContextImage?.refKind === "data" ? primaryContextImage.ref : undefined
+  );
+
+  // Only explicit attachments on this turn trigger the attachment edit hint;
+  // reusable conversation context is selected explicitly via `injectedContext`
+  // rather than automatically locking onto the last image in the chat.
+  const editHint =
+    imageGenerationMode && pendingImages.length > 0
       ? `${pendingImages.length} attached image${
           pendingImages.length === 1 ? "" : "s"
         } will be edited.`
-      : hasEditableImage
-        ? "Editing the last image in this chat."
-        : null
-    : null;
+      : null;
 
   return (
     <div className={cn("composer-wrap", compact && "composer-wrap-compact")}>
@@ -485,6 +493,34 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 </Button>
               </div>
             ))}
+          </div>
+        )}
+
+        {injectedContext && (
+          <div className="composer-context-pill" role="status" aria-live="polite">
+            {injectedContextThumb && (
+              <img
+                src={injectedContextThumb}
+                alt=""
+                className="composer-context-pill-thumb"
+              />
+            )}
+            <span className="composer-context-pill-title">
+              {injectedContext.title}
+            </span>
+            {onClearInjectedContext && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="composer-context-pill-remove tap-expand"
+                onClick={onClearInjectedContext}
+                title="Remove injected context"
+                aria-label={`Remove context ${injectedContext.title}`}
+              >
+                <X className="composer-mini-icon" aria-hidden="true" />
+              </Button>
+            )}
           </div>
         )}
 

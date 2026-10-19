@@ -3,6 +3,7 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { ArtifactsPanel } from "@/components/ArtifactsPanel";
+import { ContextsPanel } from "@/components/ContextsPanel";
 import { AuthButton } from "@/components/AuthButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileDialog, type ProfilePatch } from "@/components/ProfileDialog";
@@ -25,13 +26,18 @@ import {
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
 import { deleteImage, generateImage, loadImageBlob, loadImageDataUrl, newAttachmentPath, persistAttachment } from "@/lib/images";
-import { findCurrentImage } from "@/lib/imageContext";
 import { reclaimImagePaths } from "@/lib/artifacts";
+import {
+  artifactToContextPayload,
+  combinePromptWithContext,
+  resolveContextGroupForTask,
+} from "@/lib/contextGroups";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
   getModelCatalog,
   contextPlanFor,
+  modelSupportsVision,
   resolveDefaultModel,
   DEFAULT_MODEL_ID,
   type ModelCatalog,
@@ -41,7 +47,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import { useArtifactsPanel } from "@/hooks/useArtifactsPanel";
-import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Layers } from "lucide-react";
+import { useContextsPanel } from "@/hooks/useContextsPanel";
+import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Layers, FolderInput } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -268,9 +275,6 @@ const Index = () => {
     () => currentConversation?.messages ?? [],
     [currentConversation]
   );
-  // The image a follow-up image prompt would edit. Derived from the
-  // transcript, so it can never point at a picture that was deleted.
-  const currentImage = useMemo(() => findCurrentImage(messages), [messages]);
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -280,6 +284,30 @@ const Index = () => {
   // The artifacts panel's open state, derived lists and locate (see the hook).
   const { artifactsOpen, setArtifactsOpen, artifacts, unsavedAttachments, locateMessage } =
     useArtifactsPanel({ scrollRef, conversation: currentConversation });
+
+  // The explicit Contexts panel and composer-injected Context Group.
+  const {
+    contextsOpen,
+    setContextsOpen,
+    contextGroups,
+    expandedGroupId,
+    setExpandedGroupId,
+    injectedContext,
+    createGroup,
+    addItem,
+    addFilesToContext,
+    removeItem,
+    deleteGroup,
+    renameGroup,
+    injectGroup,
+    clearInjectedContext,
+    locateContextItem,
+  } = useContextsPanel({
+    scrollRef,
+    currentConversationId,
+    onSelectConversation: setCurrentConversationId,
+    busy: isStreaming || isGeneratingImage,
+  });
 
   const searchTerm = searchQuery.trim().toLowerCase();
 
@@ -501,6 +529,37 @@ const Index = () => {
       }
     }
 
+    // Resolve any explicitly injected Context Group for this turn.
+    let aiPrompt = content;
+    if (injectedContext) {
+      try {
+        const resolved = await resolveContextGroupForTask(
+          injectedContext,
+          loadImageDataUrl
+        );
+        aiPrompt = combinePromptWithContext(
+          content,
+          injectedContext.title,
+          resolved.contextText,
+          "chat"
+        );
+        if (
+          resolved.imageDataUrls.length > 0 &&
+          modelSupportsVision(selectedModelId, modelCatalog)
+        ) {
+          imageUrls = [...resolved.imageDataUrls, ...imageUrls];
+        }
+      } catch {
+        toast({
+          title: "Could not read context image",
+          description: "One of the images in the injected context could not be loaded.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
     // Create user message with content and image info if present
     let messageContent = content;
     if (imageUrls.length > 0) {
@@ -532,7 +591,7 @@ const Index = () => {
       baseMessages: updatedMessages,
       rollbackMessages: messages,
       history: toHistory(messages),
-      prompt: content,
+      prompt: aiPrompt,
       modelId: selectedModelId,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     }).then((delivered) => {
@@ -783,38 +842,44 @@ const Index = () => {
       }
     }
 
-    // The base of the edit: this turn's attachments, else the conversation's
-    // current image — so a follow-up prompt ("now make it night") edits the
-    // picture the previous turn produced instead of starting over.
+    // Explicit context selection: use this turn's manual attachments and/or
+    // the explicitly injected Context Group. With neither present, generate a
+    // brand-new image from scratch instead of automatically locking onto the
+    // last image in the conversation.
     let inputImages = dataUrls;
-    let base: { src: string; origin: ImageOrigin } | null = null;
-    if (inputImages.length > 0) {
-      base = { src: attachmentRefs[0].path, origin: "attachment" };
-    } else {
-      const current = findCurrentImage(messages);
-      if (current) {
-        try {
-          // A Drive path is read back and encoded; a legacy data URI already
-          // carries its bytes and is sent as it is.
-          inputImages = [
-            current.kind === "data"
-              ? current.ref
-              : await loadImageDataUrl(current.ref),
-          ];
-        } catch {
-          // Never fall back to a plain text-to-image here: that is the exact
-          // bug this path exists to fix. The user would pay for a picture
-          // that has nothing to do with the one they asked to edit.
-          toast({
-            title: "Could not read the image to edit",
-            description:
-              "It may have been deleted. Attach it again to edit it.",
-            variant: "destructive",
-            duration: 6000,
-          });
-          return;
+    let generationPrompt = prompt;
+    let base: { src: string; origin: ImageOrigin } | null =
+      attachmentRefs.length > 0
+        ? { src: attachmentRefs[0].path, origin: "attachment" }
+        : null;
+
+    if (injectedContext) {
+      try {
+        const resolved = await resolveContextGroupForTask(
+          injectedContext,
+          loadImageDataUrl
+        );
+        generationPrompt = combinePromptWithContext(
+          prompt,
+          injectedContext.title,
+          resolved.contextText,
+          "image"
+        );
+        if (resolved.imageDataUrls.length > 0) {
+          inputImages = [...inputImages, ...resolved.imageDataUrls];
+          if (!base && resolved.primaryImageBase) {
+            base = resolved.primaryImageBase;
+          }
         }
-        base = { src: current.ref, origin: current.origin };
+      } catch {
+        toast({
+          title: "Could not read the image to edit",
+          description:
+            "It may have been deleted. Attach it again to edit it.",
+          variant: "destructive",
+          duration: 6000,
+        });
+        return;
       }
     }
 
@@ -840,7 +905,7 @@ const Index = () => {
     );
     setIsGeneratingImage(true);
     try {
-      const path = await generateImage(prompt, { inputImages });
+      const path = await generateImage(generationPrompt, { inputImages });
       const assistantMessage: Message = {
         role: "assistant",
         content: "",
@@ -1205,7 +1270,7 @@ const Index = () => {
         className={cn(
           "app-main",
           sidebarOpen ? "app-main-sidebar-open" : "app-main-sidebar-closed",
-          artifactsOpen && "app-main-artifacts-open"
+          (artifactsOpen || contextsOpen) && "app-main-artifacts-open"
         )}
       >
         <header className="app-header">
@@ -1284,14 +1349,21 @@ const Index = () => {
               </button>
             ))}
           <div className="app-header-group app-header-group-end">
-            {/* Conversation-level actions: the artifacts panel, share/export
-                and theme. The account lives in the sidebar footer now. */}
+            {/* Conversation-level actions: the artifacts panel, the contexts
+                panel, share/export and theme. The account lives in the sidebar
+                footer now. */}
             {isAuthenticated && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="app-icon-btn app-header-artifacts"
-                onClick={() => setArtifactsOpen((open) => !open)}
+                onClick={() => {
+                  setArtifactsOpen((open) => {
+                    const next = !open;
+                    if (next) setContextsOpen(false);
+                    return next;
+                  });
+                }}
                 title="Artifacts in this conversation"
                 aria-label={`Artifacts in this conversation${
                   artifacts.length > 0 ? ` (${artifacts.length})` : ""
@@ -1319,6 +1391,35 @@ const Index = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+            {isAuthenticated && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "app-icon-btn app-header-contexts",
+                  contextsOpen && "app-header-contexts-active"
+                )}
+                onClick={() => {
+                  setContextsOpen((open) => {
+                    const next = !open;
+                    if (next) setArtifactsOpen(false);
+                    return next;
+                  });
+                }}
+                title="Contexts"
+                aria-label={`Contexts${
+                  contextGroups.length > 0 ? ` (${contextGroups.length})` : ""
+                }`}
+                aria-expanded={contextsOpen}
+              >
+                <FolderInput className="app-header-icon" aria-hidden="true" />
+                {contextGroups.length > 0 && (
+                  <span className="app-header-artifacts-count" aria-hidden="true">
+                    {contextGroups.length}
+                  </span>
+                )}
+              </Button>
             )}
             <ThemeToggle />
           </div>
@@ -1442,11 +1543,17 @@ const Index = () => {
                       editedFrom={message.editedFrom}
                       compacted={!!message.compaction}
                       messageIndex={index}
+                      conversationId={currentConversationId}
                       searchMatch={searchMatches.includes(index)}
                       searchActive={searchMatches[activeMatch] === index}
                       onCopy={handleCopyMessage}
                       onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content, images, model) => handleEditMessage(index, content, images, model) : undefined}
+                      onAddToContext={(payload) => {
+                        addItem(payload);
+                        setArtifactsOpen(false);
+                        setContextsOpen(true);
+                      }}
                       selectedModel={selectedModel}
                       onModelChange={setSelectedModel}
                       modelCatalog={modelCatalog}
@@ -1481,7 +1588,8 @@ const Index = () => {
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
                 modelCatalog={modelCatalog}
-                hasEditableImage={!!currentImage}
+                injectedContext={injectedContext}
+                onClearInjectedContext={clearInjectedContext}
               />
             </div>
           </>
@@ -1498,6 +1606,33 @@ const Index = () => {
           isOpen={artifactsOpen}
           onToggle={() => setArtifactsOpen((open) => !open)}
           onLocate={locateMessage}
+          onAddToContext={(artifact) => {
+            const payload = artifactToContextPayload(artifact, currentConversationId);
+            if (!payload) return;
+            addItem(payload);
+            setArtifactsOpen(false);
+            setContextsOpen(true);
+          }}
+        />
+      )}
+
+      {/* Explicit Contexts panel — collapsible multi-item Context Groups. */}
+      {isAuthenticated && (
+        <ContextsPanel
+          contextGroups={contextGroups}
+          expandedGroupId={expandedGroupId}
+          injectedGroupId={injectedContext?.id ?? null}
+          isOpen={contextsOpen}
+          onToggle={() => setContextsOpen((open) => !open)}
+          onExpandGroup={setExpandedGroupId}
+          onCreateGroup={(seed) => createGroup(seed)}
+          onAddItem={addItem}
+          onAddFiles={(files, targetGroupId) => void addFilesToContext(files, targetGroupId)}
+          onRemoveItem={removeItem}
+          onDeleteGroup={deleteGroup}
+          onRenameGroup={renameGroup}
+          onInjectGroup={injectGroup}
+          onLocateItem={locateContextItem}
         />
       )}
     </div>

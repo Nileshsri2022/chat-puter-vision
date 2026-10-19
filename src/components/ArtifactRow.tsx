@@ -1,4 +1,4 @@
-import { Check, Code2, Copy, Download, Maximize2, Table2 } from "lucide-react";
+import { Check, Code2, Copy, Download, Maximize2, Table2, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTextArtifactActions } from "@/hooks/useTextArtifactActions";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ interface ArtifactRowProps {
   position: string;
   onLocate: () => void;
   onPreview: () => void;
+  onAddToContext?: () => void;
 }
 
 /** The label as a screen reader should hear it: "Python, 24 lines". */
@@ -37,7 +38,7 @@ function previewText(artifact: TextArtifact): string {
  * One code block or table in the artifacts panel. The row itself is the
  * button that locates the block; the actions sit beside it, never inside it.
  */
-export const ArtifactRow = ({ artifact, position, onLocate, onPreview }: ArtifactRowProps) => {
+export const ArtifactRow = ({ artifact, position, onLocate, onPreview, onAddToContext }: ArtifactRowProps) => {
   const { copied, busy, copy, download } = useTextArtifactActions(artifact);
   const isTable = artifact.kind === "table";
   const KindIcon = isTable ? Table2 : Code2;
@@ -101,6 +102,18 @@ export const ArtifactRow = ({ artifact, position, onLocate, onPreview }: Artifac
         >
           <Download className="artifact-row-action-icon" aria-hidden="true" />
         </Button>
+        {onAddToContext && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="artifact-row-action tap-expand"
+            onClick={onAddToContext}
+            title="Add to context"
+            aria-label={`Add ${spoken} to context`}
+          >
+            <FolderPlus className="artifact-row-action-icon" aria-hidden="true" />
+          </Button>
+        )}
       </div>
     </div>
   );
