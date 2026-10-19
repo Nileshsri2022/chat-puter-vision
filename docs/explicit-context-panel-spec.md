@@ -235,8 +235,12 @@ export interface ResolvedContextInput {
   contextText: string;
   /** Data URIs (`data:image/...;base64,...`) resolved from the group's images (up to 10). */
   imageDataUrls: string[];
+  /** Images whose stored reference could not be read; skipped with a toast. */
+  missingImages: number;
   /** Provenance for `Message.editedFrom` when used in image-generation mode. */
   primaryImageBase: { src: string; origin: ImageOrigin } | null;
+  /** e.g. `"2 items (1 image, 1 text item)"` — the items that actually resolved. */
+  itemSummary: string;
 }
 
 export async function resolveContextGroupForTask(
@@ -244,6 +248,15 @@ export async function resolveContextGroupForTask(
   loadDataUrl: (path: string) => Promise<string>
 ): Promise<ResolvedContextInput>;
 ```
+
+In chat mode the prompt also carries that composition
+(`This context group contains 2 items (1 image, 1 text item).`), so questions
+about the context itself — *"how many items are in context?"* — are answerable.
+Without it, one image plus its caption looked like a single item even though the
+Contexts panel counted two. Image-generation prompts omit the inventory because
+it is metadata, not scene content.
+
+![Injected Context → Send → Resolve → Model: the pill is only a reference; the whole group is resolved on submit](screenshots/context-resolve-flow.png)
 
 - **Why up to 10 images works out of the box:** `generateImage` in
   `src/lib/images.ts` already passes `input_images` for multiple images (Replicate
