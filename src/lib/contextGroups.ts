@@ -102,6 +102,70 @@ export function isContextTextItem(item: ContextItem): item is ContextTextItem {
   return item.kind !== "image";
 }
 
+/**
+ * Stable identity for a Context Item, independent of the generated `id`.
+ *
+ * The composer's ad-hoc selection toggles items by what they *are* — the same
+ * generated image (Drive path or data URI) or the same code/table text — so
+ * clicking an item's `←` twice removes it rather than stacking duplicates.
+ */
+export function contextItemKey(item: ContextItem): string {
+  return item.kind === "image"
+    ? `image:${item.refKind}:${item.ref}`
+    : `${item.kind}:${item.text}`;
+}
+
+/** The same identity, computed before a payload has become a stored item. */
+export function contextPayloadKey(payload: ContextDropPayload): string {
+  return payload.kind === "image"
+    ? `image:${payload.refKind}:${payload.ref}`
+    : `${payload.kind}:${payload.text}`;
+}
+
+/** Convert a stored item back into the payload shape `injectItem` accepts. */
+export function contextItemToPayload(item: ContextItem): ContextDropPayload {
+  if (item.kind === "image") {
+    return {
+      kind: "image",
+      ref: item.ref,
+      refKind: item.refKind,
+      origin: item.origin,
+      label: item.label,
+      ...(item.ownedPath ? { ownedPath: true } : {}),
+      ...(item.source ? { source: item.source } : {}),
+    };
+  }
+  return {
+    kind: item.kind,
+    text: item.text,
+    label: item.label,
+    ...(item.language ? { language: item.language } : {}),
+    ...(item.source ? { source: item.source } : {}),
+  };
+}
+
+/**
+ * Build the ephemeral Context Group that backs a hand-picked selection in the
+ * composer. It is never persisted: it only needs the shape
+ * `resolveContextGroupForTask` and the Context Pill already understand, so a
+ * single item injects through exactly the same path as a whole saved group.
+ */
+export function createContextSelectionGroup(
+  items: ContextItem[],
+  now: number = Date.now()
+): ContextGroup {
+  const first = items[0];
+  const topic = first ? cleanTopicLabel(first.label) : "New Context";
+  const extra = items.length > 1 ? ` +${items.length - 1}` : "";
+  return {
+    id: "ctx-selection",
+    title: `Selection — ${topic}${extra}`,
+    createdAt: now,
+    updatedAt: now,
+    items,
+  };
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function isSameLocalDay(a: Date, b: Date): boolean {
@@ -156,7 +220,16 @@ function newId(prefix: string, now: number): string {
   return `${prefix}-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function payloadToItem(payload: ContextDropPayload, now: number): ContextItem {
+/**
+ * Turn one drop payload into a stored Context Item. Exported because the
+ * composer can also hold an ad-hoc selection of single items (injected one at a
+ * time from the Contexts panel or straight from a chat message) that never
+ * becomes a persisted Context Group.
+ */
+export function contextItemFromPayload(
+  payload: ContextDropPayload,
+  now: number = Date.now()
+): ContextItem {
   const id = newId("ctx-item", now);
   if (payload.kind === "image") {
     return {
@@ -193,9 +266,9 @@ export function createContextGroup(
   const items: ContextItem[] = [];
   if (seedItem) {
     if (seedItem.kind === "image" && seedItem.ref.trim()) {
-      items.push(payloadToItem(seedItem, now));
+      items.push(contextItemFromPayload(seedItem, now));
     } else if (seedItem.kind !== "image" && seedItem.text.trim()) {
-      items.push(payloadToItem(seedItem, now));
+      items.push(contextItemFromPayload(seedItem, now));
     }
   }
   const topic = items[0]?.label;
@@ -235,7 +308,7 @@ export function addItemToContextGroup(
     }
   }
 
-  const item = payloadToItem(payload, now);
+  const item = contextItemFromPayload(payload, now);
   const wasUntitled =
     group.items.length === 0 && /—\s*New Context$/.test(group.title);
   const nextTitle = wasUntitled

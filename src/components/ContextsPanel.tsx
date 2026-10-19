@@ -18,12 +18,14 @@ import { usePuterImage } from "@/hooks/usePuterImage";
 import { cn } from "@/lib/utils";
 import {
   CONTEXT_DRAG_MIME,
+  contextItemKey,
   decodeContextDragPayload,
   isContextImageItem,
   isContextTextItem,
   type ContextDropPayload,
   type ContextGroup,
   type ContextImageItem,
+  type ContextItem,
   type ContextSourceRef,
 } from "@/lib/contextGroups";
 import "./ContextsPanel.css";
@@ -42,6 +44,13 @@ interface ContextsPanelProps {
   onDeleteGroup: (groupId: string) => void;
   onRenameGroup: (groupId: string, newTitle: string) => void;
   onInjectGroup: (group: ContextGroup) => void;
+  /**
+   * Left-arrow (`←`) on a single item: queue only that image, text, code block,
+   * or table in the composer, without injecting the whole Context Group.
+   */
+  onInjectItem?: (item: ContextItem) => void;
+  /** Keys of the items already queued in the composer (from `contextItemKey`). */
+  injectedItemKeys?: Set<string>;
   onLocateItem: (source: ContextSourceRef) => void;
   /**
    * Best-effort provenance for a plain-text drop: which message in the open
@@ -50,12 +59,21 @@ interface ContextsPanelProps {
   resolveTextSource?: (text: string) => ContextSourceRef | undefined;
 }
 
+/** `←` copy for an item: inject it, or take it back out of the composer. */
+function injectActionLabel(label: string, active: boolean): string {
+  return active ? `Remove ${label} from input context` : `Inject ${label} into input`;
+}
+
 const ContextThumb = ({
   item,
+  isInjected,
+  onInject,
   onRemove,
   onLocate,
 }: {
   item: ContextImageItem;
+  isInjected?: boolean;
+  onInject?: () => void;
   onRemove: () => void;
   onLocate?: () => void;
 }) => {
@@ -65,7 +83,7 @@ const ContextThumb = ({
   );
 
   return (
-    <div className="context-thumb group">
+    <div className={cn("context-thumb group", isInjected && "context-thumb-injected")}>
       {src ? (
         <img src={src} alt={item.label} className="context-thumb-img" loading="lazy" />
       ) : (
@@ -95,6 +113,21 @@ const ContextThumb = ({
           <X className="context-thumb-icon" aria-hidden="true" />
         </button>
       </div>
+      {onInject && (
+        <button
+          type="button"
+          className={cn(
+            "context-thumb-inject tap-expand",
+            isInjected && "context-thumb-inject-active"
+          )}
+          onClick={onInject}
+          title={injectActionLabel(item.label, Boolean(isInjected))}
+          aria-label={injectActionLabel(item.label, Boolean(isInjected))}
+          aria-pressed={Boolean(isInjected)}
+        >
+          <ArrowLeft className="context-thumb-icon" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 };
@@ -113,6 +146,8 @@ export const ContextsPanel = ({
   onDeleteGroup,
   onRenameGroup,
   onInjectGroup,
+  onInjectItem,
+  injectedItemKeys,
   onLocateItem,
   resolveTextSource,
 }: ContextsPanelProps) => {
@@ -343,6 +378,14 @@ export const ContextsPanel = ({
                               <ContextThumb
                                 key={img.id}
                                 item={img}
+                                isInjected={injectedItemKeys?.has(
+                                  contextItemKey(img)
+                                )}
+                                onInject={
+                                  onInjectItem
+                                    ? () => onInjectItem(img)
+                                    : undefined
+                                }
                                 onRemove={() => onRemoveItem(group.id, img.id)}
                                 onLocate={
                                   img.source
@@ -359,8 +402,17 @@ export const ContextsPanel = ({
                             {texts.map((item) => {
                               const KindIcon =
                                 item.kind === "code" ? Code2 : item.kind === "table" ? Table2 : FileText;
+                              const isItemInjected = injectedItemKeys?.has(
+                                contextItemKey(item)
+                              );
                               return (
-                                <div key={item.id} className="context-item-row">
+                                <div
+                                  key={item.id}
+                                  className={cn(
+                                    "context-item-row",
+                                    isItemInjected && "context-item-row-injected"
+                                  )}
+                                >
                                   <KindIcon className="context-item-kind-icon" aria-hidden="true" />
                                   {/* No preview: the `→` action already shows the
                                       saved text in the chat, highlighted in place. */}
@@ -368,6 +420,31 @@ export const ContextsPanel = ({
                                     {item.label}
                                   </span>
                                   <div className="context-item-actions">
+                                    {onInjectItem && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn(
+                                          "context-item-action context-item-inject tap-expand",
+                                          isItemInjected && "context-item-action-active"
+                                        )}
+                                        onClick={() => onInjectItem(item)}
+                                        title={injectActionLabel(
+                                          item.label,
+                                          Boolean(isItemInjected)
+                                        )}
+                                        aria-label={injectActionLabel(
+                                          item.label,
+                                          Boolean(isItemInjected)
+                                        )}
+                                        aria-pressed={Boolean(isItemInjected)}
+                                      >
+                                        <ArrowLeft
+                                          className="context-item-action-icon"
+                                          aria-hidden="true"
+                                        />
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="icon"

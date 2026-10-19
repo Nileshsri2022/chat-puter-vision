@@ -397,6 +397,40 @@ Above `.composer-box`, replacing the old `<p className="composer-edit-hint">Edit
 )}
 ```
 
+### 7.5 Per-artifact `←` injection (single items, without saving a group)
+
+A whole Context Group can be injected, but a user often wants just *one* artifact
+from it — one reference image, one code block, one table, or one paragraph. That
+is now a first-class action at the same granularity as the `→` locate arrow:
+
+| Where | Control | What it queues |
+| --- | --- | --- |
+| Contexts panel, every image thumbnail | `←` (bottom-right, `aria-label="Inject {label} into input"`) | That image only |
+| Contexts panel, every text / code / table row | `←` (leftmost row action) | That row's exact text, code, or Markdown table |
+| Transcript, generated image | `←` overlay on the image | That rendered image (Drive path or `data:` URI) |
+| Transcript, code block | `←` beside copy / drag | The block (or the text selected inside it) |
+| Transcript, Markdown table | `← Use as context` in the table bar | The table as Markdown, rebuilt from the rendered cells |
+| Transcript, message or answer | `←` in the message actions | The message text; if text is selected inside the message, exactly that snippet |
+
+Clicking the same artifact again removes it, and clicking another adds it to the
+same selection — so several artifacts from different messages can be gathered
+in one composer turn. The composer pill reads
+`Selection — {first label} +N` and the selected rows/thumbnails stay visibly
+pressed (`aria-pressed="true"`). Injecting a whole group replaces the ad-hoc
+selection; sending the message clears it, exactly like a group injection.
+
+Implementation:
+
+- `createContextSelectionGroup(items)` builds an **ephemeral** `ContextGroup`
+  (`id: "ctx-selection"`) around the hand-picked items. It is never written to
+  `localStorage`, but it flows through the existing
+  `resolveContextGroupForTask` → `combinePromptWithContext` path for both chat
+  and image generation, so a single item behaves exactly like a saved group.
+- `contextItemKey` / `contextPayloadKey` give an item/ payload a stable identity
+  (image ref, or kind + text) used for toggling and for the pressed state.
+- `contextItemFromPayload` / `contextItemToPayload` convert between the stored
+  item and the drag/click payload while preserving `source` provenance.
+
 ---
 
 ## 8. Accessibility

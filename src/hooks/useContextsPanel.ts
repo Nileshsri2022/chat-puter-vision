@@ -6,7 +6,12 @@ import { useMediaQuery, ARTIFACTS_DOCK_QUERY } from "@/hooks/useMediaQuery";
 import { useToast } from "@/hooks/use-toast";
 import {
   addItemToContextGroup,
+  contextItemFromPayload,
+  contextItemKey,
+  contextItemToPayload,
+  contextPayloadKey,
   createContextGroup,
+  createContextSelectionGroup,
   loadContextGroups,
   reclaimContextImagePaths,
   removeItemFromContextGroup,
@@ -15,6 +20,7 @@ import {
   MAX_CONTEXT_TEXT_ITEMS,
   type ContextDropPayload,
   type ContextGroup,
+  type ContextItem,
   type ContextSourceRef,
 } from "@/lib/contextGroups";
 import { prepareImageAttachments } from "@/lib/attachments";
@@ -73,10 +79,30 @@ export function useContextsPanel({
   // Which Context Group is currently injected into the composer input box.
   const [injectedGroupId, setInjectedGroupId] = useState<string | null>(null);
 
-  const injectedContext = useMemo(
-    () => contextGroups.find((g) => g.id === injectedGroupId) ?? null,
-    [contextGroups, injectedGroupId]
-  );
+  // Ad-hoc pick of individual items (`←` on one row/thumbnail, or "Use as
+  // context" in the transcript). Held separately from saved groups so an item
+  // can be injected without creating, expanding, or mutating a Context Group.
+  const [selectionItems, setSelectionItems] = useState<ContextItem[]>([]);
+
+  const injectedContext = useMemo(() => {
+    if (selectionItems.length > 0) {
+      return createContextSelectionGroup(selectionItems);
+    }
+    return contextGroups.find((g) => g.id === injectedGroupId) ?? null;
+  }, [contextGroups, injectedGroupId, selectionItems]);
+
+  /**
+   * Keys of the items currently queued in the composer: the explicit selection
+   * when there is one, otherwise every item of the injected group. The panel
+   * and the transcript use these to light up the `←` control that is active.
+   */
+  const injectedItemKeys = useMemo(() => {
+    if (selectionItems.length > 0) {
+      return new Set(selectionItems.map(contextItemKey));
+    }
+    const group = contextGroups.find((g) => g.id === injectedGroupId);
+    return new Set((group?.items ?? []).map(contextItemKey));
+  }, [contextGroups, injectedGroupId, selectionItems]);
 
   const createGroup = useCallback((seed?: ContextDropPayload): ContextGroup => {
     const group = createContextGroup(seed);
@@ -244,13 +270,62 @@ export function useContextsPanel({
         });
         return;
       }
+      setSelectionItems([]);
       setInjectedGroupId(group.id);
       if (!contextsDocked) setContextsOpen(false);
     },
     [contextsDocked, toast]
   );
 
+  /**
+   * Left-arrow (`←`) on a single item, and "Use as context" in the transcript:
+   * queue exactly that image, text, code block, or table in the composer.
+   *
+   * Clicking the same item again removes it, and clicking a second item adds
+   * to the same selection, so several artifacts can be gathered without first
+   * creating a saved Context Group. Injecting a whole group replaces it.
+   */
+  const injectItem = useCallback(
+    (payload: ContextDropPayload) => {
+      const key = contextPayloadKey(payload);
+      const alreadySelected = selectionItems.some(
+        (item) => contextItemKey(item) === key
+      );
+
+      if (alreadySelected) {
+        setSelectionItems((prev) =>
+          prev.filter((item) => contextItemKey(item) !== key)
+        );
+        toast({
+          title: "Removed from input context",
+          description: payload.label,
+          duration: 1800,
+        });
+      } else {
+        setSelectionItems((prev) => [...prev, contextItemFromPayload(payload)]);
+        toast({
+          title: "Added to input context",
+          description: payload.label,
+          duration: 1800,
+        });
+      }
+
+      // A selected item supersedes a whole-group injection rather than merging
+      // with it: the pill must describe exactly what this turn will send.
+      setInjectedGroupId(null);
+      if (!contextsDocked) setContextsOpen(false);
+    },
+    [contextsDocked, selectionItems, toast]
+  );
+
+  /** `←` inside a saved Context Group, where the item is already an item. */
+  const injectContextItem = useCallback(
+    (item: ContextItem) => injectItem(contextItemToPayload(item)),
+    [injectItem]
+  );
+
   const clearInjectedContext = useCallback(() => {
+    setSelectionItems([]);
     setInjectedGroupId(null);
   }, []);
 
@@ -441,6 +516,9 @@ export function useContextsPanel({
     deleteGroup,
     renameGroup,
     injectGroup,
+    injectItem,
+    injectContextItem,
+    injectedItemKeys,
     clearInjectedContext,
     locateContextItem,
     resolveTextSource,

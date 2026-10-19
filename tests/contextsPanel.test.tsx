@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ContextsPanel } from "@/components/ContextsPanel";
 import {
   addItemToContextGroup,
+  contextItemKey,
   createContextGroup,
   type ContextGroup,
 } from "@/lib/contextGroups";
@@ -166,4 +167,71 @@ test("text, code, and table rows have no eye preview (the arrow shows the text i
   // disabled placeholder rather than silently dropping the control.
   expect(html.match(/aria-label="Show [^"]* in chat"/g)).toHaveLength(1);
   expect(html).toContain("context-item-action-disabled");
+});
+
+// ---- Per-item `←` injection ----
+
+test("every image, text, code and table row has a `←` inject button, and queued items read as pressed", () => {
+  const groups = buildFixtureGroups();
+  const items = groups[0].items;
+  const queuedImage = items.find((item) => item.kind === "image")!;
+  const queuedTable = items.find((item) => item.kind === "table")!;
+
+  const html = renderToStaticMarkup(
+    <ContextsPanel
+      contextGroups={groups}
+      expandedGroupId={groups[0].id}
+      isOpen
+      onToggle={() => {}}
+      onExpandGroup={() => {}}
+      onCreateGroup={() => {}}
+      onAddItem={() => {}}
+      onRemoveItem={() => {}}
+      onDeleteGroup={() => {}}
+      onRenameGroup={() => {}}
+      onInjectGroup={() => {}}
+      onInjectItem={() => {}}
+      injectedItemKeys={
+        new Set([contextItemKey(queuedImage), contextItemKey(queuedTable)])
+      }
+      onLocateItem={() => {}}
+    />
+  );
+
+  // One `←` per image (10) and per text/code/table row (3) — the same granularity
+  // as the `→` locate arrows.
+  expect(html.match(/class="context-thumb-inject tap-expand/g)).toHaveLength(10);
+  expect(
+    html.match(/context-item-action context-item-inject tap-expand/g)
+  ).toHaveLength(3);
+
+  // The two queued artifacts say so, and are marked visibly.
+  const pressed = html.match(/aria-pressed="true"/g) ?? [];
+  expect(pressed).toHaveLength(2);
+  expect(html.match(/aria-label="Remove [^"]* from input context"/g)).toHaveLength(2);
+  expect(html).toContain("context-thumb-inject-active");
+  expect(html).toContain("context-item-row-injected");
+  expect(html).toContain("context-item-action-active");
+});
+
+test("without an inject handler, the panel renders no per-item `←` controls", () => {
+  const groups = buildFixtureGroups();
+  const html = renderToStaticMarkup(
+    <ContextsPanel
+      contextGroups={groups}
+      expandedGroupId={groups[0].id}
+      isOpen
+      onToggle={() => {}}
+      onExpandGroup={() => {}}
+      onCreateGroup={() => {}}
+      onAddItem={() => {}}
+      onRemoveItem={() => {}}
+      onDeleteGroup={() => {}}
+      onRenameGroup={() => {}}
+      onInjectGroup={() => {}}
+      onLocateItem={() => {}}
+    />
+  );
+  expect(html).not.toContain("context-thumb-inject");
+  expect(html).not.toContain("context-item-inject");
 });

@@ -148,6 +148,21 @@
   @apply absolute bottom-1 left-1 flex items-center opacity-100 transition-opacity;
 }
 
+/* Per-item `←` inject button, mirroring the group-level
+   `← Inject into input`: it queues just this image in the composer. */
+.context-thumb-inject {
+  @apply absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-black/65 text-white shadow-sm tap-expand hover:bg-primary;
+  --tap-size: 28px;
+}
+
+.context-thumb-inject-active {
+  @apply bg-primary text-primary-foreground hover:bg-primary;
+}
+
+.context-thumb-injected {
+  @apply border-primary ring-1 ring-primary/50;
+}
+
 .context-thumb-remove {
   @apply flex size-5 items-center justify-center rounded-full bg-black/65 text-white tap-expand hover:bg-destructive;
   --tap-size: 28px;
@@ -181,6 +196,12 @@
   @apply min-w-0 flex-1 truncate;
 }
 
+/* This row is queued in the composer (its own `←` was pressed, or the whole
+   group is injected). */
+.context-item-row-injected {
+  @apply border-primary/60 bg-primary/5;
+}
+
 .context-item-kind-icon {
   @apply size-3 shrink-0 text-muted-foreground;
 }
@@ -197,6 +218,10 @@
 .context-item-action-disabled {
   @apply size-6 shrink-0 rounded-md tap-expand opacity-50 cursor-not-allowed;
   --tap-size: 30px;
+}
+
+.context-item-action-active {
+  @apply bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary;
 }
 
 .context-item-action-icon {
