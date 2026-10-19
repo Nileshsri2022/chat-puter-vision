@@ -4,7 +4,12 @@ import {
   addItemToContextGroup,
   artifactToContextPayload,
   combinePromptWithContext,
+  contextItemFromPayload,
+  contextItemKey,
+  contextItemToPayload,
+  contextPayloadKey,
   createContextGroup,
+  createContextSelectionGroup,
   decodeContextDragPayload,
   encodeContextDragPayload,
   formatContextDatePrefix,
@@ -353,4 +358,121 @@ test("resolveContextGroupForTask skips images it cannot make sendable and counts
     src: "data:image/png;base64,AAAA",
     origin: "generated",
   });
+});
+
+// ---- Single-artifact injection (`←`) ----
+//
+// The composer can queue individual artifacts without first saving them into a
+// Context Group. These tests pin the identity used to toggle a queued item and
+// the ephemeral group shape the existing send/generate paths consume.
+
+test("context item keys identify the same artifact without relying on generated ids", () => {
+  const imageItem = contextItemFromPayload(
+    {
+      kind: "image",
+      ref: "freetalk-gen.png",
+      refKind: "drive",
+      origin: "generated",
+      label: "Generated image",
+    },
+    OCT_19
+  );
+  const sameImage = contextItemFromPayload(
+    {
+      kind: "image",
+      ref: "freetalk-gen.png",
+      refKind: "drive",
+      origin: "generated",
+      label: "Generated image",
+    },
+    OCT_18
+  );
+  expect(contextItemKey(imageItem)).toBe(contextItemKey(sameImage));
+  expect(contextItemKey(imageItem)).toBe("image:drive:freetalk-gen.png");
+
+  const codeItem = contextItemFromPayload(
+    { kind: "code", text: "print('hi')", label: "</> Python · hi.py" },
+    OCT_19
+  );
+  expect(contextItemKey(codeItem)).toBe("code:print('hi')");
+  // The same text in a different kind is a different artifact.
+  expect(contextItemKey(codeItem)).not.toBe(
+    contextItemKey(
+      contextItemFromPayload(
+        { kind: "text", text: "print('hi')", label: "hi" },
+        OCT_19
+      )
+    )
+  );
+});
+
+test("a payload and the item it becomes share one key, so clicking `←` twice toggles", () => {
+  const payload: ContextDropPayload = {
+    kind: "table",
+    text: "| A | B |\n| - | - |\n| 1 | 2 |",
+    label: "▦ Table · specs",
+    source: { conversationId: "conv-1", messageIndex: 3, at: 30 },
+  };
+  const item = contextItemFromPayload(payload, OCT_19);
+  expect(contextPayloadKey(payload)).toBe(contextItemKey(item));
+  expect(contextItemToPayload(item)).toEqual(payload);
+});
+
+test("a selection group carries only hand-picked items, with an item-count title", () => {
+  const image = contextItemFromPayload(
+    {
+      kind: "image",
+      ref: "data:image/png;base64,AAAA",
+      refKind: "data",
+      origin: "generated",
+      label: "Generated image",
+    },
+    OCT_19
+  );
+  const code = contextItemFromPayload(
+    {
+      kind: "code",
+      text: "pose = 1",
+      language: "python",
+      label: "</> Python · pose_config.py",
+    },
+    OCT_19
+  );
+
+  const single = createContextSelectionGroup([image], OCT_19);
+  expect(single.items).toEqual([image]);
+  expect(single.title).toBe("Selection — Generated image");
+
+  const pair = createContextSelectionGroup([image, code], OCT_19);
+  expect(pair.title).toBe("Selection — Generated image +1");
+  expect(pair.items.map(contextItemKey)).toEqual([
+    contextItemKey(image),
+    contextItemKey(code),
+  ]);
+});
+
+test("a selection group resolves through the same chat path as a saved group", async () => {
+  const image = contextItemFromPayload(
+    {
+      kind: "image",
+      ref: "freetalk-selected.png",
+      refKind: "drive",
+      origin: "generated",
+      label: "Generated image",
+    },
+    OCT_19
+  );
+  const text = contextItemFromPayload(
+    { kind: "text", text: "Neon night lighting", label: "Neon night lighting" },
+    OCT_19
+  );
+
+  const resolved = await resolveContextGroupForTask(
+    createContextSelectionGroup([image, text], OCT_19),
+    async () => "data:image/png;base64,AAAA"
+  );
+
+  expect(resolved.imageDataUrls).toEqual(["data:image/png;base64,AAAA"]);
+  expect(resolved.contextText).toBe("Neon night lighting");
+  expect(resolved.itemSummary).toBe("2 items (1 image, 1 text item)");
 });

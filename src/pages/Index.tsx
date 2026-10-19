@@ -301,6 +301,9 @@ const Index = () => {
     deleteGroup,
     renameGroup,
     injectGroup,
+    injectItem,
+    injectContextItem,
+    injectedItemKeys,
     clearInjectedContext,
     locateContextItem,
     resolveTextSource,
@@ -1601,6 +1604,8 @@ const Index = () => {
                           : undefined
                       }
                       onRetry={message.role === "assistant" ? () => handleRetryMessage(index) : undefined}
+                      onUseAsContext={injectItem}
+                      injectedContextKeys={injectedItemKeys}
                     />
                   ))}
                   {isStreaming && (
@@ -1670,6 +1675,8 @@ const Index = () => {
           onDeleteGroup={deleteGroup}
           onRenameGroup={renameGroup}
           onInjectGroup={injectGroup}
+          onInjectItem={injectContextItem}
+          injectedItemKeys={injectedItemKeys}
           onLocateItem={locateContextItem}
           resolveTextSource={resolveTextSource}
         />

@@ -58,6 +58,23 @@
   max-height: min(16rem, 40dvh);
 }
 
+/* The generated image plus its corner `←` ("use as context") control. */
+.msg-image-wrap {
+  @apply relative inline-flex mb-3 max-w-full;
+}
+
+.msg-image-wrap .msg-image {
+  @apply mb-0;
+}
+
+.msg-image-context {
+  @apply absolute bottom-2 right-2 size-8 rounded-full border border-border bg-background/90 text-foreground shadow-md backdrop-blur tap-expand hover:bg-background;
+}
+
+.msg-image-context.msg-context-action-active {
+  @apply border-primary bg-primary text-primary-foreground hover:bg-primary;
+}
+
 .msg-image-status {
   @apply mb-3 text-sm text-muted-foreground;
 }
@@ -149,6 +166,12 @@
   @apply size-7 p-0 text-muted-foreground tap-expand cursor-grab active:cursor-grabbing;
 }
 
+/* `←` artifact action ("Use as context"). Pressed while the artifact sits in
+   the composer's injected-context pill. */
+.msg-context-action-active {
+  @apply bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary;
+}
+
 /* Code blocks */
 .msg-codeblock {
   @apply relative my-4;
@@ -186,6 +209,12 @@
   @apply absolute right-10 top-2 opacity-100 transition-opacity;
 }
 
+/* Sits left of the drag handle: the per-code-block `←` context action. */
+.msg-codeblock-context {
+  @apply absolute top-2 opacity-100 transition-opacity;
+  right: 4.5rem;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .msg-codeblock-drag {
     opacity: 0;
@@ -193,6 +222,15 @@
 
   .group\/code:hover .msg-codeblock-drag,
   .msg-codeblock-drag:focus-visible {
+    opacity: 1;
+  }
+
+  .msg-codeblock-context {
+    opacity: 0;
+  }
+
+  .group\/code:hover .msg-codeblock-context,
+  .msg-codeblock-context:focus-visible {
     opacity: 1;
   }
 }
@@ -262,6 +300,19 @@
 
 .md-table-bar {
   @apply mb-1 flex items-center gap-1 text-xs text-muted-foreground;
+}
+
+/* `← Use as context` in the table's caption bar, beside the drag grip. */
+.md-table-context-btn {
+  @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground tap-expand transition-colors hover:bg-accent hover:text-foreground;
+}
+
+.md-table-context-btn-active {
+  @apply bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary;
+}
+
+.md-table-context-icon {
+  @apply size-3.5;
 }
 
 .md-table {
