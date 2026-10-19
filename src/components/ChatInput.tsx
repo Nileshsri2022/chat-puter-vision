@@ -93,6 +93,11 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const discardRecordingRef = useRef(false);
   const pendingImagesRef = useRef<PendingImage[]>([]);
+  // Drag-and-drop: a depth counter so child elements entering/leaving the
+  // composer don't flicker the highlight; a plain `dragOver` boolean would
+  // drop on the first dragleave fired by an inner element.
+  const dragDepthRef = useRef(0);
+  const [isDragOver, setIsDragOver] = useState(false);
   const { toast } = useToast();
 
   // Vision support comes from the live model catalog (modalities data);
@@ -142,90 +147,132 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
     }
   };
 
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  /**
+   * Add image files as pending attachments, shared by the file picker and the
+   * drag-and-drop drop. Validates capacity, filters non-images, auto-converts
+   * unsupported containers to PNG, and builds the preview object URLs.
+   */
+  const addFiles = async (fileList: File[]) => {
+    const files = fileList.filter(Boolean);
+    if (files.length === 0) return;
 
-    if (files.length > 0) {
-      const capacity = MAX_ATTACHMENTS - pendingImages.length;
-      if (capacity <= 0) {
+    const capacity = MAX_ATTACHMENTS - pendingImagesRef.current.length;
+    if (capacity <= 0) {
+      toast({
+        title: "Attachment limit reached",
+        description: `A message can carry up to ${MAX_ATTACHMENTS} images.`,
+        duration: 3000,
+      });
+      return;
+    }
+
+    setIsProcessingImages(true);
+    const validFiles = files.filter(file => file.type.startsWith('image/'));
+
+    if (validFiles.length === 0) {
+      toast({
+        title: "No valid images",
+        description: "Please drop image files only.",
+        variant: "destructive",
+        duration: 3000,
+      });
+      setIsProcessingImages(false);
+      return;
+    }
+
+    // Auto-convert unsupported formats (AVIF, HEIC, etc.) to PNG
+    const needsConversionFiles = validFiles.filter(file => needsConversion(file.type));
+
+    let filesToUse = validFiles;
+    if (needsConversionFiles.length > 0) {
+      const formatNames = needsConversionFiles.map(f => f.type.replace('image/', '').toUpperCase()).join(', ');
+      toast({
+        title: "Converting images",
+        description: `Converting ${formatNames} to PNG format...`,
+        duration: 3000,
+      });
+
+      try {
+        filesToUse = await convertImagesToPNG(validFiles);
         toast({
-          title: "Attachment limit reached",
-          description: `A message can carry up to ${MAX_ATTACHMENTS} images.`,
-          duration: 3000,
+          title: "Conversion complete",
+          description: `Successfully converted ${needsConversionFiles.length} image(s) to PNG`,
+          duration: 2000,
         });
-        if (imageInputRef.current) imageInputRef.current.value = "";
-        return;
-      }
-
-      setIsProcessingImages(true);
-      const validFiles = files.filter(file => file.type.startsWith('image/'));
-
-      if (validFiles.length === 0) {
+      } catch (error) {
         toast({
-          title: "No valid images",
-          description: "Please select image files only.",
+          title: "Conversion failed",
+          description: error instanceof Error ? error.message : "Failed to convert images",
           variant: "destructive",
-          duration: 3000,
+          duration: 5000,
         });
         setIsProcessingImages(false);
         return;
       }
-
-      // Auto-convert unsupported formats (AVIF, HEIC, etc.) to PNG
-      const needsConversionFiles = validFiles.filter(file => needsConversion(file.type));
-
-      let filesToUse = validFiles;
-      if (needsConversionFiles.length > 0) {
-        const formatNames = needsConversionFiles.map(f => f.type.replace('image/', '').toUpperCase()).join(', ');
-        toast({
-          title: "Converting images",
-          description: `Converting ${formatNames} to PNG format...`,
-          duration: 3000,
-        });
-
-        try {
-          filesToUse = await convertImagesToPNG(validFiles);
-          toast({
-            title: "Conversion complete",
-            description: `Successfully converted ${needsConversionFiles.length} image(s) to PNG`,
-            duration: 2000,
-          });
-        } catch (error) {
-          toast({
-            title: "Conversion failed",
-            description: error instanceof Error ? error.message : "Failed to convert images",
-            variant: "destructive",
-            duration: 5000,
-          });
-          setIsProcessingImages(false);
-          return;
-        }
-      }
-
-      const accepted = filesToUse.slice(0, capacity);
-      if (accepted.length < filesToUse.length) {
-        toast({
-          title: "Some images were not added",
-          description: `A message can carry up to ${MAX_ATTACHMENTS} images.`,
-          duration: 3000,
-        });
-      }
-      // Previews are object URLs built in file order, so preview[i] is
-      // accepted[i] no matter which file the browser read first.
-      setPendingImages((prev) => [
-        ...prev,
-        ...accepted.map((file) => ({
-          file,
-          previewUrl: URL.createObjectURL(file),
-        })),
-      ]);
-      setIsProcessingImages(false);
     }
 
-    // Reset image input
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
+    const accepted = filesToUse.slice(0, capacity);
+    if (accepted.length < filesToUse.length) {
+      toast({
+        title: "Some images were not added",
+        description: `A message can carry up to ${MAX_ATTACHMENTS} images.`,
+        duration: 3000,
+      });
     }
+    // Previews are object URLs built in file order, so preview[i] is
+    // accepted[i] no matter which file the browser read first.
+    setPendingImages((prev) => [
+      ...prev,
+      ...accepted.map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })),
+    ]);
+    setIsProcessingImages(false);
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    // Reset image input first so selecting the same file again still fires.
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    if (files.length > 0) await addFiles(files);
+  };
+
+  // Drag-and-drop attachment. A selected-text or context drag carries no `Files`
+  // type, so it passes through to its own drop target instead of being captured
+  // here. The handlers are inert unless the composer can accept attachments.
+  const dragHasFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.types).includes("Files");
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!canAttachImages || !dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragOver(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!canAttachImages || !dragHasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDragLeave = () => {
+    if (!canAttachImages) return;
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    if (!canAttachImages || !dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) await addFiles(files);
   };
 
   const clearImages = () => {
@@ -474,7 +521,17 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
       : null;
 
   return (
-    <div className={cn("composer-wrap", compact && "composer-wrap-compact")}>
+    <div
+      className={cn(
+        "composer-wrap",
+        compact && "composer-wrap-compact",
+        isDragOver && "composer-drag-over"
+      )}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <form onSubmit={handleSubmit} className="composer-form">
         {/* Image previews */}
         {canAttachImages && pendingImages.length > 0 && (
@@ -557,6 +614,11 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
         )}
 
         <div className="composer-box">
+          {isDragOver && (
+            <div className="composer-drag-hint" aria-hidden="true">
+              Drop images to attach
+            </div>
+          )}
           {selectionTextItems.length > 0 && (
             <div className="composer-selections" role="status" aria-live="polite">
               {selectionTextItems.map((item) => {

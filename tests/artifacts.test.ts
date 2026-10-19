@@ -486,7 +486,6 @@ const readSrc = (rel: string) => readFileSync(join(import.meta.dir, "..", "src",
 test("every deliberate delete reclaims the images it drops", () => {
   const page = readSrc("pages/Index.tsx");
   for (const fn of [
-    "handleDeleteMessage",
     "handleEditMessage",
     "handleDeleteConversation",
     "handleDeleteConversations",

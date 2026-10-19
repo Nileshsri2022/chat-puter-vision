@@ -34,6 +34,7 @@ import {
 } from "@/lib/contextGroups";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { isImageUrl } from "@/lib/dataUrl";
+import { findCurrentImage, resolveGenerationEditBase } from "@/lib/imageContext";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
   getModelCatalog,
@@ -870,17 +871,16 @@ const Index = () => {
       }
     }
 
-    // Explicit context selection: use this turn's manual attachments and/or
-    // the explicitly injected Context Group. With neither present, generate a
-    // brand-new image from scratch instead of automatically locking onto the
-    // last image in the conversation.
-    let inputImages = dataUrls;
+    // Which image this turn edits, in order of intent:
+    //   1. this turn's own attachments (highest priority),
+    //   2. the explicitly injected Context Group,
+    //   3. the conversation's current image (derived from the transcript).
+    // With none of those present it is a plain text-to-image. Without step 3 a
+    // follow-up prompt ("now make it night") silently text-to-imaged a fresh
+    // scene instead of editing the picture already on screen.
     let generationPrompt = prompt;
-    let base: { src: string; origin: ImageOrigin } | null =
-      attachmentRefs.length > 0
-        ? { src: attachmentRefs[0].path, origin: "attachment" }
-        : null;
-
+    let contextImageDataUrls: string[] = [];
+    let contextBase: { src: string; origin: ImageOrigin } | null = null;
     if (injectedContext) {
       try {
         const resolved = await resolveContextGroupForTask(
@@ -897,12 +897,8 @@ const Index = () => {
         if (resolved.missingImages > 0 || usableContextImages.length !== resolved.imageDataUrls.length) {
           notifyContextImagesSkipped();
         }
-        if (usableContextImages.length > 0) {
-          inputImages = [...inputImages, ...usableContextImages];
-          if (!base && resolved.primaryImageBase) {
-            base = resolved.primaryImageBase;
-          }
-        }
+        contextImageDataUrls = usableContextImages;
+        contextBase = resolved.primaryImageBase;
       } catch {
         toast({
           title: "Could not read the image to edit",
@@ -913,6 +909,36 @@ const Index = () => {
         });
         return;
       }
+    }
+
+    const attachmentBase: { src: string; origin: ImageOrigin } | null =
+      attachmentRefs.length > 0
+        ? { src: attachmentRefs[0].path, origin: "attachment" }
+        : null;
+
+    // Resolve the edit base at one seam. A current image whose bytes cannot be
+    // read must not fall back to a text-to-image — that is the bug this path
+    // exists to fix — so a read failure aborts the turn with the same toast.
+    let inputImages: string[];
+    let base: { src: string; origin: ImageOrigin } | null;
+    try {
+      ({ inputImages, base } = await resolveGenerationEditBase({
+        messages,
+        attachmentDataUrls: dataUrls,
+        attachmentBase,
+        contextImageDataUrls,
+        contextBase,
+        loadImageDataUrl,
+      }));
+    } catch {
+      toast({
+        title: "Could not read the image to edit",
+        description:
+          "It may have been deleted. Attach it again to edit it.",
+        variant: "destructive",
+        duration: 6000,
+      });
+      return;
     }
 
     const userMessage: Message = {
@@ -1225,26 +1251,6 @@ const Index = () => {
         duration: 2000,
       });
     }
-  };
-
-  const handleDeleteMessage = (messageIndex: number) => {
-    const removed = messages[messageIndex];
-    if (removed) reclaimMessages([removed]);
-    setConversations(prev => prev.map(conv =>
-      conv.id === currentConversationId
-        ? {
-            ...conv,
-            // Summaries after the deleted message covered it; drop them.
-            messages: conv.messages
-              .filter((_, i) => i !== messageIndex)
-              .map((m, i) => (i >= messageIndex && m.compaction ? { ...m, compaction: undefined } : m)),
-          }
-        : conv
-    ));
-    toast({
-      title: "Message deleted",
-      duration: 2000,
-    });
   };
 
   const handleShareExchange = (index: number) => {
@@ -1594,7 +1600,6 @@ const Index = () => {
                       searchMatch={searchMatches.includes(index)}
                       searchActive={searchMatches[activeMatch] === index}
                       onCopy={handleCopyMessage}
-                      onDelete={() => handleDeleteMessage(index)}
                       onEdit={message.role === "user" ? (content, images, model) => handleEditMessage(index, content, images, model) : undefined}
                       selectedModel={selectedModel}
                       onModelChange={setSelectedModel}
