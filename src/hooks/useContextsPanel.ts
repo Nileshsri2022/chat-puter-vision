@@ -50,56 +50,30 @@ export function useContextsPanel({
 }: UseContextsPanelOptions) {
   const contextsDocked = useMediaQuery(ARTIFACTS_DOCK_QUERY);
   const { toast } = useToast();
-
-  const [contextsOpen, setContextsOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("contexts_open");
-      if (saved !== null) return saved === "true";
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("contexts_open", String(contextsOpen));
-  }, [contextsOpen]);
-
-  const [contextGroups, setContextGroups] = useState<ContextGroup[]>(() =>
-    loadContextGroups()
+  const [contextsOpen, setContextsOpen] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("contexts_open") === "true" : false
   );
+  useEffect(() => localStorage.setItem("contexts_open", String(contextsOpen)), [contextsOpen]);
 
-  useEffect(() => {
-    saveContextGroups(contextGroups);
-  }, [contextGroups]);
+  const [contextGroups, setContextGroups] = useState<ContextGroup[]>(() => loadContextGroups());
+  useEffect(() => saveContextGroups(contextGroups), [contextGroups]);
 
-  // Which Context Group is currently expanded in the collapsible accordion.
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(
     () => loadContextGroups()[0]?.id ?? null
   );
-
-  // Which Context Group is currently injected into the composer input box.
   const [injectedGroupId, setInjectedGroupId] = useState<string | null>(null);
-
-  // Ad-hoc pick of individual items (`←` on one row/thumbnail, or "Use as
-  // context" in the transcript). Held separately from saved groups so an item
-  // can be injected without creating, expanding, or mutating a Context Group.
   const [selectionItems, setSelectionItems] = useState<ContextItem[]>([]);
 
-  const injectedContext = useMemo(() => {
-    if (selectionItems.length > 0) {
-      return createContextSelectionGroup(selectionItems);
-    }
-    return contextGroups.find((g) => g.id === injectedGroupId) ?? null;
-  }, [contextGroups, injectedGroupId, selectionItems]);
+  const injectedContext = useMemo(
+    () =>
+      selectionItems.length > 0
+        ? createContextSelectionGroup(selectionItems)
+        : contextGroups.find((g) => g.id === injectedGroupId) ?? null,
+    [contextGroups, injectedGroupId, selectionItems]
+  );
 
-  /**
-   * Keys of the items currently queued in the composer: the explicit selection
-   * when there is one, otherwise every item of the injected group. The panel
-   * and the transcript use these to light up the `←` control that is active.
-   */
   const injectedItemKeys = useMemo(() => {
-    if (selectionItems.length > 0) {
-      return new Set(selectionItems.map(contextItemKey));
-    }
+    if (selectionItems.length > 0) return new Set(selectionItems.map(contextItemKey));
     const group = contextGroups.find((g) => g.id === injectedGroupId);
     return new Set((group?.items ?? []).map(contextItemKey));
   }, [contextGroups, injectedGroupId, selectionItems]);
@@ -329,6 +303,10 @@ export function useContextsPanel({
     setInjectedGroupId(null);
   }, []);
 
+  const removeInjectedItem = useCallback((itemId: string) => {
+    setSelectionItems((prev) => prev.filter((item) => item.id !== itemId));
+  }, []);
+
   /**
    * Best-effort provenance for text that arrived without one (a plain-text drop
    * where the browser dropped our custom MIME). Finds the message in the open
@@ -502,25 +480,10 @@ export function useContextsPanel({
   );
 
   return {
-    contextsDocked,
-    contextsOpen,
-    setContextsOpen,
-    contextGroups,
-    expandedGroupId,
-    setExpandedGroupId,
-    injectedContext,
-    createGroup,
-    addItem,
-    addFilesToContext,
-    removeItem,
-    deleteGroup,
-    renameGroup,
-    injectGroup,
-    injectItem,
-    injectContextItem,
-    injectedItemKeys,
-    clearInjectedContext,
-    locateContextItem,
-    resolveTextSource,
+    contextsDocked, contextsOpen, setContextsOpen, contextGroups,
+    expandedGroupId, setExpandedGroupId, injectedContext, createGroup,
+    addItem, addFilesToContext, removeItem, deleteGroup, renameGroup,
+    injectGroup, injectItem, injectContextItem, injectedItemKeys,
+    clearInjectedContext, removeInjectedItem, locateContextItem, resolveTextSource,
   };
 }

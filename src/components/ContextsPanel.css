@@ -138,21 +138,37 @@
   @apply flex size-full items-center justify-center p-1 text-center text-[10px] text-muted-foreground;
 }
 
-/* Corner right-arrow (`→`) locate button on every image thumbnail */
-.context-thumb-locate {
-  @apply absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm tap-expand hover:bg-background;
-  --tap-size: 28px;
-}
-
+/* Bottom `...` trigger and expanded 3-icon strip (`←`, `→`, `×`) on every image thumbnail */
 .context-thumb-actions {
-  @apply absolute bottom-1 left-1 flex items-center opacity-100 transition-opacity;
+  @apply absolute inset-x-1 bottom-1 z-10 flex items-center justify-center opacity-100 transition-opacity;
 }
 
-/* Per-item `←` inject button, mirroring the group-level
-   `← Inject into input`: it queues just this image in the composer. */
-.context-thumb-inject {
-  @apply absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-black/65 text-white shadow-sm tap-expand hover:bg-primary;
+.context-thumb-actions-open {
+  @apply z-20;
+}
+
+.context-thumb-more {
+  @apply flex h-4 w-6 items-center justify-center rounded-full bg-black/70 text-white shadow-sm backdrop-blur-sm tap-expand hover:bg-black/85;
   --tap-size: 28px;
+}
+
+.context-thumb-menu {
+  @apply flex w-full items-center justify-between rounded-full bg-black/85 px-1 py-0.5 text-white shadow-md backdrop-blur-sm;
+}
+
+.context-thumb-locate {
+  @apply flex size-4 items-center justify-center rounded-full text-white tap-expand hover:bg-white/20;
+  --tap-size: 24px;
+}
+
+.context-thumb-locate-disabled {
+  @apply cursor-not-allowed opacity-50 hover:bg-transparent;
+}
+
+/* Per-item `←` inject button inside the image `...` menu. */
+.context-thumb-inject {
+  @apply flex size-4 items-center justify-center rounded-full text-white tap-expand hover:bg-primary;
+  --tap-size: 24px;
 }
 
 .context-thumb-inject-active {
@@ -164,12 +180,12 @@
 }
 
 .context-thumb-remove {
-  @apply flex size-5 items-center justify-center rounded-full bg-black/65 text-white tap-expand hover:bg-destructive;
-  --tap-size: 28px;
+  @apply flex size-4 items-center justify-center rounded-full text-white tap-expand hover:bg-destructive;
+  --tap-size: 24px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .context-thumb-actions {
+  .context-thumb-actions-hover {
     opacity: 0;
   }
 

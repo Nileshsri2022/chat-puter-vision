@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw, GripVertical } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
@@ -16,7 +16,7 @@ import remarkGfm from "remark-gfm";
 import { copyToClipboard } from "@/lib/utils/export";
 import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
-import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type ReactNode } from "react";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import type { EditedFrom } from "@/lib/backend";
 import type { ModelCatalog } from "@/lib/models";
@@ -24,7 +24,6 @@ import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import { stripImageMarker } from "@/lib/attachments";
 import {
   CONTEXT_DRAG_MIME,
-  contextPayloadKey,
   encodeContextDragPayload,
   type ContextDropPayload,
 } from "@/lib/contextGroups";
@@ -68,73 +67,20 @@ interface ChatMessageProps {
   onShareExchange?: (format: "md") => void;
   onRetry?: () => void;
   /**
-   * Queue one artifact from this message — its text, a code block, a table, or
-   * the generated image — directly in the composer as input context.
+   * Queue a selected text snippet from this message in the composer when the
+   * user highlights text and clicks the floating `Ask` button.
    */
   onUseAsContext?: (payload: ContextDropPayload) => void;
   /**
-   * Keys (`contextPayloadKey`) of the artifacts already queued in the composer,
-   * so the matching `←` control reads as pressed.
+   * Keys (`contextPayloadKey`) of the artifacts already queued in the composer.
    */
   injectedContextKeys?: Set<string>;
+  /**
+   * Optional initial text selection for testing the floating `Ask` button in
+   * server-rendered markup where `window.getSelection` is unavailable.
+   */
+  selectedText?: string;
 }
-
-
-/**
- * Grip that drags a message or block into the Contexts panel. The message
- * text itself must stay selectable, so only this handle — never the text —
- * carries the `draggable` attribute. (Making the whole bubble draggable
- * let the browser's drag gesture swallow every press-and-move, which made
- * text impossible to select or highlight.)
- */
-const DragHandle = ({ onDragStart, label, className }: { onDragStart: (e: React.DragEvent) => void; label: string; className?: string }) => (
-  <Button
-    variant="ghost"
-    size="sm"
-    draggable
-    onDragStart={onDragStart}
-    className={cn("msg-drag-handle", className)}
-    title="Drag to add as context"
-    aria-label={`Drag ${label} to contexts panel`}
-  >
-    <GripVertical className="msg-action-icon" aria-hidden="true" />
-  </Button>
-);
-
-/**
- * Left-arrow (`←`) artifact action: queue this exact block in the composer as
- * context. Matches the `← Inject into input` affordance in the Contexts panel,
- * and stays visibly pressed while the artifact is queued.
- */
-const UseAsContextButton = ({
-  active,
-  onClick,
-  label,
-  className,
-  iconClassName,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  className?: string;
-  iconClassName?: string;
-}) => (
-  <Button
-    variant="ghost"
-    size="icon"
-    onClick={onClick}
-    className={cn(
-      "msg-action-btn msg-context-action",
-      active && "msg-context-action-active",
-      className
-    )}
-    title={active ? `Remove ${label} from input context` : `Use ${label} as context`}
-    aria-label={active ? `Remove ${label} from input context` : `Use ${label} as context`}
-    aria-pressed={active}
-  >
-    <ArrowLeft className={cn("msg-action-icon", iconClassName)} aria-hidden="true" />
-  </Button>
-);
 
 /** Sparkle-in-rounded-square glyph for the thinking section, DeepSeek-style. */
 const ThoughtIcon = ({ className }: { className?: string }) => (
@@ -147,12 +93,22 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry, onUseAsContext, injectedContextKeys }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry, onUseAsContext, selectedText }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [ttsState, setTtsState] = useState<"idle" | "loading" | "playing">("idle");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectionPopup, setSelectionPopup] = useState<{
+    text: string;
+    top: number;
+    left: number;
+    at?: number;
+  } | null>(() =>
+    selectedText?.trim()
+      ? { text: selectedText.trim(), top: 0, left: 48 }
+      : null
+  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { src: imageSrc, failed: imageFailed } = usePuterImage(imagePath, image);
@@ -241,14 +197,12 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
       ? { conversationId, messageIndex }
       : undefined;
 
-  const buildTextPayload = (rawText?: string): ContextTextPayload | null => {
+  const buildTextPayload = (rawText?: string, at?: number): ContextTextPayload | null => {
     const clean = (rawText ?? stripImageMarker(stripThinkBlocks(content))).trim();
     if (!clean) return null;
     const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Message";
     // highlightText must match the *rendered* plain text, not the raw markdown,
-    // otherwise locating a bold/list/table snippet would never find its highlight
-    // (for example "**Factoring**" renders as "Factoring", and a list dash
-    // before "searching" is not part of the text node).
+    // otherwise locating a bold/list/table snippet would never find its highlight.
     const plainForHighlight = rawText
       ? rawText.trim().slice(0, 120)
       : stripMarkdownForSpeech(clean).trim().slice(0, 120) || clean.slice(0, 120);
@@ -257,7 +211,13 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
       text: clean,
       label: firstLine.length < clean.length ? `${firstLine}…` : firstLine,
       ...(sourceBase
-        ? { source: { ...sourceBase, highlightText: plainForHighlight } }
+        ? {
+            source: {
+              ...sourceBase,
+              ...(typeof at === "number" ? { at } : {}),
+              highlightText: plainForHighlight,
+            },
+          }
         : {}),
     };
   };
@@ -286,22 +246,9 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     return null;
   };
 
-  /** True when this artifact is already queued in the composer. */
-  const isQueued = (payload: ContextDropPayload | null): boolean =>
-    Boolean(payload && injectedContextKeys?.has(contextPayloadKey(payload)));
-
-  // Payloads for the message-level and image-level `←` actions. `buildTextPayload`
-  // strips thinking and attachment markers, so the button never queues metadata.
-  // Skipped entirely when nothing can consume them (e.g. the streaming reply).
-  const messagePayload = onUseAsContext ? buildTextPayload() : null;
-  const messageQueued = isQueued(messagePayload);
-  const imagePayload = onUseAsContext ? buildImagePayload() : null;
-  const imageQueued = isQueued(imagePayload);
-
   /**
    * Text the user has selected inside this message, or `""` when the selection
-   * is elsewhere. The message-level `←` queues exactly that snippet, so
-   * "select text as context" does not silently send the whole answer.
+   * is elsewhere.
    */
   const readSelectedText = (): string => {
     if (typeof window === "undefined") return "";
@@ -313,79 +260,99 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     return selection.toString().trim();
   };
 
-  /** Message text, narrowed to the user's selection when there is one. */
-  const readMessagePayloadForAction = (): ContextTextPayload | null => {
-    const selected = readSelectedText();
-    return buildTextPayload(selected || undefined) ?? messagePayload;
-  };
-
   /**
-   * Code as context: a selection inside the block when there is one, otherwise
-   * the whole block. Shared by the drag handle and the `←` button so both send
-   * the same text and provenance (`at` keeps the block locatable).
+   * Update the floating `Ask` button position whenever text is selected inside
+   * this message, matching the ChatGPT selection popover flow.
    */
-  const readCodePayload = (
-    pre: HTMLPreElement | null,
-    at?: number
-  ): ContextTextPayload | null => {
-    if (!pre) return null;
-    const codeEl = pre.querySelector("code");
-    let selected = "";
-    if (typeof window !== "undefined") {
-      const selection = window.getSelection?.();
-      const anchor = selection?.anchorNode ?? null;
-      // Only our own selection counts; text selected elsewhere on the page
-      // must not silently replace the block the user clicked.
-      if (selection && anchor && pre.contains(anchor)) {
-        selected = selection.toString().trim();
-      }
+  const updateSelectionPopup = useCallback(() => {
+    if (typeof window === "undefined" || !onUseAsContext || isStreaming) {
+      setSelectionPopup(null);
+      return;
     }
-    const raw = selected || codeEl?.innerText || pre.innerText || "";
-    const clean = raw.trim();
-    if (!clean) return null;
-    const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Code";
-    let language: string | undefined;
-    const cls = (codeEl as HTMLElement | null)?.className ?? "";
-    const match = /language-([a-z0-9+-]+)/i.exec(cls);
-    if (match) language = match[1].toLowerCase();
-    return {
-      kind: "code",
-      text: clean,
-      label: `</> ${firstLine}`,
-      ...(language ? { language } : {}),
-      ...(sourceBase
-        ? {
-            source: {
-              ...sourceBase,
-              at,
-              highlightText: stripMarkdownForSpeech(clean).slice(0, 80) || clean.slice(0, 80),
-            },
-          }
-        : {}),
+    const root = messageContainerRef.current;
+    const selection = window.getSelection?.();
+    if (!root || !selection || selection.isCollapsed || selection.rangeCount === 0) {
+      setSelectionPopup(null);
+      return;
+    }
+    const anchor = selection.anchorNode;
+    const focus = selection.focusNode;
+    if (!anchor || !focus || !root.contains(anchor) || !root.contains(focus)) {
+      setSelectionPopup(null);
+      return;
+    }
+    const anchorEl = anchor instanceof HTMLElement ? anchor : anchor.parentElement;
+    if (anchorEl?.closest("textarea, input, button")) {
+      setSelectionPopup(null);
+      return;
+    }
+    const text = selection.toString().trim();
+    if (!text) {
+      setSelectionPopup(null);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      setSelectionPopup(null);
+      return;
+    }
+    const blockEl = anchorEl?.closest<HTMLElement>("[data-artifact-at]");
+    const rawAt = blockEl?.dataset.artifactAt;
+    const at = rawAt !== undefined && rawAt !== "" ? Number(rawAt) : undefined;
+    const top = Math.max(0, rect.top - rootRect.top - 8);
+    const rawLeft = rect.left - rootRect.left + rect.width / 2;
+    const left =
+      rootRect.width > 0
+        ? Math.min(Math.max(36, rawLeft), Math.max(36, rootRect.width - 36))
+        : rawLeft;
+    setSelectionPopup({
+      text,
+      top,
+      left,
+      ...(Number.isFinite(at) ? { at } : {}),
+    });
+  }, [isStreaming, onUseAsContext]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !onUseAsContext) return;
+    const handleSelectionChange = () => updateSelectionPopup();
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
     };
+  }, [onUseAsContext, updateSelectionPopup]);
+
+  const handleAskSelection = () => {
+    if (!selectionPopup || !onUseAsContext) return;
+    const payload = buildTextPayload(selectionPopup.text, selectionPopup.at);
+    if (payload) {
+      onUseAsContext(payload);
+    }
+    setSelectionPopup(null);
+    if (typeof window !== "undefined") {
+      window.getSelection?.()?.removeAllRanges();
+      document.getElementById("chat-message-input")?.focus();
+    }
   };
 
   /**
-   * Fills a drag event's payload for a context-drag handle. The custom
-   * MIME type carries provenance for the Contexts panel; text/plain
-   * serves drops into external apps.
+   * Native drag of a text selection inside the message: attaches provenance so
+   * dropping selected text into the Contexts panel keeps its `→` locate source.
    */
-  const setContextDragData = (e: React.DragEvent, payload: ContextTextPayload) => {
+  const handleSelectedTextDragStart = (e: React.DragEvent) => {
+    const selected = readSelectedText();
+    if (!selected) return;
+    const payload = buildTextPayload(selected);
+    if (!payload) return;
     e.dataTransfer.setData(CONTEXT_DRAG_MIME, encodeContextDragPayload(payload));
     e.dataTransfer.setData("text/plain", payload.text);
-    // Some browsers (Safari) require effectAllowed to be set.
     try {
       e.dataTransfer.effectAllowed = "copy";
     } catch {
-      // Older browsers can refuse effectAllowed; not worth interrupting the drag.
+      // Ignore browsers that disallow setting effectAllowed.
     }
-  };
-
-  // Drag affordances live on the grip handles (DragHandle), never on
-  // the text itself, so text stays selectable and highlightable.
-  const handleMessageDragStart = (e: React.DragEvent) => {
-    const payload = buildTextPayload();
-    if (payload) setContextDragData(e, payload);
   };
 
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
@@ -413,24 +380,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
       setTimeout(() => setCodeCopied(false), 1500);
     };
 
-    const handleCodeDragStart = (e: React.DragEvent) => {
-      const payload = readCodePayload(preRef.current, at);
-      if (payload) setContextDragData(e, payload);
-    };
-
-    // Read during render only when something is queued, so the arrow reflects
-    // an existing selection; otherwise there is no DOM work to do.
-    const codePayload = injectedContextKeys?.size
-      ? readCodePayload(preRef.current, at)
-      : null;
-    const codeQueued = isQueued(codePayload);
-
-    const handleUseCodeAsContext = () => {
-      if (!onUseAsContext) return;
-      const payload = readCodePayload(preRef.current, at);
-      if (payload) onUseAsContext(payload);
-    };
-
     return (
       <div className="msg-codeblock group/code" data-artifact-at={at}>
         <pre
@@ -452,16 +401,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             <Copy className="msg-codeblock-copy-icon" />
           )}
         </Button>
-        {onUseAsContext && (
-          <UseAsContextButton
-            active={codeQueued}
-            onClick={handleUseCodeAsContext}
-            label="code block"
-            className="msg-codeblock-context"
-            iconClassName="msg-codeblock-copy-icon"
-          />
-        )}
-        <DragHandle onDragStart={handleCodeDragStart} label="code block" className="msg-codeblock-drag" />
       </div>
     );
   };
@@ -549,111 +488,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     ),
   };
 
-  // Wrap a rendered table so it can be dragged into the Contexts panel as a
-  // proper \"table\" item (with source.at for block-level locate). The text we
-  // drag is the Markdown the artifacts panel extracts — but for the ad-hoc drag
-  // we reconstruct a simple pipe table from the rendered cells; it's enough for
-  // context injection.
-  const TableWrap = ({ at, children }: { at?: number; children: React.ReactNode }) => {
-    const wrapRef = useRef<HTMLDivElement>(null);
-
-    /** Rebuild a minimal Markdown table (keeping its pipe structure). */
-    const readTablePayload = (): ContextTextPayload | null => {
-      const wrap = wrapRef.current;
-      if (!wrap) return null;
-      let text = "";
-      // Rebuild from the rendered DOM so the context keeps the structure
-      // (| col | col |) instead of a flat string.
-      const table = wrap.querySelector("table");
-      if (table) {
-        const rows = Array.from(table.querySelectorAll("tr"));
-        const mdRows = rows.map((tr) => {
-          const cells = Array.from(tr.querySelectorAll("th, td")).map((c) =>
-            (c.textContent ?? "").trim().replace(/\|/g, "\\|")
-          );
-          return `| ${cells.join(" | ")} |`;
-        });
-        if (mdRows.length >= 1) {
-          const header = mdRows[0];
-          const cols = header.split("|").length - 2;
-          const sep = `| ${Array(cols).fill("---").join(" | ")} |`;
-          mdRows.splice(1, 0, sep);
-        }
-        text = mdRows.join("\n");
-      } else {
-        text = wrap.innerText.trim();
-      }
-      const clean = text.trim();
-      if (!clean) return null;
-      const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Table";
-      return {
-        kind: "table",
-        text: clean,
-        label: `▦ ${firstLine}`,
-        ...(sourceBase
-          ? {
-              source: {
-                ...sourceBase,
-                at,
-                highlightText: clean.slice(0, 80),
-              },
-            }
-          : {}),
-      };
-    };
-
-    const handleTableDragStart = (e: React.DragEvent) => {
-      const payload = readTablePayload();
-      if (payload) setContextDragData(e, payload);
-    };
-
-    const tablePayload = injectedContextKeys?.size ? readTablePayload() : null;
-    const tableQueued = isQueued(tablePayload);
-
-    const handleUseTableAsContext = () => {
-      if (!onUseAsContext) return;
-      const payload = readTablePayload();
-      if (payload) onUseAsContext(payload);
-    };
-
-    const tableActionLabel = tableQueued
-      ? "Remove table from input context"
-      : "Use table as context";
-
-    return (
-      <div
-        ref={wrapRef}
-        className="md-table-wrap"
-        data-artifact-at={at}
-      >
-        <div className="md-table-bar">
-          <DragHandle onDragStart={handleTableDragStart} label="table" />
-          {onUseAsContext ? (
-            <button
-              type="button"
-              className={cn(
-                "md-table-context-btn",
-                tableQueued && "md-table-context-btn-active"
-              )}
-              onClick={handleUseTableAsContext}
-              title={tableActionLabel}
-              aria-label={tableActionLabel}
-              aria-pressed={tableQueued}
-            >
-              <ArrowLeft className="md-table-context-icon" aria-hidden="true" />
-              {tableQueued ? "In input context" : "Use as context"}
-            </button>
-          ) : (
-            <span>Drag to add as context</span>
-          )}
-        </div>
-        <div className="md-table-scroll">
-          <table className="md-table">{children}</table>
-        </div>
-      </div>
-    );
-  };
-
   // The answer stamps each code block and table with its offset in `answer`
   // (`data-artifact-at`), matching what lib/artifactBlocks.ts computes, so
   // the artifacts panel can locate one block rather than the whole message.
@@ -663,9 +497,34 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     ...markdownComponents,
     pre: ({ node, children }) => <CodeBlock at={node?.position?.start.offset}>{children}</CodeBlock>,
     table: ({ node, children }) => (
-      <TableWrap at={node?.position?.start.offset}>{children}</TableWrap>
+      <div className="md-table-wrap" data-artifact-at={node?.position?.start.offset}>
+        <div className="md-table-scroll">
+          <table className="md-table">{children}</table>
+        </div>
+      </div>
     ),
   };
+
+  const askPopover =
+    selectionPopup && onUseAsContext && !isStreaming ? (
+      <button
+        type="button"
+        className="msg-selection-ask-btn"
+        style={{
+          top: `${selectionPopup.top}px`,
+          left: `${selectionPopup.left}px`,
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={handleAskSelection}
+        title="Ask about selected text"
+        aria-label="Ask about selected text"
+      >
+        Ask
+      </button>
+    ) : null;
 
   return (
     <>
@@ -678,7 +537,11 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             searchActive && "msg-search-match-active"
           )}
           data-message-index={messageIndex}
+          onMouseUp={updateSelectionPopup}
+          onKeyUp={updateSelectionPopup}
+          onTouchEnd={updateSelectionPopup}
         >
+          {askPopover}
           {editing ? (
             <ChatInput
               initialValue={stripImageMarker(content)}
@@ -698,22 +561,15 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
               <div className="msg-user-row">
                 {/* `data-search-text` tags the regions in-conversation search
                     scans — see lib/utils/highlight.ts. */}
-                <div className="msg-user-bubble" data-search-text>
+                <div
+                  className="msg-user-bubble"
+                  data-search-text
+                  onDragStart={handleSelectedTextDragStart}
+                >
                   {content}
                 </div>
               </div>
               <div className="msg-user-actions">
-                <DragHandle onDragStart={handleMessageDragStart} label="message" />
-                {onUseAsContext && messagePayload && (
-                  <UseAsContextButton
-                    active={messageQueued}
-                    onClick={() => {
-                      const payload = readMessagePayloadForAction();
-                      if (payload) onUseAsContext(payload);
-                    }}
-                    label="message"
-                  />
-                )}
                 {onCopy && (
                   <Button
                     variant="ghost"
@@ -751,7 +607,11 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             searchActive && "msg-search-match-active"
           )}
           data-message-index={messageIndex}
+          onMouseUp={updateSelectionPopup}
+          onKeyUp={updateSelectionPopup}
+          onTouchEnd={updateSelectionPopup}
         >
+          {askPopover}
           <div className="msg-inner">
             <div className="msg-model-label">
               {isStreaming ? "Thinking…" : getModelDisplayName(model)}
@@ -787,19 +647,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                     if (e.key === "Enter" || e.key === " ") setPreviewOpen(true);
                   }}
                 />
-                {/* `←` on the image itself: queue it as the next turn's input
-                    context without opening the Contexts panel. */}
-                {onUseAsContext && imagePayload && (
-                  <UseAsContextButton
-                    active={imageQueued}
-                    onClick={() => {
-                      const payload = buildImagePayload();
-                      if (payload) onUseAsContext(payload);
-                    }}
-                    label="image"
-                    className="msg-image-context"
-                  />
-                )}
               </div>
             )}
             {imageSrc && editedFrom && (
@@ -841,7 +688,11 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 )}
               </div>
             )}
-            <div className="msg-answer" data-search-text>
+            <div
+              className="msg-answer"
+              data-search-text
+              onDragStart={handleSelectedTextDragStart}
+            >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={answerComponents}
@@ -863,17 +714,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             )}
             {!isStreaming && (
               <div className="msg-actions">
-                <DragHandle onDragStart={handleMessageDragStart} label="answer" />
-                {onUseAsContext && messagePayload && (
-                  <UseAsContextButton
-                    active={messageQueued}
-                    onClick={() => {
-                      const payload = readMessagePayloadForAction();
-                      if (payload) onUseAsContext(payload);
-                    }}
-                    label="answer"
-                  />
-                )}
                 {speakable && (
                   <Button
                     variant="ghost"

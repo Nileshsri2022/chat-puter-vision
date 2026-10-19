@@ -10,7 +10,11 @@
 import { test, expect } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatMessage } from "@/components/ChatMessage";
-import { contextPayloadKey } from "@/lib/contextGroups";
+import { ChatInput } from "@/components/ChatInput";
+import {
+  contextItemFromPayload,
+  createContextSelectionGroup,
+} from "@/lib/contextGroups";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { collectArtifacts, isImageArtifact } from "@/lib/artifacts";
 
@@ -140,26 +144,14 @@ test("blocks in the thinking section carry no offsets", () => {
   expect(thinking).not.toContain("data-artifact-at");
 });
 
-// ---- Per-artifact `←` use-as-context ----
-//
-// Every artifact in the transcript (the answer text, a code block, a table, a
-// generated image) can be queued straight in the composer, matching the
-// Contexts panel's per-item `←` button.
+// ---- No drag handles or left-arrow (`←`) context buttons in chat responses;
+//      only the floating `Ask` button on text selection ----
 
-test("the answer, its code block, and its table each offer `←` use-as-context", () => {
-  const html = renderToStaticMarkup(
+test("messages, code blocks, tables, and images render no drag-to-add-as-context icon or left-arrow button", () => {
+  const assistantHtml = renderToStaticMarkup(
     <ChatMessage role="assistant" content={BLOCKS} onUseAsContext={() => {}} />
   );
-  expect(html).toContain('aria-label="Use answer as context"');
-  expect(html).toContain('aria-label="Use code block as context"');
-  expect(html).toContain('aria-label="Use table as context"');
-  // The table bar's passive hint becomes a real control when the action exists
-  // (the drag handles keep their own "Drag to add as context" tooltip).
-  expect(html).not.toContain("<span>Drag to add as context</span>");
-});
-
-test("a generated image offers its own `←` use-as-context control", () => {
-  const html = renderToStaticMarkup(
+  const imageHtml = renderToStaticMarkup(
     <ChatMessage
       role="assistant"
       content=""
@@ -167,43 +159,65 @@ test("a generated image offers its own `←` use-as-context control", () => {
       onUseAsContext={() => {}}
     />
   );
-  expect(html).toContain('aria-label="Use image as context"');
-  expect(html).toContain("msg-image-context");
-});
-
-test("a user message's text can be queued as context", () => {
-  const html = renderToStaticMarkup(
+  const userHtml = renderToStaticMarkup(
     <ChatMessage
       role="user"
       content="A man dancing in water"
       onUseAsContext={() => {}}
     />
   );
-  expect(html).toContain('aria-label="Use message as context"');
+
+  for (const html of [assistantHtml, imageHtml, userHtml]) {
+    expect(html).not.toContain("Drag to add as context");
+    expect(html).not.toContain("msg-drag-handle");
+    expect(html).not.toContain("Use answer as context");
+    expect(html).not.toContain("Use message as context");
+    expect(html).not.toContain("Use code block as context");
+    expect(html).not.toContain("Use table as context");
+    expect(html).not.toContain("Use image as context");
+    expect(html).not.toContain("msg-image-context");
+    // No `Ask` pill until the user actually selects text.
+    expect(html).not.toContain("msg-selection-ask-btn");
+  }
 });
 
-test("a queued answer reads as pressed instead of offering to queue it again", () => {
-  const content = "Quantum computers use qubits.";
-  const key = contextPayloadKey({ kind: "text", text: content, label: content });
+test("selecting text inside a message renders the floating Ask button", () => {
   const html = renderToStaticMarkup(
     <ChatMessage
       role="assistant"
-      content={content}
+      content="Quantum computers use qubits to represent superpositions."
       onUseAsContext={() => {}}
-      injectedContextKeys={new Set([key])}
+      selectedText="qubits to represent superpositions."
     />
   );
-  expect(html).toContain('aria-label="Remove answer from input context"');
-  expect(html).toContain('aria-pressed="true"');
+  expect(html).toContain("msg-selection-ask-btn");
+  expect(html).toContain('aria-label="Ask about selected text"');
+  expect(html).toContain(">Ask<");
 });
 
-test("without a handler, messages render no use-as-context controls", () => {
+test("ChatInput renders a ChatGPT-style Selection card with Selected text popover when text is queued via Ask", () => {
+  const item = contextItemFromPayload({
+    kind: "text",
+    text: "selected folders and files.\n-- cached: Removes the file only from the Git staging area",
+    label: "selected folders and files.",
+  });
+  const selectionGroup = createContextSelectionGroup([item]);
   const html = renderToStaticMarkup(
-    <ChatMessage role="assistant" content={BLOCKS} />
+    <ChatInput
+      onSend={() => {}}
+      selectedModel="gpt-4o-mini"
+      onModelChange={() => {}}
+      modelCatalog={null}
+      injectedContext={selectionGroup}
+      onClearInjectedContext={() => {}}
+      onRemoveInjectedItem={() => {}}
+    />
   );
-  expect(html).not.toContain("Use answer as context");
-  expect(html).not.toContain("Use code block as context");
-  expect(html).not.toContain("Use table as context");
-  // The drag affordance and its hint remain for the drag-only path.
-  expect(html).toContain("Drag to add as context");
+
+  expect(html).toContain("composer-selection-card");
+  expect(html).toContain("composer-selection-footer");
+  expect(html).toContain(">Selection<");
+  expect(html).toContain("composer-selection-popover");
+  expect(html).toContain("Selected text:");
+  expect(html).toContain("Removes the file only from the Git staging area");
 });
