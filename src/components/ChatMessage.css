@@ -142,6 +142,13 @@
   @apply size-4;
 }
 
+/* Grip that drags a message/block into the Contexts panel. Text
+   stays selectable because the text itself is never draggable —
+   only this handle is. */
+.msg-drag-handle {
+  @apply size-7 p-0 text-muted-foreground tap-expand cursor-grab active:cursor-grabbing;
+}
+
 /* Code blocks */
 .msg-codeblock {
   @apply relative my-4;
@@ -170,6 +177,24 @@
 
 .msg-codeblock-copy-icon {
   @apply size-3.5;
+}
+
+/* Sits left of the copy button in the code block's top corner and
+   follows the same reveal pattern: always visible on touch,
+   hover-revealed on fine pointers. */
+.msg-codeblock-drag {
+  @apply absolute right-10 top-2 opacity-100 transition-opacity;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .msg-codeblock-drag {
+    opacity: 0;
+  }
+
+  .group\/code:hover .msg-codeblock-drag,
+  .msg-codeblock-drag:focus-visible {
+    opacity: 1;
+  }
 }
 
 /* Markdown elements */
@@ -226,7 +251,17 @@
 }
 
 .md-table-wrap {
-  @apply my-4 overflow-x-auto;
+  @apply my-4;
+}
+
+/* Horizontal scrolling lives on the inner div so the caption bar
+   above the table (drag handle + hint) stays put. */
+.md-table-scroll {
+  @apply overflow-x-auto;
+}
+
+.md-table-bar {
+  @apply mb-1 flex items-center gap-1 text-xs text-muted-foreground;
 }
 
 .md-table {
