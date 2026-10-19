@@ -68,3 +68,14 @@ export function isImageUrl(url: string): boolean {
     /^https?:\/\//i.test(trimmed) || /^data:image\/[a-z0-9.+-]+[;,]/i.test(trimmed)
   );
 }
+
+/**
+ * True for a self-contained data URI — the bytes travel with the URL.
+ *
+ * A hosted URL can expire; a data URI cannot. Anything that has to survive
+ * being sent to a provider later (an edit base, for instance) wants this
+ * one, not the other.
+ */
+export function isDataUrl(url: string): boolean {
+  return /^data:image\/[a-z0-9.+-]+[;,]/i.test(url.trim());
+}

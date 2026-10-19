@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Maximize2, Copy, Download, Check, Sparkles, Paperclip, ImageOff } from "lucide-react";
+import { Maximize2, Copy, Download, Check, Sparkles, Paperclip, ImageOff, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import { useToast } from "@/hooks/use-toast";
@@ -51,11 +51,13 @@ export const ArtifactTile = ({
   position,
   onLocate,
   onPreview,
+  onAddToContext,
 }: {
   artifact: ImageArtifact;
   position: string;
   onLocate: () => void;
   onPreview: (src: string) => void;
+  onAddToContext?: () => void;
 }) => {
   const { src, failed } = usePuterImage(artifact.path, artifact.src);
   const { toast } = useToast();
@@ -175,6 +177,18 @@ export const ArtifactTile = ({
         >
           <Download className="artifacts-tile-action-icon" aria-hidden="true" />
         </Button>
+        {onAddToContext && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="artifacts-tile-action tap-expand"
+            onClick={onAddToContext}
+            title="Add to context"
+            aria-label={`Add ${artifact.label} to context`}
+          >
+            <FolderPlus className="artifacts-tile-action-icon" aria-hidden="true" />
+          </Button>
+        )}
       </div>
     </div>
   );

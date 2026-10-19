@@ -16,6 +16,8 @@ import {
 } from "@/lib/audio";
 import { extractText } from "@/lib/ocr";
 import { checkAuthStatus } from "@/lib/backend";
+import { usePuterImage } from "@/hooks/usePuterImage";
+import { isContextImageItem, isContextTextItem, type ContextGroup } from "@/lib/contextGroups";
 import "./ChatInput.css";
 
 
@@ -28,12 +30,24 @@ interface PendingImage {
 interface ChatInputProps {
   onSend: (message: string, model?: string, images?: File[]) => void;
   onStop?: () => void;
-  onGenerateImage?: (prompt: string) => Promise<void>;
+  /**
+   * Starts an image generation. `images` are the attachments the turn edits:
+   * the image model receives their pixels, so the prompt can refer to "the
+   * image" and mean it.
+   */
+  onGenerateImage?: (prompt: string, images?: File[]) => Promise<void>;
   isGeneratingImage?: boolean;
   disabled?: boolean;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
   modelCatalog?: ModelCatalog | null;
+  /**
+   * Explicit Context Group injected from the Contexts panel via `← Inject into input`.
+   * Displayed as a dismissible pill above the composer box.
+   */
+  injectedContext?: ContextGroup | null;
+  /** Clears the currently injected Context Group pill. */
+  onClearInjectedContext?: () => void;
   /** Prefills the textarea (inline edit mode). */
   initialValue?: string;
   /** Compact rendering for inline editing (shorter box, no outer padding). */
@@ -58,7 +72,7 @@ function microphoneErrorMessage(error: unknown): string {
     : "Allow microphone access to use voice input.";
 }
 
-export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, initialValue, compact, onCancel }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, injectedContext, onClearInjectedContext, initialValue, compact, onCancel }: ChatInputProps) => {
   const [input, setInput] = useState(initialValue ?? "");
   // Attachments live in one array so the preview at index N is always the file
   // at index N — the OCR button and the remove button act on what they show.
@@ -81,6 +95,10 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   // Vision support comes from the live model catalog (modalities data);
   // keyword matching is only the offline fallback inside modelSupportsVision.
   const modelSupportsImages = modelSupportsVision(selectedModel, modelCatalog ?? null);
+  // In image-generation mode the *image* model reads the attachment, not the
+  // chat model, so the chat model's vision support says nothing about whether
+  // attaching is possible. Gating on it there hid the whole feature.
+  const canAttachImages = imageGenerationMode || modelSupportsImages;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,8 +108,13 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
 
     if (imageGenerationMode && onGenerateImage) {
       if (!message) return;
+      // The attachments are the edit base, not a chat message: they go to the
+      // image model, so the chat model's vision gate does not apply. They are
+      // cleared here because the call consumes them.
+      const images = pendingImages.map((image) => image.file);
       setInput("");
-      void onGenerateImage(message);
+      clearImages();
+      void onGenerateImage(message, images.length > 0 ? images : undefined);
       return;
     }
 
@@ -356,9 +379,17 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   }, [pendingImages]);
 
   // Switching to a text-only model hides the previews, so the attachments are
-  // dropped here rather than lingering invisibly until the next send.
+  // dropped here rather than lingering invisibly until the next send. In
+  // image-generation mode the attachments belong to the image model, so they
+  // stay: dropping them there would throw away the picture the user is about
+  // to edit.
   useEffect(() => {
-    if (modelSupportsImages || pendingImagesRef.current.length === 0) return;
+    if (
+      imageGenerationMode ||
+      modelSupportsImages ||
+      pendingImagesRef.current.length === 0
+    )
+      return;
     pendingImagesRef.current.forEach((image) =>
       URL.revokeObjectURL(image.previewUrl)
     );
@@ -369,7 +400,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
       description: "The selected model cannot read images.",
       duration: 4000,
     });
-  }, [modelSupportsImages, toast]);
+  }, [imageGenerationMode, modelSupportsImages, toast]);
 
   const extractFromImage = async (index: number) => {
     const file = pendingImages[index]?.file;
@@ -403,13 +434,37 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
   const hasMessage = input.trim().length > 0;
   const canSubmit = imageGenerationMode
     ? hasMessage && Boolean(onGenerateImage)
-    : hasMessage || (modelSupportsImages && pendingImages.length > 0);
+    : hasMessage ||
+      (modelSupportsImages && pendingImages.length > 0) ||
+      Boolean(injectedContext && injectedContext.items.length > 0);
+
+  const primaryContextImage = injectedContext?.items.find(isContextImageItem);
+  // The pill names the group and says what is inside it: how many items, plus
+  // the first text snippet, so the user can see the context that was injected
+  // without opening the panel again.
+  const injectedContextCount = injectedContext?.items.length ?? 0;
+  const injectedContextSnippet =
+    injectedContext?.items.find(isContextTextItem)?.label ?? "";
+  const { src: injectedContextThumb } = usePuterImage(
+    primaryContextImage?.refKind === "drive" ? primaryContextImage.ref : undefined,
+    primaryContextImage?.refKind === "data" ? primaryContextImage.ref : undefined
+  );
+
+  // Only explicit attachments on this turn trigger the attachment edit hint;
+  // reusable conversation context is selected explicitly via `injectedContext`
+  // rather than automatically locking onto the last image in the chat.
+  const editHint =
+    imageGenerationMode && pendingImages.length > 0
+      ? `${pendingImages.length} attached image${
+          pendingImages.length === 1 ? "" : "s"
+        } will be edited.`
+      : null;
 
   return (
     <div className={cn("composer-wrap", compact && "composer-wrap-compact")}>
       <form onSubmit={handleSubmit} className="composer-form">
         {/* Image previews */}
-        {modelSupportsImages && pendingImages.length > 0 && (
+        {canAttachImages && pendingImages.length > 0 && (
           <div className="composer-previews">
             {pendingImages.map((image, index) => (
               <div key={index} className="composer-preview group">
@@ -447,6 +502,47 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
           </div>
         )}
 
+        {injectedContext && (
+          <div className="composer-context-pill" role="status" aria-live="polite">
+            {injectedContextThumb && (
+              <img
+                src={injectedContextThumb}
+                alt=""
+                className="composer-context-pill-thumb"
+              />
+            )}
+            <span className="composer-context-pill-text">
+              <span className="composer-context-pill-title">
+                {injectedContext.title}
+              </span>
+              <span className="composer-context-pill-summary">
+                {injectedContextCount} item
+                {injectedContextCount === 1 ? "" : "s"}
+                {injectedContextSnippet ? ` · ${injectedContextSnippet}` : ""}
+              </span>
+            </span>
+            {onClearInjectedContext && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="composer-context-pill-remove tap-expand"
+                onClick={onClearInjectedContext}
+                title="Remove injected context"
+                aria-label={`Remove context ${injectedContext.title}`}
+              >
+                <X className="composer-mini-icon" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+        )}
+
+        {editHint && (
+          <p className="composer-edit-hint" aria-live="polite">
+            {editHint}
+          </p>
+        )}
+
         <div className="composer-box">
           <Textarea
             id={compact ? undefined : "chat-message-input"}
@@ -457,7 +553,9 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
             onKeyDown={handleKeyDown}
             placeholder={
               imageGenerationMode
-                ? "Describe an image to generate…"
+                ? pendingImages.length > 0
+                  ? "Describe the change to make…"
+                  : "Describe an image to generate…"
                 : modelSupportsImages
                   ? "Message (images supported)…"
                   : "Message FreeTalk…"
@@ -532,7 +630,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
               )}
             </div>
             <div className="composer-send-group">
-              {modelSupportsImages && (
+              {canAttachImages && (
                 <Button
                   type="button"
                   size="icon"
@@ -588,7 +686,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
           </div>
         </div>
 
-        {modelSupportsImages && (
+        {canAttachImages && (
           <input
             id="image-file-input"
             name="images"

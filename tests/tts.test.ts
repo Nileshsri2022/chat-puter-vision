@@ -125,3 +125,9 @@ test("stopAllSpeech pauses the current element", () => {
   stopAllSpeech();
   expect(paused).toBe(1);
 });
+
+test("tilde fenced code blocks become a placeholder", () => {
+  expect(stripMarkdownForSpeech("~~~js\nconst x = 1;\n~~~")).toBe(
+    "[code omitted]"
+  );
+});

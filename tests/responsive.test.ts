@@ -25,6 +25,7 @@ const stylesheets = [
   "components/CreditPill.css",
   "components/ErrorBoundary.css",
   "components/ArtifactsPanel.css",
+  "components/ContextsPanel.css",
   "components/ImageLightbox.css",
   "components/ArtifactRow.css",
   "components/TextPreviewDialog.css",
@@ -58,6 +59,7 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     "components/ChatInput.css",
     "components/ChatMessage.css",
     "components/ArtifactsPanel.css",
+    "components/ContextsPanel.css",
     "components/ArtifactRow.css",
   ]) {
     expect(read(file)).toContain("@media (hover: hover) and (pointer: fine)");
@@ -75,6 +77,9 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     ".msg-codeblock-copy",
     ".artifacts-tile-action",
     ".artifacts-close-btn",
+    ".contexts-close-btn",
+    ".context-thumb-locate",
+    ".context-item-action",
     ".artifact-row-action",
   ]) {
     expect(allCss).toContain(cls);
@@ -87,6 +92,7 @@ test("a hover-revealed action group also opens for keyboard focus", () => {
   // The reveal has to target the group, while focus is anywhere inside it.
   for (const [file, group] of [
     ["components/ArtifactsPanel.css", ".artifacts-tile-actions"],
+    ["components/ContextsPanel.css", ".context-thumb-actions"],
     ["components/ArtifactRow.css", ".artifact-row-actions"],
   ] as const) {
     const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
@@ -128,6 +134,7 @@ test("full-height regions use dvh rather than bare vh", () => {
     ["pages/Index.css", ".app-root"],
     ["components/ConversationSidebar.css", ".sidebar"],
     ["components/ArtifactsPanel.css", ".artifacts-panel"],
+    ["components/ContextsPanel.css", ".contexts-panel"],
   ] as const) {
     const block = new RegExp(
       `${rule.replace(".", "\\.")}\\s*\\{([^}]*)\\}`,
@@ -251,7 +258,10 @@ test("image generation uses the shared composer and keeps its mode active", () =
   expect(input).toContain('aria-pressed={imageGenerationMode}');
   expect(input).toContain('imageGenerationMode && "composer-tool-btn-active"');
   expect(input).toContain("if (imageGenerationMode && onGenerateImage)");
-  expect(input).toContain("void onGenerateImage(message)");
+  // The attachments come along: they are the image the prompt edits.
+  expect(input).toContain(
+    "void onGenerateImage(message, images.length > 0 ? images : undefined)"
+  );
   expect(input).toContain('title={imageGenerationMode ? "Generate image" : "Send message"}');
 });
 
@@ -491,8 +501,10 @@ test("attachments are persisted in the background and never block a send", () =>
   // before the write lands, and a Drive failure cannot lose the message.
   expect(helper).toContain("void persistAttachment(");
   expect(helper).not.toMatch(/await persistAttachment/);
-  // Both send paths keep the refs, or an edited message loses its images.
-  expect(page.match(/attachments: attachmentRefs/g)?.length).toBe(2);
+  // Every send path keeps the refs, or a message loses its images: the chat
+  // send, the edit, and the image-generation turn (whose attachments are the
+  // image the prompt edits).
+  expect(page.match(/attachments: attachmentRefs/g)?.length).toBe(3);
 });
 
 test("the panel never claims an image it cannot resolve", () => {

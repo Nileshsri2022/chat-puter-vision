@@ -63,6 +63,37 @@
   @apply size-4 animate-spin rounded-full border border-current border-t-transparent;
 }
 
+/* What the next image prompt will act on. */
+.composer-edit-hint {
+  @apply px-1 text-xs text-muted-foreground;
+}
+
+/* Dismissible injected Context Group pill above the input box. */
+.composer-context-pill {
+  @apply mx-auto inline-flex max-w-full items-center gap-2.5 self-center rounded-xl border border-border bg-card/90 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm;
+}
+
+.composer-context-pill-thumb {
+  @apply size-7 shrink-0 rounded-md border border-border object-cover;
+}
+
+.composer-context-pill-text {
+  @apply flex min-w-0 flex-col leading-tight;
+}
+
+.composer-context-pill-title {
+  @apply min-w-0 truncate;
+}
+
+.composer-context-pill-summary {
+  @apply text-[11px] font-normal text-muted-foreground;
+}
+
+.composer-context-pill-remove {
+  @apply size-6 shrink-0 rounded-full tap-expand text-muted-foreground hover:text-foreground;
+  --tap-size: 32px;
+}
+
 /* Composer box */
 .composer-box {
   @apply rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md;

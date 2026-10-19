@@ -18,9 +18,20 @@ import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { usePuterImage } from "@/hooks/usePuterImage";
+import type { EditedFrom } from "@/lib/backend";
 import type { ModelCatalog } from "@/lib/models";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import { stripImageMarker } from "@/lib/attachments";
+import {
+  CONTEXT_DRAG_MIME,
+  encodeContextDragPayload,
+  type ContextDropPayload,
+} from "@/lib/contextGroups";
+
+/** The text-shaped members of a context payload (everything but images). */
+type ContextTextPayload = Extract<ContextDropPayload, { text: string }>;
+/** The image-shaped member of a context payload. */
+type ContextImagePayload = Extract<ContextDropPayload, { kind: "image" }>;
 import "./ChatMessage.css";
 
 interface ChatMessageProps {
@@ -31,10 +42,17 @@ interface ChatMessageProps {
   image?: string;
   /** Puter path of a generated image; loaded from Puter storage for display. */
   imagePath?: string;
+  /**
+   * Set when this image was produced by editing an earlier one. The caption
+   * tells the reader the picture is an edit, not a fresh generation.
+   */
+  editedFrom?: EditedFrom;
   /** The model summarized earlier turns to produce this reply. */
   compacted?: boolean;
   /** Position in the transcript; tags the node for in-conversation search. */
   messageIndex?: number;
+  /** Conversation ID for context source provenance (`→` jump to source). */
+  conversationId?: string;
   /** In-conversation search: this message contains the query. */
   searchMatch?: boolean;
   /** In-conversation search: this is the match the finder is sitting on. */
@@ -62,7 +80,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, compacted, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -71,6 +89,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { src: imageSrc, failed: imageFailed } = usePuterImage(imagePath, image);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
 
   const speakable = !isUser && stripMarkdownForSpeech(content).trim().length > 0;
 
@@ -150,6 +169,97 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
 
   const getModelDisplayName = (modelId?: string) => modelDisplayName(modelId);
 
+  const sourceBase =
+    conversationId && typeof messageIndex === "number"
+      ? { conversationId, messageIndex }
+      : undefined;
+
+  const buildTextPayload = (rawText?: string): ContextTextPayload | null => {
+    const clean = (rawText ?? stripImageMarker(stripThinkBlocks(content))).trim();
+    if (!clean) return null;
+    const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Message";
+    // highlightText must match the *rendered* plain text, not the raw markdown,
+    // otherwise locating a bold/list/table snippet would never find its highlight
+    // (for example "**Factoring**" renders as "Factoring", and a list dash
+    // before "searching" is not part of the text node).
+    const plainForHighlight = rawText
+      ? rawText.trim().slice(0, 120)
+      : stripMarkdownForSpeech(clean).trim().slice(0, 120) || clean.slice(0, 120);
+    return {
+      kind: "text",
+      text: clean,
+      label: firstLine.length < clean.length ? `${firstLine}…` : firstLine,
+      ...(sourceBase
+        ? { source: { ...sourceBase, highlightText: plainForHighlight } }
+        : {}),
+    };
+  };
+
+  const buildImagePayload = (): ContextImagePayload | null => {
+    if (imagePath) {
+      return {
+        kind: "image",
+        ref: imagePath,
+        refKind: "drive",
+        origin: "generated",
+        label: "Generated image",
+        ...(sourceBase ? { source: sourceBase } : {}),
+      };
+    }
+    if (image && image.startsWith("data:")) {
+      return {
+        kind: "image",
+        ref: image,
+        refKind: "data",
+        origin: "generated",
+        label: "Generated image",
+        ...(sourceBase ? { source: sourceBase } : {}),
+      };
+    }
+    return null;
+  };
+
+  /**
+   * The part of the current window selection that sits inside this message,
+   * or "" when there is none. Dragging the message into the Contexts panel
+   * is paused while a selection is live, so selecting text never starts a
+   * drag by accident.
+   */
+  const selectionInMessage = (): string => {
+    const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
+    const raw = sel?.toString().trim() ?? "";
+    if (!raw) return "";
+    const container = messageContainerRef.current;
+    if (!container) return "";
+    const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+    const common = range?.commonAncestorContainer ?? null;
+    if (!common) return "";
+    let node: Node | null = common;
+    while (node) {
+      if (node === container) return raw;
+      node = node.parentNode;
+    }
+    // Selection ends outside this message: still accept it when the message
+    // visibly contains the highlighted words (a drag can extend a few chars
+    // past the bubble without changing what the user meant).
+    const probe = raw.slice(0, 40).replace(/\s+/g, " ");
+    const visible = (container.textContent ?? "").replace(/\s+/g, " ");
+    return probe && visible.includes(probe) ? raw : "";
+  };
+
+  // Track whether the live selection is inside this message, so the
+  // drag-to-context handles below stay inert while the user is selecting.
+  const [selectionActive, setSelectionActive] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      setSelectionActive(Boolean(selectionInMessage()));
+    };
+    document.addEventListener("selectionchange", read);
+    return () => document.removeEventListener("selectionchange", read);
+    // The listener only re-reads the DOM through a stable ref, so mounting it
+    // once is correct: a new one per render would churn every message anyway.
+  }, []);
+
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a
   // response can never inject markup/scripts.
@@ -175,8 +285,56 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
       setTimeout(() => setCodeCopied(false), 1500);
     };
 
+    const handleCodeDragStart = (e: React.DragEvent) => {
+      const selected = window.getSelection?.()?.toString().trim() ?? "";
+      const raw =
+        selected ||
+        preRef.current?.querySelector("code")?.innerText ||
+        preRef.current?.innerText ||
+        "";
+      const clean = raw.trim();
+      if (!clean) return;
+      const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Code";
+      // Pull the language from the language-xxx class react-markdown emits.
+      let language: string | undefined;
+      try {
+        const codeEl = preRef.current?.querySelector("code");
+        const cls = (codeEl as HTMLElement | null)?.className ?? "";
+        const m = /language-([a-z0-9+-]+)/i.exec(cls);
+        if (m) language = m[1].toLowerCase();
+      } catch {
+        // No language class to read; send the code without one.
+      }
+      const payload: ContextDropPayload = {
+        kind: "code",
+        text: clean,
+        label: `</> ${firstLine}`,
+        ...(language ? { language } : {}),
+        ...(sourceBase
+          ? {
+              source: {
+                ...sourceBase,
+                at,
+                highlightText: stripMarkdownForSpeech(clean).slice(0, 80) || clean.slice(0, 80),
+              },
+            }
+          : {}),
+      };
+      e.dataTransfer.setData(CONTEXT_DRAG_MIME, encodeContextDragPayload(payload));
+      e.dataTransfer.setData("text/plain", clean);
+      try {
+        e.dataTransfer.effectAllowed = "copy";
+      } catch {
+        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
+      }
+    };
+
     return (
-      <div className="msg-codeblock group/code" data-artifact-at={at}>
+      <div
+        className="msg-codeblock group/code" data-artifact-at={at}
+        draggable={!selectionActive}
+        onDragStart={handleCodeDragStart}
+      >
         <pre
           ref={preRef}
           className="msg-codeblock-pre"
@@ -281,6 +439,77 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     ),
   };
 
+  // Wrap a rendered table so it can be dragged into the Contexts panel as a
+  // proper \"table\" item (with source.at for block-level locate). The text we
+  // drag is the Markdown the artifacts panel extracts — but for the ad-hoc drag
+  // we reconstruct a simple pipe table from the rendered cells; it's enough for
+  // context injection.
+  const TableWrap = ({ at, children }: { at?: number; children: React.ReactNode }) => {
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const handleTableDragStart = (e: React.DragEvent) => {
+      const wrap = wrapRef.current;
+      let text = "";
+      if (wrap) {
+        // Rebuild a minimal Markdown table from the rendered DOM so the context
+        // keeps the structure (| col | col |) instead of a flat string.
+        const table = wrap.querySelector("table");
+        if (table) {
+          const rows = Array.from(table.querySelectorAll("tr"));
+          const mdRows = rows.map((tr) => {
+            const cells = Array.from(tr.querySelectorAll("th, td")).map((c) =>
+              (c.textContent ?? "").trim().replace(/\|/g, "\\|")
+            );
+            return `| ${cells.join(" | ")} |`;
+          });
+          if (mdRows.length >= 1) {
+            const header = mdRows[0];
+            const cols = header.split("|").length - 2;
+            const sep = `| ${Array(cols).fill("---").join(" | ")} |`;
+            mdRows.splice(1, 0, sep);
+          }
+          text = mdRows.join("\n");
+        } else {
+          text = wrap.innerText.trim();
+        }
+      }
+      const clean = text.trim();
+      if (!clean) return;
+      const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Table";
+      const payload: ContextDropPayload = {
+        kind: "table",
+        text: clean,
+        label: `▦ ${firstLine}`,
+        ...(sourceBase
+          ? {
+              source: {
+                ...sourceBase,
+                at,
+                highlightText: clean.slice(0, 80),
+              },
+            }
+          : {}),
+      };
+      e.dataTransfer.setData(CONTEXT_DRAG_MIME, encodeContextDragPayload(payload));
+      e.dataTransfer.setData("text/plain", clean);
+      try {
+        e.dataTransfer.effectAllowed = "copy";
+      } catch {
+        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
+      }
+    };
+    return (
+      <div
+        ref={wrapRef}
+        className="md-table-wrap"
+        data-artifact-at={at}
+        draggable
+        onDragStart={handleTableDragStart}
+      >
+        <table className="md-table">{children}</table>
+      </div>
+    );
+  };
+
   // The answer stamps each code block and table with its offset in `answer`
   // (`data-artifact-at`), matching what lib/artifactBlocks.ts computes, so
   // the artifacts panel can locate one block rather than the whole message.
@@ -290,9 +519,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     ...markdownComponents,
     pre: ({ node, children }) => <CodeBlock at={node?.position?.start.offset}>{children}</CodeBlock>,
     table: ({ node, children }) => (
-      <div className="md-table-wrap" data-artifact-at={node?.position?.start.offset}>
-        <table className="md-table">{children}</table>
-      </div>
+      <TableWrap at={node?.position?.start.offset}>{children}</TableWrap>
     ),
   };
 
@@ -300,6 +527,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     <>
       {isUser ? (
         <div
+          ref={messageContainerRef}
           className={cn(
             "msg-user-col",
             searchMatch && "msg-search-match",
@@ -326,7 +554,27 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
               <div className="msg-user-row">
                 {/* `data-search-text` tags the regions in-conversation search
                     scans — see lib/utils/highlight.ts. */}
-                <div className="msg-user-bubble" data-search-text>
+                <div
+                  className="msg-user-bubble"
+                  data-search-text
+                  draggable={!selectionActive}
+                  onDragStart={(e) => {
+                    const selected = window.getSelection?.()?.toString()?.trim();
+                    const payload = buildTextPayload(selected || undefined);
+                    if (payload) {
+                      e.dataTransfer.setData(
+                        CONTEXT_DRAG_MIME,
+                        encodeContextDragPayload(payload)
+                      );
+                      e.dataTransfer.setData("text/plain", payload.text);
+                      try {
+        e.dataTransfer.effectAllowed = "copy";
+      } catch {
+        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
+      }
+                    }
+                  }}
+                >
                   {content}
                 </div>
               </div>
@@ -363,6 +611,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
         </div>
       ) : (
         <div
+          ref={messageContainerRef}
           className={cn(
             "msg-row group",
             searchMatch && "msg-search-match",
@@ -385,6 +634,16 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 alt="Generated image"
                 className="msg-image"
                 loading="lazy"
+                draggable
+                onDragStart={(e) => {
+                  const payload = buildImagePayload();
+                  if (payload) {
+                    e.dataTransfer.setData(
+                      CONTEXT_DRAG_MIME,
+                      encodeContextDragPayload(payload)
+                    );
+                  }
+                }}
                 role="button"
                 tabIndex={0}
                 title="Open image preview"
@@ -394,6 +653,13 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                   if (e.key === "Enter" || e.key === " ") setPreviewOpen(true);
                 }}
               />
+            )}
+            {imageSrc && editedFrom && (
+              <div className="msg-image-caption">
+                {editedFrom.origin === "attachment"
+                  ? "Edited from an attached image"
+                  : "Edited from the previous image"}
+              </div>
             )}
             {(thinking || thinkingOpen) && (
               <div className="msg-think-wrap">
@@ -427,7 +693,33 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 )}
               </div>
             )}
-            <div className="msg-answer" data-search-text>
+            <div
+              className="msg-answer"
+              data-search-text
+              draggable={!selectionActive}
+              onDragStart={(e) => {
+                // Prefer the user's current selection when dragging from the
+                // answer; fallback to the whole message (buildTextPayload handles it).
+                const selected = window.getSelection?.()?.toString()?.trim();
+                const payload = buildTextPayload(selected || undefined);
+                if (payload) {
+                  e.dataTransfer.setData(
+                    CONTEXT_DRAG_MIME,
+                    encodeContextDragPayload(payload)
+                  );
+                  // Also set plain text for external drops (e.g. dragging to
+                  // another app) — but keep our custom MIME primary so
+                  // ContextsPanel's drop handler can pick up provenance.
+                  e.dataTransfer.setData("text/plain", payload.text);
+                  // Some browsers (Safari) require effectAllowed to be set.
+                  try {
+        e.dataTransfer.effectAllowed = "copy";
+      } catch {
+        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
+      }
+                }
+              }}
+            >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={answerComponents}

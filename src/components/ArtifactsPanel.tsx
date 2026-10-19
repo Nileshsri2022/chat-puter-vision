@@ -52,6 +52,8 @@ interface ArtifactsPanelProps {
   onToggle: () => void;
   /** Scroll the transcript to this message (or one block in it) and flash it. */
   onLocate: (messageIndex: number, opts?: LocateOptions) => void;
+  /** Add an artifact into the active Context Group. */
+  onAddToContext?: (artifact: Artifact) => void;
 }
 
 const SectionTitle = ({ label, count }: { label: string; count: number }) => (
@@ -80,6 +82,7 @@ export const ArtifactsPanel = ({
   isOpen,
   onToggle,
   onLocate,
+  onAddToContext,
 }: ArtifactsPanelProps) => {
   const [filter, setFilter] = useState<Filter>("all");
   const [preview, setPreview] = useState<{ src: string; label: string } | null>(null);
@@ -138,6 +141,9 @@ export const ArtifactsPanel = ({
           position={`message ${artifact.messageIndex + 1}`}
           onLocate={() => onLocate(artifact.messageIndex, { at: artifact.at })}
           onPreview={() => setTextPreview(artifact)}
+          onAddToContext={
+            onAddToContext ? () => onAddToContext(artifact) : undefined
+          }
         />
       ))}
     </div>
@@ -217,6 +223,9 @@ export const ArtifactsPanel = ({
                         position={`message ${artifact.messageIndex + 1}`}
                         onLocate={() => onLocate(artifact.messageIndex)}
                         onPreview={(src) => setPreview({ src, label: artifact.label })}
+                        onAddToContext={
+                          onAddToContext ? () => onAddToContext(artifact) : undefined
+                        }
                       />
                     ))}
                     {showPending && (

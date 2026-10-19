@@ -3,6 +3,7 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { ArtifactsPanel } from "@/components/ArtifactsPanel";
+import { ContextsPanel } from "@/components/ContextsPanel";
 import { AuthButton } from "@/components/AuthButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileDialog, type ProfilePatch } from "@/components/ProfileDialog";
@@ -21,15 +22,23 @@ import {
   type AttachmentRef,
   type BackendUser,
   type CompactionItem,
+  type ImageOrigin,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
-import { deleteImage, generateImage, loadImageBlob, newAttachmentPath, persistAttachment } from "@/lib/images";
+import { deleteImage, generateImage, loadImageBlob, loadImageDataUrl, newAttachmentPath, persistAttachment } from "@/lib/images";
 import { reclaimImagePaths } from "@/lib/artifacts";
+import {
+  artifactToContextPayload,
+  combinePromptWithContext,
+  resolveContextGroupForTask,
+} from "@/lib/contextGroups";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
+import { isImageUrl } from "@/lib/dataUrl";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
   getModelCatalog,
   contextPlanFor,
+  modelSupportsVision,
   resolveDefaultModel,
   DEFAULT_MODEL_ID,
   type ModelCatalog,
@@ -39,7 +48,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaQuery, DESKTOP_QUERY } from "@/hooks/useMediaQuery";
 import { useArtifactsPanel } from "@/hooks/useArtifactsPanel";
-import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Layers } from "lucide-react";
+import { useContextsPanel } from "@/hooks/useContextsPanel";
+import { Sparkles, PanelLeftOpen, Share2, Plus, Search, X, ChevronUp, ChevronDown, Layers, FolderInput } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./Index.css";
 import { saveConversations, loadConversations, saveCurrentConversationId, loadCurrentConversationId } from "@/lib/utils/storage";
@@ -260,7 +270,12 @@ const Index = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
-  const messages = currentConversation?.messages || [];
+  // Memoised so the identity is stable: a fresh [] on every render would make
+  // every effect and memo that depends on `messages` re-run for nothing.
+  const messages = useMemo(
+    () => currentConversation?.messages ?? [],
+    [currentConversation]
+  );
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -270,6 +285,31 @@ const Index = () => {
   // The artifacts panel's open state, derived lists and locate (see the hook).
   const { artifactsOpen, setArtifactsOpen, artifacts, unsavedAttachments, locateMessage } =
     useArtifactsPanel({ scrollRef, conversation: currentConversation });
+
+  // The explicit Contexts panel and composer-injected Context Group.
+  const {
+    contextsOpen,
+    setContextsOpen,
+    contextGroups,
+    expandedGroupId,
+    setExpandedGroupId,
+    injectedContext,
+    createGroup,
+    addItem,
+    addFilesToContext,
+    removeItem,
+    deleteGroup,
+    renameGroup,
+    injectGroup,
+    clearInjectedContext,
+    locateContextItem,
+    resolveTextSource,
+  } = useContextsPanel({
+    scrollRef,
+    currentConversationId,
+    onSelectConversation: setCurrentConversationId,
+    busy: isStreaming || isGeneratingImage,
+  });
 
   const searchTerm = searchQuery.trim().toLowerCase();
 
@@ -491,10 +531,52 @@ const Index = () => {
       }
     }
 
-    // Create user message with content and image info if present
+    // Resolve any explicitly injected Context Group for this turn.
+    let aiPrompt = content;
+    if (injectedContext) {
+      try {
+        const resolved = await resolveContextGroupForTask(
+          injectedContext,
+          loadImageDataUrl
+        );
+        aiPrompt = combinePromptWithContext(
+          content,
+          injectedContext.title,
+          resolved.contextText,
+          "chat",
+          resolved.itemSummary
+        );
+        // Only URLs the chat API can resolve may reach the request; anything
+        // else is reported instead of failing the whole message.
+        const usableContextImages = resolved.imageDataUrls.filter(isImageUrl);
+        if (resolved.missingImages > 0 || usableContextImages.length !== resolved.imageDataUrls.length) {
+          notifyContextImagesSkipped();
+        }
+        if (
+          usableContextImages.length > 0 &&
+          modelSupportsVision(selectedModelId, modelCatalog)
+        ) {
+          imageUrls = [...usableContextImages, ...imageUrls];
+        }
+      } catch {
+        toast({
+          title: "Could not read context image",
+          description: "One of the images in the injected context could not be loaded.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
+    // Create user message with content and attachment info if present.
+    // `imageUrls` also holds images resolved from the injected Context Group,
+    // but those are prompt context, not attachments: counting them here used
+    // to make a context-only turn read "[Images: 1 attached]" in the
+    // transcript and made the artifacts panel report an unsaved attachment.
     let messageContent = content;
-    if (imageUrls.length > 0) {
-      messageContent = appendImageMarker(content, imageUrls.length);
+    if (attachmentRefs.length > 0) {
+      messageContent = appendImageMarker(content, attachmentRefs.length);
     }
 
     const userMessage: Message = {
@@ -522,7 +604,7 @@ const Index = () => {
       baseMessages: updatedMessages,
       rollbackMessages: messages,
       history: toHistory(messages),
-      prompt: content,
+      prompt: aiPrompt,
       modelId: selectedModelId,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     }).then((delivered) => {
@@ -530,6 +612,17 @@ const Index = () => {
       // stored for it a moment ago are ours to reclaim.
       if (!delivered) {
         for (const ref of attachmentRefs) void deleteImage(ref.path);
+      } else if (injectedContext) {
+        // The group was attached to this message. Keep it available in the
+        // panel, but stop silently re-sending it with every later turn — and
+        // say so, or the pill vanishing looks like the context was dropped.
+        const appliedTitle = injectedContext.title;
+        clearInjectedContext();
+        toast({
+          title: "Context applied",
+          description: `“${appliedTitle}” was attached to this message.`,
+          duration: 3000,
+        });
       }
     });
   };
@@ -739,7 +832,7 @@ const Index = () => {
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
   };
-  const handleGenerateImage = async (prompt: string) => {
+  const handleGenerateImage = async (prompt: string, images?: File[]) => {
     if (!currentConversation) return;
     if (!isAuthenticated) {
       toast({
@@ -750,7 +843,82 @@ const Index = () => {
       });
       return;
     }
-    const userMessage: Message = { role: "user", content: prompt };
+
+    // Attachments on this turn are the edit base: the image model receives
+    // their pixels, so the prompt can talk about "the image" and mean it.
+    let dataUrls: string[] = [];
+    let attachmentRefs: AttachmentRef[] = [];
+    if (images && images.length > 0) {
+      try {
+        ({ dataUrls, refs: attachmentRefs } =
+          await prepareAndStoreAttachments(images, notifyStoreFailed));
+      } catch (error) {
+        toast({
+          title: "Image processing failed",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to process images. Please try again.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
+    // Explicit context selection: use this turn's manual attachments and/or
+    // the explicitly injected Context Group. With neither present, generate a
+    // brand-new image from scratch instead of automatically locking onto the
+    // last image in the conversation.
+    let inputImages = dataUrls;
+    let generationPrompt = prompt;
+    let base: { src: string; origin: ImageOrigin } | null =
+      attachmentRefs.length > 0
+        ? { src: attachmentRefs[0].path, origin: "attachment" }
+        : null;
+
+    if (injectedContext) {
+      try {
+        const resolved = await resolveContextGroupForTask(
+          injectedContext,
+          loadImageDataUrl
+        );
+        generationPrompt = combinePromptWithContext(
+          prompt,
+          injectedContext.title,
+          resolved.contextText,
+          "image"
+        );
+        const usableContextImages = resolved.imageDataUrls.filter(isImageUrl);
+        if (resolved.missingImages > 0 || usableContextImages.length !== resolved.imageDataUrls.length) {
+          notifyContextImagesSkipped();
+        }
+        if (usableContextImages.length > 0) {
+          inputImages = [...inputImages, ...usableContextImages];
+          if (!base && resolved.primaryImageBase) {
+            base = resolved.primaryImageBase;
+          }
+        }
+      } catch {
+        toast({
+          title: "Could not read the image to edit",
+          description:
+            "It may have been deleted. Attach it again to edit it.",
+          variant: "destructive",
+          duration: 6000,
+        });
+        return;
+      }
+    }
+
+    const userMessage: Message = {
+      role: "user",
+      content:
+        attachmentRefs.length > 0
+          ? appendImageMarker(prompt, attachmentRefs.length)
+          : prompt,
+      ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+    };
     const withPrompt = [...messages, userMessage];
     setConversations((prev) =>
       prev.map((conv) =>
@@ -765,8 +933,13 @@ const Index = () => {
     );
     setIsGeneratingImage(true);
     try {
-      const path = await generateImage(prompt);
-      const assistantMessage: Message = { role: "assistant", content: "", imagePath: path };
+      const path = await generateImage(generationPrompt, { inputImages });
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: "",
+        imagePath: path,
+        ...(base ? { editedFrom: base } : {}),
+      };
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === currentConversationId
@@ -774,6 +947,7 @@ const Index = () => {
             : conv
         )
       );
+      if (injectedContext) clearInjectedContext();
     } catch (error) {
       toast({
         title: "Image generation failed",
@@ -786,6 +960,9 @@ const Index = () => {
           conv.id === currentConversationId ? { ...conv, messages } : conv
         )
       );
+      // The turn rolled back, so nothing points at the files it stored a
+      // moment ago: they are ours to reclaim.
+      for (const ref of attachmentRefs) void deleteImage(ref.path);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -1004,6 +1181,20 @@ const Index = () => {
   };
 
   /**
+   * Some image in the injected Context Group could not be turned into a URL
+   * the model accepts (deleted file, stale reference). The turn still goes
+   * ahead with the text and the images that did resolve.
+   */
+  const notifyContextImagesSkipped = useCallback(() => {
+    toast({
+      title: "Some context images were skipped",
+      description:
+        "They could not be read from storage, so this message went out with the rest of the context. Re-add them to the context to include them.",
+      duration: 6000,
+    });
+  }, [toast]);
+
+  /**
    * An attachment that reached the model but could not be stored: the send
    * still succeeded, so this is a warning rather than an error, but staying
    * quiet would leave the images panel short of an image with no explanation.
@@ -1122,7 +1313,7 @@ const Index = () => {
         className={cn(
           "app-main",
           sidebarOpen ? "app-main-sidebar-open" : "app-main-sidebar-closed",
-          artifactsOpen && "app-main-artifacts-open"
+          (artifactsOpen || contextsOpen) && "app-main-artifacts-open"
         )}
       >
         <header className="app-header">
@@ -1201,14 +1392,21 @@ const Index = () => {
               </button>
             ))}
           <div className="app-header-group app-header-group-end">
-            {/* Conversation-level actions: the artifacts panel, share/export
-                and theme. The account lives in the sidebar footer now. */}
+            {/* Conversation-level actions: the artifacts panel, the contexts
+                panel, share/export and theme. The account lives in the sidebar
+                footer now. */}
             {isAuthenticated && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="app-icon-btn app-header-artifacts"
-                onClick={() => setArtifactsOpen((open) => !open)}
+                onClick={() => {
+                  setArtifactsOpen((open) => {
+                    const next = !open;
+                    if (next) setContextsOpen(false);
+                    return next;
+                  });
+                }}
                 title="Artifacts in this conversation"
                 aria-label={`Artifacts in this conversation${
                   artifacts.length > 0 ? ` (${artifacts.length})` : ""
@@ -1236,6 +1434,35 @@ const Index = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+            {isAuthenticated && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "app-icon-btn app-header-contexts",
+                  contextsOpen && "app-header-contexts-active"
+                )}
+                onClick={() => {
+                  setContextsOpen((open) => {
+                    const next = !open;
+                    if (next) setArtifactsOpen(false);
+                    return next;
+                  });
+                }}
+                title="Contexts"
+                aria-label={`Contexts${
+                  contextGroups.length > 0 ? ` (${contextGroups.length})` : ""
+                }`}
+                aria-expanded={contextsOpen}
+              >
+                <FolderInput className="app-header-icon" aria-hidden="true" />
+                {contextGroups.length > 0 && (
+                  <span className="app-header-artifacts-count" aria-hidden="true">
+                    {contextGroups.length}
+                  </span>
+                )}
+              </Button>
             )}
             <ThemeToggle />
           </div>
@@ -1356,8 +1583,10 @@ const Index = () => {
                       model={message.model}
                       image={message.image}
                       imagePath={message.imagePath}
+                      editedFrom={message.editedFrom}
                       compacted={!!message.compaction}
                       messageIndex={index}
+                      conversationId={currentConversationId}
                       searchMatch={searchMatches.includes(index)}
                       searchActive={searchMatches[activeMatch] === index}
                       onCopy={handleCopyMessage}
@@ -1397,6 +1626,8 @@ const Index = () => {
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
                 modelCatalog={modelCatalog}
+                injectedContext={injectedContext}
+                onClearInjectedContext={clearInjectedContext}
               />
             </div>
           </>
@@ -1413,6 +1644,34 @@ const Index = () => {
           isOpen={artifactsOpen}
           onToggle={() => setArtifactsOpen((open) => !open)}
           onLocate={locateMessage}
+          onAddToContext={(artifact) => {
+            const payload = artifactToContextPayload(artifact, currentConversationId);
+            if (!payload) return;
+            addItem(payload);
+            setArtifactsOpen(false);
+            setContextsOpen(true);
+          }}
+        />
+      )}
+
+      {/* Explicit Contexts panel — collapsible multi-item Context Groups. */}
+      {isAuthenticated && (
+        <ContextsPanel
+          contextGroups={contextGroups}
+          expandedGroupId={expandedGroupId}
+          injectedGroupId={injectedContext?.id ?? null}
+          isOpen={contextsOpen}
+          onToggle={() => setContextsOpen((open) => !open)}
+          onExpandGroup={setExpandedGroupId}
+          onCreateGroup={(seed) => createGroup(seed)}
+          onAddItem={addItem}
+          onAddFiles={(files, targetGroupId) => void addFilesToContext(files, targetGroupId)}
+          onRemoveItem={removeItem}
+          onDeleteGroup={deleteGroup}
+          onRenameGroup={renameGroup}
+          onInjectGroup={injectGroup}
+          onLocateItem={locateContextItem}
+          resolveTextSource={resolveTextSource}
         />
       )}
     </div>

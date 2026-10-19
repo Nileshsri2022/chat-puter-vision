@@ -38,26 +38,83 @@ function textNodes(root: Node): Text[] {
   return nodes;
 }
 
+/** A match's character span in the concatenated text of a region. */
+export interface MatchSpan {
+  start: number;
+  end: number;
+}
+
+/**
+ * Every case-insensitive occurrence of `query` in `texts` read as one string.
+ *
+ * Splitting the query across the parts is the whole point: markdown renders
+ * "**quantum** algorithms" as two text nodes, and a phrase that a user
+ * selected naturally spans them. Pure, so the offset maths is testable
+ * without a DOM.
+ */
+export function findMatchSpans(texts: string[], query: string): MatchSpan[] {
+  const needle = query.toLowerCase();
+  if (!needle) return [];
+  const haystack = texts.join("").toLowerCase();
+  const spans: MatchSpan[] = [];
+  for (
+    let at = haystack.indexOf(needle);
+    at !== -1;
+    at = haystack.indexOf(needle, at + needle.length)
+  ) {
+    spans.push({ start: at, end: at + needle.length });
+  }
+  return spans;
+}
+
 /**
  * Every case-insensitive occurrence of `query` inside the rendered message, as
  * DOM ranges in document order.
  *
  * Only `[data-search-text]` regions are scanned, so a search for "copy" hits
  * the answer and never the message toolbar.
+ *
+ * Matches are located across the region's text nodes, not within each one, so
+ * a phrase that straddles bold text or an inline code span is still found.
  */
 export function collectMatchRanges(root: HTMLElement, query: string): Range[] {
-  const needle = query.toLowerCase();
-  if (!needle) return [];
+  if (!query.trim()) return [];
 
   const ranges: Range[] = [];
   for (const region of Array.from(root.querySelectorAll(SEARCHABLE_REGION))) {
-    for (const text of textNodes(region)) {
-      const haystack = text.data.toLowerCase();
-      for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + needle.length)) {
+    const nodes = textNodes(region);
+    if (nodes.length === 0) continue;
+
+    const spans = findMatchSpans(
+      nodes.map((node) => node.data),
+      query
+    );
+    if (spans.length === 0) continue;
+
+    // Map a character offset in the concatenated text back to (node, offset).
+    const locate = (offset: number): { node: Text; offset: number } | null => {
+      let cursor = 0;
+      for (const node of nodes) {
+        const end = cursor + node.data.length;
+        if (offset >= cursor && offset < end) {
+          return { node, offset: offset - cursor };
+        }
+        cursor = end;
+      }
+      return null;
+    };
+
+    for (const span of spans) {
+      const start = locate(span.start);
+      const end = locate(span.end - 1);
+      if (!start || !end) continue;
+      try {
         const range = document.createRange();
-        range.setStart(text, at);
-        range.setEnd(text, at + needle.length);
+        range.setStart(start.node, start.offset);
+        range.setEnd(end.node, end.offset + 1);
         ranges.push(range);
+      } catch {
+        // Offsets went stale between the walk and the range; skip this hit.
       }
     }
   }
