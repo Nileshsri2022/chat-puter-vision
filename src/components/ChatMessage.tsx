@@ -291,8 +291,8 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     };
     document.addEventListener("selectionchange", read);
     return () => document.removeEventListener("selectionchange", read);
-    // Both members are stable per render; the listener just re-reads the DOM.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // The listener only re-reads the DOM through a stable ref, so mounting it
+    // once is correct: a new one per render would churn every message anyway.
   }, []);
 
   const addToContextLabel = selectionActive
