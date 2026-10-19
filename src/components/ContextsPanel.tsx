@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Code2, FileText,
-  MoreHorizontal, Pencil, Plus, Table2, Trash2, X,
+  ArrowLeft, ChevronDown, ChevronRight, Code2, FileText,
+  Pencil, Plus, Table2, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ContextItemActionsMenu } from "@/components/ContextItemActionsMenu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import { cn } from "@/lib/utils";
@@ -36,23 +37,17 @@ interface ContextsPanelProps {
   onLocateItem: (source: ContextSourceRef) => void;
   /** Best-effort provenance for a plain-text drop. */
   resolveTextSource?: (text: string) => ContextSourceRef | undefined;
-  /** Optional controlled item id whose `...` action strip (`←`, `→`, `×`) is open. */
+  /** Optional controlled item id whose shared `...` action menu is open. */
   openActionItemId?: string | null;
 }
 
-/** `←` copy for an item: inject it, or take it back out of the composer. */
-function injectActionLabel(label: string, active: boolean): string {
-  return active ? `Remove ${label} from input context` : `Inject ${label} into input`;
-}
-
 const ContextThumb = ({
-  item, isInjected, isMenuOpen, onToggleMenu, onCloseMenu, onInject, onRemove, onLocate,
+  item, isInjected, isMenuOpen, onMenuOpenChange, onInject, onRemove, onLocate,
 }: {
   item: ContextImageItem;
   isInjected?: boolean;
   isMenuOpen: boolean;
-  onToggleMenu: () => void;
-  onCloseMenu: () => void;
+  onMenuOpenChange: (open: boolean) => void;
   onInject?: () => void;
   onRemove: () => void;
   onLocate?: () => void;
@@ -73,61 +68,16 @@ const ContextThumb = ({
         className={cn("context-thumb-actions", isMenuOpen && "context-thumb-actions-open")}
         onClick={(e) => e.stopPropagation()}
       >
-        {isMenuOpen ? (
-          <div className="context-thumb-menu" role="group" aria-label={`Actions for ${item.label}`}>
-            {onInject && (
-              <button
-                type="button"
-                className={cn("context-thumb-inject tap-expand", isInjected && "context-thumb-inject-active")}
-                onClick={() => { onInject(); onCloseMenu(); }}
-                title={injectActionLabel(item.label, Boolean(isInjected))}
-                aria-label={injectActionLabel(item.label, Boolean(isInjected))}
-                aria-pressed={Boolean(isInjected)}
-              >
-                <ArrowLeft className="context-thumb-icon" aria-hidden="true" />
-              </button>
-            )}
-            {onLocate ? (
-              <button
-                type="button"
-                className="context-thumb-locate tap-expand"
-                onClick={() => { onLocate(); onCloseMenu(); }}
-                title={`Show ${item.label} in chat`}
-                aria-label={`Show ${item.label} in chat`}
-              >
-                <ArrowRight className="context-thumb-icon" aria-hidden="true" />
-              </button>
-            ) : (
-              <span
-                className="context-thumb-locate context-thumb-locate-disabled"
-                title="No source — uploaded from device"
-                aria-hidden="true"
-              >
-                <ArrowRight className="context-thumb-icon opacity-30" aria-hidden="true" />
-              </span>
-            )}
-            <button
-              type="button"
-              className="context-thumb-remove tap-expand"
-              onClick={() => { onRemove(); onCloseMenu(); }}
-              title={`Remove ${item.label}`}
-              aria-label={`Remove ${item.label}`}
-            >
-              <X className="context-thumb-icon" aria-hidden="true" />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="context-thumb-more tap-expand"
-            onClick={onToggleMenu}
-            title={`Actions for ${item.label}`}
-            aria-label={`Actions for ${item.label}`}
-            aria-expanded={false}
-          >
-            <MoreHorizontal className="context-thumb-icon" aria-hidden="true" />
-          </button>
-        )}
+        <ContextItemActionsMenu
+          item={item}
+          variant="image"
+          isInjected={Boolean(isInjected)}
+          isOpen={isMenuOpen}
+          onOpenChange={onMenuOpenChange}
+          onInject={onInject}
+          onRemove={onRemove}
+          onLocate={onLocate}
+        />
       </div>
     </div>
   );
@@ -148,24 +98,21 @@ export const ContextsPanel = ({
   const [internalOpenItemId, setInternalOpenItemId] = useState<string | null>(null);
   const activeMenuItemId = openActionItemId !== undefined ? openActionItemId : internalOpenItemId;
 
+  const setItemMenuOpen = (itemId: string, open: boolean) => {
+    if (openActionItemId !== undefined) return;
+    setInternalOpenItemId(open ? itemId : null);
+  };
+
   useEffect(() => {
     const el = panelRef.current;
     if (!el) return;
-    if (isOpen) el.removeAttribute("inert");
-    else el.setAttribute("inert", "");
+    if (isOpen) {
+      el.removeAttribute("inert");
+    } else {
+      el.setAttribute("inert", "");
+      setInternalOpenItemId(null);
+    }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!internalOpenItemId || typeof document === "undefined") return;
-    const closeMenu = () => setInternalOpenItemId(null);
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setInternalOpenItemId(null); };
-    document.addEventListener("click", closeMenu);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("click", closeMenu);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [internalOpenItemId]);
 
   const handleDropData = (e: React.DragEvent, targetGroupId?: string) => {
     e.preventDefault();
@@ -333,10 +280,7 @@ export const ContextsPanel = ({
                                 item={img}
                                 isInjected={injectedItemKeys?.has(contextItemKey(img))}
                                 isMenuOpen={activeMenuItemId === img.id}
-                                onToggleMenu={() =>
-                                  setInternalOpenItemId((prev) => (prev === img.id ? null : img.id))
-                                }
-                                onCloseMenu={() => setInternalOpenItemId(null)}
+                                onMenuOpenChange={(open) => setItemMenuOpen(img.id, open)}
                                 onInject={onInjectItem ? () => onInjectItem(img) : undefined}
                                 onRemove={() => onRemoveItem(group.id, img.id)}
                                 onLocate={img.source ? () => onLocateItem(img.source!) : undefined}
@@ -362,70 +306,16 @@ export const ContextsPanel = ({
                                     {item.label}
                                   </span>
                                   <div className="context-item-actions" onClick={(e) => e.stopPropagation()}>
-                                    {isMenuOpen ? (
-                                      <>
-                                        {onInjectItem && (
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className={cn(
-                                              "context-item-action context-item-inject tap-expand",
-                                              isItemInjected && "context-item-action-active"
-                                            )}
-                                            onClick={() => { onInjectItem(item); setInternalOpenItemId(null); }}
-                                            title={injectActionLabel(item.label, Boolean(isItemInjected))}
-                                            aria-label={injectActionLabel(item.label, Boolean(isItemInjected))}
-                                            aria-pressed={Boolean(isItemInjected)}
-                                          >
-                                            <ArrowLeft className="context-item-action-icon" aria-hidden="true" />
-                                          </Button>
-                                        )}
-                                        {item.source ? (
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="context-item-action context-item-locate tap-expand"
-                                            onClick={() => { onLocateItem(item.source!); setInternalOpenItemId(null); }}
-                                            title={`Show ${item.label} in chat`}
-                                            aria-label={`Show ${item.label} in chat`}
-                                          >
-                                            <ArrowRight className="context-item-action-icon" aria-hidden="true" />
-                                          </Button>
-                                        ) : (
-                                          <span
-                                            className="context-item-action context-item-action-disabled"
-                                            title="No source — dragged from outside the chat"
-                                            aria-hidden="true"
-                                          >
-                                            <ArrowRight className="context-item-action-icon opacity-30" aria-hidden="true" />
-                                          </span>
-                                        )}
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="context-item-action context-item-remove tap-expand"
-                                          onClick={() => { onRemoveItem(group.id, item.id); setInternalOpenItemId(null); }}
-                                          title={`Remove ${item.label}`}
-                                          aria-label={`Remove ${item.label}`}
-                                        >
-                                          <X className="context-item-action-icon" aria-hidden="true" />
-                                        </Button>
-                                      </>
-                                    ) : (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="context-item-action context-item-more tap-expand"
-                                        onClick={() =>
-                                          setInternalOpenItemId((prev) => (prev === item.id ? null : item.id))
-                                        }
-                                        title={`Actions for ${item.label}`}
-                                        aria-label={`Actions for ${item.label}`}
-                                        aria-expanded={false}
-                                      >
-                                        <MoreHorizontal className="context-item-action-icon" aria-hidden="true" />
-                                      </Button>
-                                    )}
+                                    <ContextItemActionsMenu
+                                      item={item}
+                                      variant="row"
+                                      isInjected={Boolean(isItemInjected)}
+                                      isOpen={isMenuOpen}
+                                      onOpenChange={(open) => setItemMenuOpen(item.id, open)}
+                                      onInject={onInjectItem ? () => onInjectItem(item) : undefined}
+                                      onLocate={item.source ? () => onLocateItem(item.source!) : undefined}
+                                      onRemove={() => onRemoveItem(group.id, item.id)}
+                                    />
                                   </div>
                                 </div>
                               );
