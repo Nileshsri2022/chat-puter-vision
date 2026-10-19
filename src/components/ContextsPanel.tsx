@@ -29,6 +29,7 @@ import {
   type ContextGroup,
   type ContextImageItem,
   type ContextSourceRef,
+  type ContextTextItem,
 } from "@/lib/contextGroups";
 import "./ContextsPanel.css";
 
@@ -126,7 +127,7 @@ export const ContextsPanel = ({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
-  const [previewItem, setPreviewItem] = useState<import("@/lib/contextGroups").ContextTextItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<ContextTextItem | null>(null);
   const [previewCopied, setPreviewCopied] = useState(false);
 
   useEffect(() => {
