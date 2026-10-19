@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw, GripVertical } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
@@ -68,6 +68,27 @@ interface ChatMessageProps {
   onRetry?: () => void;
 }
 
+
+/**
+ * Grip that drags a message or block into the Contexts panel. The message
+ * text itself must stay selectable, so only this handle — never the text —
+ * carries the `draggable` attribute. (Making the whole bubble draggable
+ * let the browser's drag gesture swallow every press-and-move, which made
+ * text impossible to select or highlight.)
+ */
+const DragHandle = ({ onDragStart, label, className }: { onDragStart: (e: React.DragEvent) => void; label: string; className?: string }) => (
+  <Button
+    variant="ghost"
+    size="sm"
+    draggable
+    onDragStart={onDragStart}
+    className={cn("msg-drag-handle", className)}
+    title="Drag to add as context"
+    aria-label={`Drag ${label} to contexts panel`}
+  >
+    <GripVertical className="msg-action-icon" aria-hidden="true" />
+  </Button>
+);
 
 /** Sparkle-in-rounded-square glyph for the thinking section, DeepSeek-style. */
 const ThoughtIcon = ({ className }: { className?: string }) => (
@@ -220,45 +241,27 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
   };
 
   /**
-   * The part of the current window selection that sits inside this message,
-   * or "" when there is none. Dragging the message into the Contexts panel
-   * is paused while a selection is live, so selecting text never starts a
-   * drag by accident.
+   * Fills a drag event's payload for a context-drag handle. The custom
+   * MIME type carries provenance for the Contexts panel; text/plain
+   * serves drops into external apps.
    */
-  const selectionInMessage = (): string => {
-    const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
-    const raw = sel?.toString().trim() ?? "";
-    if (!raw) return "";
-    const container = messageContainerRef.current;
-    if (!container) return "";
-    const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
-    const common = range?.commonAncestorContainer ?? null;
-    if (!common) return "";
-    let node: Node | null = common;
-    while (node) {
-      if (node === container) return raw;
-      node = node.parentNode;
+  const setContextDragData = (e: React.DragEvent, payload: ContextTextPayload) => {
+    e.dataTransfer.setData(CONTEXT_DRAG_MIME, encodeContextDragPayload(payload));
+    e.dataTransfer.setData("text/plain", payload.text);
+    // Some browsers (Safari) require effectAllowed to be set.
+    try {
+      e.dataTransfer.effectAllowed = "copy";
+    } catch {
+      // Older browsers can refuse effectAllowed; not worth interrupting the drag.
     }
-    // Selection ends outside this message: still accept it when the message
-    // visibly contains the highlighted words (a drag can extend a few chars
-    // past the bubble without changing what the user meant).
-    const probe = raw.slice(0, 40).replace(/\s+/g, " ");
-    const visible = (container.textContent ?? "").replace(/\s+/g, " ");
-    return probe && visible.includes(probe) ? raw : "";
   };
 
-  // Track whether the live selection is inside this message, so the
-  // drag-to-context handles below stay inert while the user is selecting.
-  const [selectionActive, setSelectionActive] = useState(false);
-  useEffect(() => {
-    const read = () => {
-      setSelectionActive(Boolean(selectionInMessage()));
-    };
-    document.addEventListener("selectionchange", read);
-    return () => document.removeEventListener("selectionchange", read);
-    // The listener only re-reads the DOM through a stable ref, so mounting it
-    // once is correct: a new one per render would churn every message anyway.
-  }, []);
+  // Drag affordances live on the grip handles (DragHandle), never on
+  // the text itself, so text stays selectable and highlightable.
+  const handleMessageDragStart = (e: React.DragEvent) => {
+    const payload = buildTextPayload();
+    if (payload) setContextDragData(e, payload);
+  };
 
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a
@@ -320,21 +323,11 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             }
           : {}),
       };
-      e.dataTransfer.setData(CONTEXT_DRAG_MIME, encodeContextDragPayload(payload));
-      e.dataTransfer.setData("text/plain", clean);
-      try {
-        e.dataTransfer.effectAllowed = "copy";
-      } catch {
-        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
-      }
+      setContextDragData(e, payload);
     };
 
     return (
-      <div
-        className="msg-codeblock group/code" data-artifact-at={at}
-        draggable={!selectionActive}
-        onDragStart={handleCodeDragStart}
-      >
+      <div className="msg-codeblock group/code" data-artifact-at={at}>
         <pre
           ref={preRef}
           className="msg-codeblock-pre"
@@ -354,6 +347,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             <Copy className="msg-codeblock-copy-icon" />
           )}
         </Button>
+        <DragHandle onDragStart={handleCodeDragStart} label="code block" className="msg-codeblock-drag" />
       </div>
     );
   };
@@ -419,7 +413,9 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     },
     table: ({ children }) => (
       <div className="md-table-wrap">
-        <table className="md-table">{children}</table>
+        <div className="md-table-scroll">
+          <table className="md-table">{children}</table>
+        </div>
       </div>
     ),
     th: ({ children }) => (
@@ -489,23 +485,21 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
             }
           : {}),
       };
-      e.dataTransfer.setData(CONTEXT_DRAG_MIME, encodeContextDragPayload(payload));
-      e.dataTransfer.setData("text/plain", clean);
-      try {
-        e.dataTransfer.effectAllowed = "copy";
-      } catch {
-        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
-      }
+      setContextDragData(e, payload);
     };
     return (
       <div
         ref={wrapRef}
         className="md-table-wrap"
         data-artifact-at={at}
-        draggable
-        onDragStart={handleTableDragStart}
       >
-        <table className="md-table">{children}</table>
+        <div className="md-table-bar">
+          <DragHandle onDragStart={handleTableDragStart} label="table" />
+          <span>Drag to add as context</span>
+        </div>
+        <div className="md-table-scroll">
+          <table className="md-table">{children}</table>
+        </div>
       </div>
     );
   };
@@ -554,58 +548,37 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
               <div className="msg-user-row">
                 {/* `data-search-text` tags the regions in-conversation search
                     scans — see lib/utils/highlight.ts. */}
-                <div
-                  className="msg-user-bubble"
-                  data-search-text
-                  draggable={!selectionActive}
-                  onDragStart={(e) => {
-                    const selected = window.getSelection?.()?.toString()?.trim();
-                    const payload = buildTextPayload(selected || undefined);
-                    if (payload) {
-                      e.dataTransfer.setData(
-                        CONTEXT_DRAG_MIME,
-                        encodeContextDragPayload(payload)
-                      );
-                      e.dataTransfer.setData("text/plain", payload.text);
-                      try {
-        e.dataTransfer.effectAllowed = "copy";
-      } catch {
-        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
-      }
-                    }
-                  }}
-                >
+                <div className="msg-user-bubble" data-search-text>
                   {content}
                 </div>
               </div>
-              {(onCopy || onEdit) && (
-                <div className="msg-user-actions">
-                  {onCopy && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleCopy}
-                      className="msg-action-btn"
-                      title="Copy message"
-                      aria-label="Copy message"
-                    >
-                      <Copy className="msg-action-icon" aria-hidden="true" />
-                    </Button>
-                  )}
-                  {onEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setEditing(true)}
-                      className="msg-action-btn"
-                      title="Edit message"
-                      aria-label="Edit message"
-                    >
-                      <Pencil className="msg-action-icon" aria-hidden="true" />
-                    </Button>
-                  )}
-                </div>
-              )}
+              <div className="msg-user-actions">
+                <DragHandle onDragStart={handleMessageDragStart} label="message" />
+                {onCopy && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleCopy}
+                    className="msg-action-btn"
+                    title="Copy message"
+                    aria-label="Copy message"
+                  >
+                    <Copy className="msg-action-icon" aria-hidden="true" />
+                  </Button>
+                )}
+                {onEdit && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditing(true)}
+                    className="msg-action-btn"
+                    title="Edit message"
+                    aria-label="Edit message"
+                  >
+                    <Pencil className="msg-action-icon" aria-hidden="true" />
+                  </Button>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -693,33 +666,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 )}
               </div>
             )}
-            <div
-              className="msg-answer"
-              data-search-text
-              draggable={!selectionActive}
-              onDragStart={(e) => {
-                // Prefer the user's current selection when dragging from the
-                // answer; fallback to the whole message (buildTextPayload handles it).
-                const selected = window.getSelection?.()?.toString()?.trim();
-                const payload = buildTextPayload(selected || undefined);
-                if (payload) {
-                  e.dataTransfer.setData(
-                    CONTEXT_DRAG_MIME,
-                    encodeContextDragPayload(payload)
-                  );
-                  // Also set plain text for external drops (e.g. dragging to
-                  // another app) — but keep our custom MIME primary so
-                  // ContextsPanel's drop handler can pick up provenance.
-                  e.dataTransfer.setData("text/plain", payload.text);
-                  // Some browsers (Safari) require effectAllowed to be set.
-                  try {
-        e.dataTransfer.effectAllowed = "copy";
-      } catch {
-        // Older browsers can refuse effectAllowed; not worth interrupting the drag.
-      }
-                }
-              }}
-            >
+            <div className="msg-answer" data-search-text>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={answerComponents}
@@ -739,8 +686,9 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {!isStreaming && (speakable || onCopy || onDelete || onShareExchange || onRetry) && (
+            {!isStreaming && (
               <div className="msg-actions">
+                <DragHandle onDragStart={handleMessageDragStart} label="answer" />
                 {speakable && (
                   <Button
                     variant="ghost"
