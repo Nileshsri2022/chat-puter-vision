@@ -33,6 +33,7 @@ import {
   resolveContextGroupForTask,
 } from "@/lib/contextGroups";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
+import { isImageUrl } from "@/lib/dataUrl";
 import { syncConversations, recordDelete } from "@/lib/sync";
 import {
   getModelCatalog,
@@ -302,6 +303,7 @@ const Index = () => {
     injectGroup,
     clearInjectedContext,
     locateContextItem,
+    resolveTextSource,
   } = useContextsPanel({
     scrollRef,
     currentConversationId,
@@ -543,11 +545,17 @@ const Index = () => {
           resolved.contextText,
           "chat"
         );
+        // Only URLs the chat API can resolve may reach the request; anything
+        // else is reported instead of failing the whole message.
+        const usableContextImages = resolved.imageDataUrls.filter(isImageUrl);
+        if (resolved.missingImages > 0 || usableContextImages.length !== resolved.imageDataUrls.length) {
+          notifyContextImagesSkipped();
+        }
         if (
-          resolved.imageDataUrls.length > 0 &&
+          usableContextImages.length > 0 &&
           modelSupportsVision(selectedModelId, modelCatalog)
         ) {
-          imageUrls = [...resolved.imageDataUrls, ...imageUrls];
+          imageUrls = [...usableContextImages, ...imageUrls];
         }
       } catch {
         toast({
@@ -599,6 +607,17 @@ const Index = () => {
       // stored for it a moment ago are ours to reclaim.
       if (!delivered) {
         for (const ref of attachmentRefs) void deleteImage(ref.path);
+      } else if (injectedContext) {
+        // The group was attached to this message. Keep it available in the
+        // panel, but stop silently re-sending it with every later turn — and
+        // say so, or the pill vanishing looks like the context was dropped.
+        const appliedTitle = injectedContext.title;
+        clearInjectedContext();
+        toast({
+          title: "Context applied",
+          description: `“${appliedTitle}” was attached to this message.`,
+          duration: 3000,
+        });
       }
     });
   };
@@ -865,8 +884,12 @@ const Index = () => {
           resolved.contextText,
           "image"
         );
-        if (resolved.imageDataUrls.length > 0) {
-          inputImages = [...inputImages, ...resolved.imageDataUrls];
+        const usableContextImages = resolved.imageDataUrls.filter(isImageUrl);
+        if (resolved.missingImages > 0 || usableContextImages.length !== resolved.imageDataUrls.length) {
+          notifyContextImagesSkipped();
+        }
+        if (usableContextImages.length > 0) {
+          inputImages = [...inputImages, ...usableContextImages];
           if (!base && resolved.primaryImageBase) {
             base = resolved.primaryImageBase;
           }
@@ -919,6 +942,7 @@ const Index = () => {
             : conv
         )
       );
+      if (injectedContext) clearInjectedContext();
     } catch (error) {
       toast({
         title: "Image generation failed",
@@ -1150,6 +1174,20 @@ const Index = () => {
       });
     }
   };
+
+  /**
+   * Some image in the injected Context Group could not be turned into a URL
+   * the model accepts (deleted file, stale reference). The turn still goes
+   * ahead with the text and the images that did resolve.
+   */
+  const notifyContextImagesSkipped = useCallback(() => {
+    toast({
+      title: "Some context images were skipped",
+      description:
+        "They could not be read from storage, so this message went out with the rest of the context. Re-add them to the context to include them.",
+      duration: 6000,
+    });
+  }, [toast]);
 
   /**
    * An attachment that reached the model but could not be stored: the send
@@ -1633,6 +1671,7 @@ const Index = () => {
           onRenameGroup={renameGroup}
           onInjectGroup={injectGroup}
           onLocateItem={locateContextItem}
+          resolveTextSource={resolveTextSource}
         />
       )}
     </div>

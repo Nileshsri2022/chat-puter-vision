@@ -17,7 +17,7 @@ import {
 import { extractText } from "@/lib/ocr";
 import { checkAuthStatus } from "@/lib/backend";
 import { usePuterImage } from "@/hooks/usePuterImage";
-import { isContextImageItem, type ContextGroup } from "@/lib/contextGroups";
+import { isContextImageItem, isContextTextItem, type ContextGroup } from "@/lib/contextGroups";
 import "./ChatInput.css";
 
 
@@ -439,6 +439,12 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
       Boolean(injectedContext && injectedContext.items.length > 0);
 
   const primaryContextImage = injectedContext?.items.find(isContextImageItem);
+  // The pill names the group and says what is inside it: how many items, plus
+  // the first text snippet, so the user can see the context that was injected
+  // without opening the panel again.
+  const injectedContextCount = injectedContext?.items.length ?? 0;
+  const injectedContextSnippet =
+    injectedContext?.items.find(isContextTextItem)?.label ?? "";
   const { src: injectedContextThumb } = usePuterImage(
     primaryContextImage?.refKind === "drive" ? primaryContextImage.ref : undefined,
     primaryContextImage?.refKind === "data" ? primaryContextImage.ref : undefined
@@ -505,8 +511,15 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
                 className="composer-context-pill-thumb"
               />
             )}
-            <span className="composer-context-pill-title">
-              {injectedContext.title}
+            <span className="composer-context-pill-text">
+              <span className="composer-context-pill-title">
+                {injectedContext.title}
+              </span>
+              <span className="composer-context-pill-summary">
+                {injectedContextCount} item
+                {injectedContextCount === 1 ? "" : "s"}
+                {injectedContextSnippet ? ` · ${injectedContextSnippet}` : ""}
+              </span>
             </span>
             {onClearInjectedContext && (
               <Button

@@ -243,6 +243,16 @@
   border-radius: var(--radius);
 }
 
+/* Fallback highlight for context locate when the Custom Highlight API is
+   unavailable (Safari/Firefox without it). Paints a temporary tint on the
+   whole message so the user still sees where the context came from. */
+[data-context-highlight] {
+  background-color: hsl(45 100% 55% / 0.35) !important;
+  box-shadow: inset 3px 0 0 0 hsl(32 95% 52%) !important;
+  border-radius: var(--radius);
+  transition: background-color 0.2s;
+}
+
 /* A code block or table (block-level locate) flashes with an outline: its own
    children paint over an inset ring and a background, and an outline draws
    above them. */

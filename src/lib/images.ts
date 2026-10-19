@@ -226,10 +226,35 @@ export function loadImageUrl(path: string): Promise<string> {
  * shape the chat path sends, which every provider route accepts. The blob
  * comes from the shared per-path cache, so an image already on screen costs
  * one read in total.
+ *
+ * Defensive MIME handling: some Drive reads (or test shims) return a Blob
+ * with an empty or generic type (e.g. application/octet-stream). Those would
+ * become `data:application/octet-stream;base64,…`, which the chat path's
+ * `isImageUrl` check rejects. Infer the type from the path extension instead
+ * and coerce it, so an image already on screen is always sendable.
  */
 export async function loadImageDataUrl(path: string): Promise<string> {
   const blob = await loadImageBlob(path);
-  return blobToDataUrl(blob);
+  let dataUrl = await blobToDataUrl(blob);
+  // If the Blob had no image MIME, force one from the file extension.
+  if (!/^data:image\//i.test(dataUrl)) {
+    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    const inferred =
+      ext === "jpg" || ext === "jpeg"
+        ? "image/jpeg"
+        : ext === "webp"
+          ? "image/webp"
+          : ext === "gif"
+            ? "image/gif"
+            : "image/png";
+    dataUrl = dataUrl.replace(/^data:[^;,]*;/, `data:${inferred};`);
+    // If the Blob was somehow encoded without the ;base64 marker (shouldn't happen),
+    // ensure we still present as base64.
+    if (!dataUrl.includes(";base64,")) {
+      dataUrl = dataUrl.replace(",", ";base64,");
+    }
+  }
+  return dataUrl;
 }
 
 /**

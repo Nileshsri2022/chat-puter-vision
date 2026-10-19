@@ -254,6 +254,34 @@ export function useContextsPanel({
     setInjectedGroupId(null);
   }, []);
 
+  /**
+   * Best-effort provenance for text that arrived without one (a plain-text drop
+   * where the browser dropped our custom MIME). Finds the message in the open
+   * transcript that contains the snippet, so the new row still gets a working
+   * `→` locate button instead of a dead control.
+   */
+  const resolveTextSource = useCallback(
+    (text: string): ContextSourceRef | undefined => {
+      const root = scrollRef.current;
+      const probe = text.trim().slice(0, 40);
+      if (!root || !probe) return undefined;
+      for (const el of Array.from(
+        root.querySelectorAll<HTMLElement>("[data-message-index]")
+      )) {
+        if (collectMatchRanges(el, probe).length === 0) continue;
+        const index = Number(el.dataset.messageIndex);
+        if (!Number.isFinite(index)) continue;
+        return {
+          conversationId: currentConversationId,
+          messageIndex: index,
+          highlightText: probe,
+        };
+      }
+      return undefined;
+    },
+    [currentConversationId, scrollRef]
+  );
+
   const flashTimer = useRef<number | null>(null);
   const highlightTimer = useRef<number | null>(null);
   const flashed = useRef<HTMLElement | null>(null);
@@ -289,11 +317,55 @@ export function useContextsPanel({
 
       if (!contextsDocked) setContextsOpen(false);
 
-      window.setTimeout(() => {
-        const message = scrollRef.current?.querySelector<HTMLElement>(
+      const snippetCandidates = (): string[] => {
+        const raw = source.highlightText?.trim() ?? "";
+        if (!raw) return [];
+        // Progressively shorter prefixes: a long snippet may span elements, and
+        // the first handful of words is what the user recognises anyway.
+        const firstLine = raw.split("\n")[0] ?? raw;
+        const list = [firstLine.slice(0, 80), firstLine.slice(0, 50), firstLine.slice(0, 30)];
+        const flat = raw.replace(/\s+/g, " ").trim();
+        list.push(flat.slice(0, 60), flat.slice(0, 30));
+        return [...new Set(list.map((s) => s.trim()).filter(Boolean))];
+      };
+
+      /** The message element the item came from, or null. */
+      const findMessage = (): HTMLElement | null => {
+        const root = scrollRef.current;
+        if (!root) return null;
+        const byIndex = root.querySelector<HTMLElement>(
           `[data-message-index="${source.messageIndex}"]`
         );
-        if (!message) return;
+        if (byIndex) return byIndex;
+        // Indices go stale (a message was deleted or an edit truncated the
+        // tail). Fall back to the text the user actually saved.
+        for (const snippet of snippetCandidates()) {
+          for (const candidate of Array.from(
+            root.querySelectorAll<HTMLElement>("[data-message-index]")
+          )) {
+            if (collectMatchRanges(candidate, snippet).length > 0) return candidate;
+          }
+        }
+        return null;
+      };
+
+      const start = Date.now();
+      const attemptLocate = () => {
+        const message = findMessage();
+        if (!message) {
+          // The transcript may still be mounting after a conversation switch.
+          if (Date.now() - start < 1200) {
+            window.setTimeout(attemptLocate, 60);
+          } else {
+            toast({
+              title: "Could not find that text in this chat",
+              description:
+                "The message it came from may have been edited or deleted. The saved text is still in the context — open it with the preview button.",
+              duration: 5000,
+            });
+          }
+          return;
+        }
 
         const block =
           typeof source.at === "number"
@@ -325,22 +397,30 @@ export function useContextsPanel({
         }, 1800);
 
         if (source.highlightText) {
-          const snippet = source.highlightText.trim().split("\n")[0]?.slice(0, 80) ?? "";
-          if (snippet) {
+          let painted = false;
+          for (const snippet of snippetCandidates()) {
             const ranges = collectMatchRanges(message, snippet);
-            if (ranges.length > 0) {
-              paintSearchHighlights(ranges, ranges);
-              if (highlightTimer.current !== null) {
-                window.clearTimeout(highlightTimer.current);
-              }
-              highlightTimer.current = window.setTimeout(() => {
-                clearSearchHighlights();
-                highlightTimer.current = null;
-              }, 2000);
-            }
+            if (ranges.length === 0) continue;
+            paintSearchHighlights(ranges, ranges);
+            painted = true;
+            break;
           }
+          // Tint the message as well, so the locate reads even where the Custom
+          // Highlight API is unavailable (Safari < 17.2, older Firefox).
+          message.setAttribute("data-context-highlight", "");
+          if (highlightTimer.current !== null) {
+            window.clearTimeout(highlightTimer.current);
+          }
+          highlightTimer.current = window.setTimeout(() => {
+            message.removeAttribute("data-context-highlight");
+            if (painted) clearSearchHighlights();
+            highlightTimer.current = null;
+          }, 2200);
         }
-      }, 30);
+      };
+      // A short delay lets the panel start its close transition before the
+      // transcript scrolls, so the two animations do not fight.
+      window.setTimeout(attemptLocate, 30);
     },
     [busy, contextsDocked, currentConversationId, onSelectConversation, scrollRef, toast]
   );
@@ -362,5 +442,6 @@ export function useContextsPanel({
     injectGroup,
     clearInjectedContext,
     locateContextItem,
+    resolveTextSource,
   };
 }

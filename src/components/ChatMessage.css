@@ -244,3 +244,10 @@
 .md-img {
   @apply max-w-full rounded-lg border border-border;
 }
+
+/* The add-to-context button lights up while the live selection belongs to
+   this message, so it is obvious it will add the highlighted snippet and not
+   the whole message. */
+.msg-action-btn-selected {
+  @apply bg-primary/15 text-primary;
+}

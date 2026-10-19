@@ -56,10 +56,26 @@ In practice, that automatic rule creates three new problems:
    `→` scrolls the transcript to the exact message, image, code block, table, or
    text range where that item came from and highlights it with a glowing outline
    (`data-artifact-flash` + CSS Custom Highlight API for text snippets).
+   - A snippet is matched across the message's text nodes, so a selection that
+     crosses bold text, inline code, or a link still highlights as one range.
+   - If the stored message index no longer resolves (a message was deleted or an
+     edit truncated the tail), the locate falls back to finding the saved text in
+     the open transcript, then says so in a toast when the source is gone.
+   - Every text/code/table row can be previewed without leaving the panel: click
+     the row label or the eye button to read (and copy) the exact text that will
+     be injected. Rows added from outside the chat keep a disabled `→`
+     placeholder, which says the item has no source instead of hiding the control.
 5. **One-click `← Inject into input` action.**
    Clicking **`← Inject into input`** on any Context Group injects it into the
-   composer as a **dismissible Context Pill** (thumbnail + title + `×` button)
-   above the prompt box.
+   composer as a **dismissible Context Pill** (thumbnail + title + item count +
+   `×` button) above the prompt box. The pill is consumed by the message it was
+   injected into: after a reply (or an image) lands, the group stays in the panel
+   but stops being re-sent with every later turn.
+   - If the user has text selected inside a message, the message's
+     **Add to context** button adds exactly that snippet (its `title` says so);
+     with no selection it adds the whole message.
+   - One broken image in a group is skipped with a warning rather than failing
+     the send with "Attached images must be data: or https: URLs".
 6. **Task-agnostic execution.**
    - In **Chat mode**, an injected Context Group sends its text/code/table items
      as structured prompt context and its images as `image_url` blocks.
