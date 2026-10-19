@@ -360,7 +360,7 @@ export function useContextsPanel({
             toast({
               title: "Could not find that text in this chat",
               description:
-                "The message it came from may have been edited or deleted. The saved text is still in the context — open it with the preview button.",
+                "The message it came from may have been edited or deleted. The saved text is still in the context.",
               duration: 5000,
             });
           }
@@ -397,6 +397,9 @@ export function useContextsPanel({
         }, 1800);
 
         if (source.highlightText) {
+          // Highlight only the saved text itself. The `data-artifact-flash`
+          // ring above already marks the message, so the whole message keeps
+          // its normal background — no yellow tint behind it.
           let painted = false;
           for (const snippet of snippetCandidates()) {
             const ranges = collectMatchRanges(message, snippet);
@@ -405,17 +408,15 @@ export function useContextsPanel({
             painted = true;
             break;
           }
-          // Tint the message as well, so the locate reads even where the Custom
-          // Highlight API is unavailable (Safari < 17.2, older Firefox).
-          message.setAttribute("data-context-highlight", "");
-          if (highlightTimer.current !== null) {
-            window.clearTimeout(highlightTimer.current);
+          if (painted) {
+            if (highlightTimer.current !== null) {
+              window.clearTimeout(highlightTimer.current);
+            }
+            highlightTimer.current = window.setTimeout(() => {
+              clearSearchHighlights();
+              highlightTimer.current = null;
+            }, 2200);
           }
-          highlightTimer.current = window.setTimeout(() => {
-            message.removeAttribute("data-context-highlight");
-            if (painted) clearSearchHighlights();
-            highlightTimer.current = null;
-          }, 2200);
         }
       };
       // A short delay lets the panel start its close transition before the

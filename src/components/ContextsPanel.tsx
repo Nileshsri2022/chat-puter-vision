@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   ArrowRight,
   ChevronDown,
   ChevronRight,
   Code2,
-  Copy,
-  Check,
-  Eye,
+  FileText,
   Pencil,
   Plus,
   Table2,
@@ -19,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import { cn } from "@/lib/utils";
-import { copyToClipboard } from "@/lib/utils/export";
 import {
   CONTEXT_DRAG_MIME,
   decodeContextDragPayload,
@@ -29,7 +25,6 @@ import {
   type ContextGroup,
   type ContextImageItem,
   type ContextSourceRef,
-  type ContextTextItem,
 } from "@/lib/contextGroups";
 import "./ContextsPanel.css";
 
@@ -127,8 +122,6 @@ export const ContextsPanel = ({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
-  const [previewItem, setPreviewItem] = useState<ContextTextItem | null>(null);
-  const [previewCopied, setPreviewCopied] = useState(false);
 
   useEffect(() => {
     const el = panelRef.current;
@@ -136,21 +129,6 @@ export const ContextsPanel = ({
     if (isOpen) el.removeAttribute("inert");
     else el.setAttribute("inert", "");
   }, [isOpen]);
-
-  // The item preview is a dialog: Escape closes it, and switching items resets
-  // the copy confirmation instead of showing it on the next snippet.
-  useEffect(() => {
-    if (!previewItem) return;
-    setPreviewCopied(false);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setPreviewItem(null);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [previewItem]);
 
   const handleDropData = (e: React.DragEvent, targetGroupId?: string) => {
     e.preventDefault();
@@ -263,9 +241,8 @@ export const ContextsPanel = ({
                 </button>
                 <p className="context-empty-title">No contexts yet</p>
                 <p className="context-empty-sub">
-                  Drag any image, text selection, code block, or table here — or
-                  use the add-to-context button on a message — to build a
-                  reusable context group.
+                  Drag any image, text selection, code block, or table here
+                  to build a reusable context group.
                 </p>
               </div>
             ) : (
@@ -381,30 +358,16 @@ export const ContextsPanel = ({
                           <div className="context-items-list">
                             {texts.map((item) => {
                               const KindIcon =
-                                item.kind === "code" ? Code2 : item.kind === "table" ? Table2 : Eye;
+                                item.kind === "code" ? Code2 : item.kind === "table" ? Table2 : FileText;
                               return (
                                 <div key={item.id} className="context-item-row">
                                   <KindIcon className="context-item-kind-icon" aria-hidden="true" />
-                                  <button
-                                    type="button"
-                                    className="context-item-label context-item-label-btn"
-                                    title={`${item.text.slice(0, 120)} (click to preview)`}
-                                    onClick={() => setPreviewItem(item)}
-                                    aria-label={`Show the full text of ${item.label}`}
-                                  >
+                                  {/* No preview: the `→` action already shows the
+                                      saved text in the chat, highlighted in place. */}
+                                  <span className="context-item-label" title={item.text.slice(0, 120)}>
                                     {item.label}
-                                  </button>
+                                  </span>
                                   <div className="context-item-actions">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="context-item-action tap-expand"
-                                      onClick={() => setPreviewItem(item)}
-                                      title="Preview text"
-                                      aria-label={`Preview ${item.label}`}
-                                    >
-                                      <Eye className="context-item-action-icon" aria-hidden="true" />
-                                    </Button>
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -507,94 +470,6 @@ export const ContextsPanel = ({
           }}
         />
 
-        {/* Preview dialog for a text/code/table/ocr context item — clicking the
-            label (or the eye icon) shows the exact text that will be injected,
-            matching how an image thumbnail opens its own preview. Rendered in a
-            portal because the panel is transformed (slide-in), which would
-            otherwise trap a `fixed` overlay inside the panel's box. */}
-        {previewItem &&
-          createPortal(
-            <div
-              className="context-preview-scrim"
-              role="dialog"
-              aria-modal="true"
-              aria-label={previewItem.label}
-              onClick={() => setPreviewItem(null)}
-            >
-              <div
-                className="context-preview-panel"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="context-preview-header">
-                  {previewItem.kind === "code" ? (
-                    <Code2 className="context-preview-title-icon" aria-hidden="true" />
-                  ) : previewItem.kind === "table" ? (
-                    <Table2 className="context-preview-title-icon" aria-hidden="true" />
-                  ) : (
-                    <Eye className="context-preview-title-icon" aria-hidden="true" />
-                  )}
-                  <h2 className="context-preview-title">{previewItem.label}</h2>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="context-preview-action tap-expand"
-                    onClick={async () => {
-                      if (await copyToClipboard(previewItem.text)) {
-                        setPreviewCopied(true);
-                        window.setTimeout(() => setPreviewCopied(false), 1500);
-                      }
-                    }}
-                    title="Copy text"
-                    aria-label="Copy text"
-                  >
-                    {previewCopied ? (
-                      <Check className="context-preview-action-icon" aria-hidden="true" />
-                    ) : (
-                      <Copy className="context-preview-action-icon" aria-hidden="true" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="context-preview-action tap-expand"
-                    onClick={() => setPreviewItem(null)}
-                    title="Close preview"
-                    aria-label="Close preview"
-                  >
-                    <X className="context-preview-action-icon" aria-hidden="true" />
-                  </Button>
-                </div>
-                <div className="context-preview-body">
-                  {previewItem.kind === "code" ? (
-                    <pre className="context-preview-pre">
-                      <code>{previewItem.text}</code>
-                    </pre>
-                  ) : previewItem.kind === "table" ? (
-                    <pre className="context-preview-pre">{previewItem.text}</pre>
-                  ) : (
-                    <p className="context-preview-text">{previewItem.text}</p>
-                  )}
-                </div>
-                {previewItem.source && (
-                  <div className="context-preview-footer">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const source = previewItem.source!;
-                        setPreviewItem(null);
-                        onLocateItem(source);
-                      }}
-                    >
-                      <ArrowRight className="context-preview-footer-icon" aria-hidden="true" />
-                      Show in chat
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>,
-            document.body
-          )}
       </aside>
     </>
   );
