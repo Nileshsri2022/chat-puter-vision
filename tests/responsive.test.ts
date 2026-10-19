@@ -251,7 +251,10 @@ test("image generation uses the shared composer and keeps its mode active", () =
   expect(input).toContain('aria-pressed={imageGenerationMode}');
   expect(input).toContain('imageGenerationMode && "composer-tool-btn-active"');
   expect(input).toContain("if (imageGenerationMode && onGenerateImage)");
-  expect(input).toContain("void onGenerateImage(message)");
+  // The attachments come along: they are the image the prompt edits.
+  expect(input).toContain(
+    "void onGenerateImage(message, images.length > 0 ? images : undefined)"
+  );
   expect(input).toContain('title={imageGenerationMode ? "Generate image" : "Send message"}');
 });
 
@@ -491,8 +494,10 @@ test("attachments are persisted in the background and never block a send", () =>
   // before the write lands, and a Drive failure cannot lose the message.
   expect(helper).toContain("void persistAttachment(");
   expect(helper).not.toMatch(/await persistAttachment/);
-  // Both send paths keep the refs, or an edited message loses its images.
-  expect(page.match(/attachments: attachmentRefs/g)?.length).toBe(2);
+  // Every send path keeps the refs, or a message loses its images: the chat
+  // send, the edit, and the image-generation turn (whose attachments are the
+  // image the prompt edits).
+  expect(page.match(/attachments: attachmentRefs/g)?.length).toBe(3);
 });
 
 test("the panel never claims an image it cannot resolve", () => {

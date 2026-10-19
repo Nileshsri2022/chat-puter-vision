@@ -62,6 +62,11 @@
   @apply mb-3 text-sm text-muted-foreground;
 }
 
+/* Says the picture is an edit of an earlier one, not a fresh generation. */
+.msg-image-caption {
+  @apply -mt-2 mb-3 text-xs text-muted-foreground;
+}
+
 /* Shown on the reply where the model summarized earlier turns. */
 .msg-compaction-note {
   @apply mt-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground;

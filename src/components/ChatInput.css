@@ -63,6 +63,11 @@
   @apply size-4 animate-spin rounded-full border border-current border-t-transparent;
 }
 
+/* What the next image prompt will act on. */
+.composer-edit-hint {
+  @apply px-1 text-xs text-muted-foreground;
+}
+
 /* Composer box */
 .composer-box {
   @apply rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md;
