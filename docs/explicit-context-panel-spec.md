@@ -397,27 +397,16 @@ Above `.composer-box`, replacing the old `<p className="composer-edit-hint">Edit
 )}
 ```
 
-### 7.5 Per-artifact `←` injection (single items, without saving a group)
+### 7.5 Per-item `...` actions in Contexts Panel & ChatGPT-style `Ask` on text selection
 
-A whole Context Group can be injected, but a user often wants just *one* artifact
-from it — one reference image, one code block, one table, or one paragraph. That
-is now a first-class action at the same granularity as the `→` locate arrow:
+To keep both the chat transcript and the Contexts panel uncluttered:
 
-| Where | Control | What it queues |
+| Where | Control | Behaviour |
 | --- | --- | --- |
-| Contexts panel, every image thumbnail | `←` (bottom-right, `aria-label="Inject {label} into input"`) | That image only |
-| Contexts panel, every text / code / table row | `←` (leftmost row action) | That row's exact text, code, or Markdown table |
-| Transcript, generated image | `←` overlay on the image | That rendered image (Drive path or `data:` URI) |
-| Transcript, code block | `←` beside copy / drag | The block (or the text selected inside it) |
-| Transcript, Markdown table | `← Use as context` in the table bar | The table as Markdown, rebuilt from the rendered cells |
-| Transcript, message or answer | `←` in the message actions | The message text; if text is selected inside the message, exactly that snippet |
-
-Clicking the same artifact again removes it, and clicking another adds it to the
-same selection — so several artifacts from different messages can be gathered
-in one composer turn. The composer pill reads
-`Selection — {first label} +N` and the selected rows/thumbnails stay visibly
-pressed (`aria-pressed="true"`). Injecting a whole group replaces the ad-hoc
-selection; sending the message clears it, exactly like a group injection.
+| Transcript (`ChatMessage.tsx`) | No `⋮⋮` drag handle or `←` left-arrow button on messages, code blocks, tables, or images | Only when the user selects text inside a message does a floating **`Ask`** button appear above the selection (`aria-label="Ask about selected text"`). Clicking `Ask` queues the selected snippet in the composer and focuses the input. |
+| Composer (`ChatInput.tsx`) | **Selection** card inside `.composer-box` | Each selected text snippet renders as a compact `Selection` card above the textarea (4-line snippet preview + `Selection` badge). Hovering or focusing the card reveals the top-right `×` dismiss button and a floating `Selected text:` popover showing the full text. |
+| Contexts panel, every image thumbnail | `...` button at the bottom of the image (`aria-label="Actions for {label}"`) | Clicking `...` expands the 3-icon strip at the bottom of the image in order: **left arrow (`←`)** to inject into input, **right arrow (`→`)** to show in chat, and **cancel (`×`)** to remove. |
+| Contexts panel, every text / code / table row | `...` button on the right of the row (`aria-label="Actions for {label}"`) | Clicking `...` expands the 3-icon strip on the right of the row in order: **left arrow (`←`)** to inject into input, **right arrow (`→`)** to show in chat, and **cancel (`×`)** to remove. |
 
 Implementation:
 

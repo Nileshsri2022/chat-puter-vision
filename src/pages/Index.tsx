@@ -305,6 +305,7 @@ const Index = () => {
     injectContextItem,
     injectedItemKeys,
     clearInjectedContext,
+    removeInjectedItem,
     locateContextItem,
     resolveTextSource,
   } = useContextsPanel({
@@ -1633,6 +1634,7 @@ const Index = () => {
                 modelCatalog={modelCatalog}
                 injectedContext={injectedContext}
                 onClearInjectedContext={clearInjectedContext}
+                onRemoveInjectedItem={removeInjectedItem}
               />
             </div>
           </>

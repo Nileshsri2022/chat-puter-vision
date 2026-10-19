@@ -3,7 +3,7 @@ import { MAX_ATTACHMENTS } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import { modelSupportsVision, type ModelCatalog } from "@/lib/models";
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Paperclip, X, Square, Mic, Sparkles, ScanText } from "lucide-react";
+import { ArrowUp, Paperclip, X, Square, Mic, Sparkles, ScanText, TextQuote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModelSelector } from "./ModelSelector";
@@ -43,11 +43,14 @@ interface ChatInputProps {
   modelCatalog?: ModelCatalog | null;
   /**
    * Explicit Context Group injected from the Contexts panel via `← Inject into input`.
-   * Displayed as a dismissible pill above the composer box.
+   * Displayed as a dismissible pill above the composer box, or as ChatGPT-style
+   * Selection cards inside the composer box for ad-hoc text selections.
    */
   injectedContext?: ContextGroup | null;
   /** Clears the currently injected Context Group pill. */
   onClearInjectedContext?: () => void;
+  /** Removes a single item from an ad-hoc Selection in the composer. */
+  onRemoveInjectedItem?: (itemId: string) => void;
   /** Prefills the textarea (inline edit mode). */
   initialValue?: string;
   /** Compact rendering for inline editing (shorter box, no outer padding). */
@@ -72,7 +75,7 @@ function microphoneErrorMessage(error: unknown): string {
     : "Allow microphone access to use voice input.";
 }
 
-export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, injectedContext, onClearInjectedContext, initialValue, compact, onCancel }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, disabled, selectedModel, onModelChange, modelCatalog, injectedContext, onClearInjectedContext, onRemoveInjectedItem, initialValue, compact, onCancel }: ChatInputProps) => {
   const [input, setInput] = useState(initialValue ?? "");
   // Attachments live in one array so the preview at index N is always the file
   // at index N — the OCR button and the remove button act on what they show.
@@ -438,7 +441,17 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
       (modelSupportsImages && pendingImages.length > 0) ||
       Boolean(injectedContext && injectedContext.items.length > 0);
 
+  const isSelectionContext = injectedContext?.id === "ctx-selection";
+  const selectionTextItems = isSelectionContext
+    ? injectedContext.items.filter(isContextTextItem)
+    : [];
   const primaryContextImage = injectedContext?.items.find(isContextImageItem);
+  // Show the group pill for saved Context Groups (or when an image is in the
+  // selection); ad-hoc text selections render as ChatGPT-style Selection cards
+  // inside the composer box above the textarea.
+  const showContextPill = Boolean(
+    injectedContext && (!isSelectionContext || Boolean(primaryContextImage))
+  );
   // The pill names the group and says what is inside it: how many items, plus
   // the first text snippet, so the user can see the context that was injected
   // without opening the panel again.
@@ -502,7 +515,7 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
           </div>
         )}
 
-        {injectedContext && (
+        {showContextPill && injectedContext && (
           <div className="composer-context-pill" role="status" aria-live="polite">
             {injectedContextThumb && (
               <img
@@ -544,6 +557,55 @@ export const ChatInput = ({ onSend, onStop, onGenerateImage, isGeneratingImage, 
         )}
 
         <div className="composer-box">
+          {selectionTextItems.length > 0 && (
+            <div className="composer-selections" role="status" aria-live="polite">
+              {selectionTextItems.map((item) => {
+                const snippetPreview =
+                  item.text.length > 130
+                    ? `${item.text.slice(0, 130).trimEnd()}...`
+                    : item.text;
+                return (
+                  <div key={item.id} className="composer-selection-card group">
+                    <div className="composer-selection-popover" role="tooltip">
+                      <div className="composer-selection-popover-label">
+                        Selected text:
+                      </div>
+                      <div className="composer-selection-popover-body">
+                        {item.text}
+                      </div>
+                    </div>
+                    <p className="composer-selection-snippet">
+                      {snippetPreview}
+                    </p>
+                    <div className="composer-selection-footer">
+                      <TextQuote
+                        className="composer-selection-icon"
+                        aria-hidden="true"
+                      />
+                      <span>Selection</span>
+                    </div>
+                    {(onRemoveInjectedItem || onClearInjectedContext) && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="composer-selection-remove tap-expand"
+                        onClick={() =>
+                          onRemoveInjectedItem
+                            ? onRemoveInjectedItem(item.id)
+                            : onClearInjectedContext?.()
+                        }
+                        title="Remove selection"
+                        aria-label={`Remove selection ${item.label}`}
+                      >
+                        <X className="composer-mini-icon" aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <Textarea
             id={compact ? undefined : "chat-message-input"}
             name="message"

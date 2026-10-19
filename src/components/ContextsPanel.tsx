@@ -1,32 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Code2,
-  FileText,
-  Pencil,
-  Plus,
-  Table2,
-  Trash2,
-  X,
+  ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Code2, FileText,
+  MoreHorizontal, Pencil, Plus, Table2, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePuterImage } from "@/hooks/usePuterImage";
 import { cn } from "@/lib/utils";
 import {
-  CONTEXT_DRAG_MIME,
-  contextItemKey,
-  decodeContextDragPayload,
-  isContextImageItem,
-  isContextTextItem,
-  type ContextDropPayload,
-  type ContextGroup,
-  type ContextImageItem,
-  type ContextItem,
-  type ContextSourceRef,
+  CONTEXT_DRAG_MIME, contextItemKey, decodeContextDragPayload,
+  isContextImageItem, isContextTextItem,
+  type ContextDropPayload, type ContextGroup, type ContextImageItem,
+  type ContextItem, type ContextSourceRef,
 } from "@/lib/contextGroups";
 import "./ContextsPanel.css";
 
@@ -44,19 +29,15 @@ interface ContextsPanelProps {
   onDeleteGroup: (groupId: string) => void;
   onRenameGroup: (groupId: string, newTitle: string) => void;
   onInjectGroup: (group: ContextGroup) => void;
-  /**
-   * Left-arrow (`←`) on a single item: queue only that image, text, code block,
-   * or table in the composer, without injecting the whole Context Group.
-   */
+  /** Left-arrow (`←`) on a single item: queue only that item in the composer. */
   onInjectItem?: (item: ContextItem) => void;
   /** Keys of the items already queued in the composer (from `contextItemKey`). */
   injectedItemKeys?: Set<string>;
   onLocateItem: (source: ContextSourceRef) => void;
-  /**
-   * Best-effort provenance for a plain-text drop: which message in the open
-   * transcript holds it, so the row gets a working `→` locate button.
-   */
+  /** Best-effort provenance for a plain-text drop. */
   resolveTextSource?: (text: string) => ContextSourceRef | undefined;
+  /** Optional controlled item id whose `...` action strip (`←`, `→`, `×`) is open. */
+  openActionItemId?: string | null;
 }
 
 /** `←` copy for an item: inject it, or take it back out of the composer. */
@@ -65,14 +46,13 @@ function injectActionLabel(label: string, active: boolean): string {
 }
 
 const ContextThumb = ({
-  item,
-  isInjected,
-  onInject,
-  onRemove,
-  onLocate,
+  item, isInjected, isMenuOpen, onToggleMenu, onCloseMenu, onInject, onRemove, onLocate,
 }: {
   item: ContextImageItem;
   isInjected?: boolean;
+  isMenuOpen: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
   onInject?: () => void;
   onRemove: () => void;
   onLocate?: () => void;
@@ -87,69 +67,77 @@ const ContextThumb = ({
       {src ? (
         <img src={src} alt={item.label} className="context-thumb-img" loading="lazy" />
       ) : (
-        <span className="context-thumb-missing">
-          {failed ? "Unavailable" : "Loading…"}
-        </span>
+        <span className="context-thumb-missing">{failed ? "Unavailable" : "Loading…"}</span>
       )}
-      {onLocate && (
-        <button
-          type="button"
-          className="context-thumb-locate tap-expand"
-          onClick={onLocate}
-          title={`Show ${item.label} in chat`}
-          aria-label={`Show ${item.label} in chat`}
-        >
-          <ArrowRight className="context-thumb-icon" aria-hidden="true" />
-        </button>
-      )}
-      <div className="context-thumb-actions">
-        <button
-          type="button"
-          className="context-thumb-remove tap-expand"
-          onClick={onRemove}
-          title={`Remove ${item.label}`}
-          aria-label={`Remove ${item.label}`}
-        >
-          <X className="context-thumb-icon" aria-hidden="true" />
-        </button>
+      <div
+        className={cn("context-thumb-actions", isMenuOpen && "context-thumb-actions-open")}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isMenuOpen ? (
+          <div className="context-thumb-menu" role="group" aria-label={`Actions for ${item.label}`}>
+            {onInject && (
+              <button
+                type="button"
+                className={cn("context-thumb-inject tap-expand", isInjected && "context-thumb-inject-active")}
+                onClick={() => { onInject(); onCloseMenu(); }}
+                title={injectActionLabel(item.label, Boolean(isInjected))}
+                aria-label={injectActionLabel(item.label, Boolean(isInjected))}
+                aria-pressed={Boolean(isInjected)}
+              >
+                <ArrowLeft className="context-thumb-icon" aria-hidden="true" />
+              </button>
+            )}
+            {onLocate ? (
+              <button
+                type="button"
+                className="context-thumb-locate tap-expand"
+                onClick={() => { onLocate(); onCloseMenu(); }}
+                title={`Show ${item.label} in chat`}
+                aria-label={`Show ${item.label} in chat`}
+              >
+                <ArrowRight className="context-thumb-icon" aria-hidden="true" />
+              </button>
+            ) : (
+              <span
+                className="context-thumb-locate context-thumb-locate-disabled"
+                title="No source — uploaded from device"
+                aria-hidden="true"
+              >
+                <ArrowRight className="context-thumb-icon opacity-30" aria-hidden="true" />
+              </span>
+            )}
+            <button
+              type="button"
+              className="context-thumb-remove tap-expand"
+              onClick={() => { onRemove(); onCloseMenu(); }}
+              title={`Remove ${item.label}`}
+              aria-label={`Remove ${item.label}`}
+            >
+              <X className="context-thumb-icon" aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="context-thumb-more tap-expand"
+            onClick={onToggleMenu}
+            title={`Actions for ${item.label}`}
+            aria-label={`Actions for ${item.label}`}
+            aria-expanded={false}
+          >
+            <MoreHorizontal className="context-thumb-icon" aria-hidden="true" />
+          </button>
+        )}
       </div>
-      {onInject && (
-        <button
-          type="button"
-          className={cn(
-            "context-thumb-inject tap-expand",
-            isInjected && "context-thumb-inject-active"
-          )}
-          onClick={onInject}
-          title={injectActionLabel(item.label, Boolean(isInjected))}
-          aria-label={injectActionLabel(item.label, Boolean(isInjected))}
-          aria-pressed={Boolean(isInjected)}
-        >
-          <ArrowLeft className="context-thumb-icon" aria-hidden="true" />
-        </button>
-      )}
     </div>
   );
 };
 
 export const ContextsPanel = ({
-  contextGroups,
-  expandedGroupId,
-  injectedGroupId,
-  isOpen,
-  onToggle,
-  onExpandGroup,
-  onCreateGroup,
-  onAddItem,
-  onAddFiles,
-  onRemoveItem,
-  onDeleteGroup,
-  onRenameGroup,
-  onInjectGroup,
-  onInjectItem,
-  injectedItemKeys,
-  onLocateItem,
-  resolveTextSource,
+  contextGroups, expandedGroupId, injectedGroupId, isOpen, onToggle,
+  onExpandGroup, onCreateGroup, onAddItem, onAddFiles, onRemoveItem,
+  onDeleteGroup, onRenameGroup, onInjectGroup, onInjectItem, injectedItemKeys,
+  onLocateItem, resolveTextSource, openActionItemId,
 }: ContextsPanelProps) => {
   const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +145,8 @@ export const ContextsPanel = ({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
+  const [internalOpenItemId, setInternalOpenItemId] = useState<string | null>(null);
+  const activeMenuItemId = openActionItemId !== undefined ? openActionItemId : internalOpenItemId;
 
   useEffect(() => {
     const el = panelRef.current;
@@ -165,32 +155,34 @@ export const ContextsPanel = ({
     else el.setAttribute("inert", "");
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!internalOpenItemId || typeof document === "undefined") return;
+    const closeMenu = () => setInternalOpenItemId(null);
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setInternalOpenItemId(null); };
+    document.addEventListener("click", closeMenu);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("click", closeMenu);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [internalOpenItemId]);
+
   const handleDropData = (e: React.DragEvent, targetGroupId?: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverId(null);
-
     const rawContext = e.dataTransfer.getData(CONTEXT_DRAG_MIME);
     if (rawContext) {
       const payload = decodeContextDragPayload(rawContext);
-      if (payload) {
-        onAddItem(payload, targetGroupId);
-        return;
-      }
+      if (payload) { onAddItem(payload, targetGroupId); return; }
     }
 
     const files = Array.from(e.dataTransfer.files || []);
-    if (files.length > 0 && onAddFiles) {
-      onAddFiles(files, targetGroupId);
-      return;
-    }
+    if (files.length > 0 && onAddFiles) { onAddFiles(files, targetGroupId); return; }
 
     const plainText = e.dataTransfer.getData("text/plain")?.trim();
     if (plainText) {
       const firstLine = plainText.split("\n")[0]?.trim().slice(0, 36) || "Text snippet";
-      // The custom MIME is primary, but if the browser dropped it we still try
-      // to work out where the snippet came from — otherwise the new row would
-      // have no `→` button and the user could never get back to the source.
       const source = resolveTextSource?.(plainText);
       onAddItem(
         {
@@ -222,9 +214,7 @@ export const ContextsPanel = ({
           <div className="contexts-title-row">
             <h2 className="contexts-title">contexts</h2>
             {contextGroups.length > 0 && (
-              <span className="contexts-count" aria-hidden="true">
-                {contextGroups.length}
-              </span>
+              <span className="contexts-count" aria-hidden="true">{contextGroups.length}</span>
             )}
           </div>
           <Button
@@ -240,11 +230,7 @@ export const ContextsPanel = ({
         </div>
 
         <div className="contexts-toolbar">
-          <button
-            type="button"
-            className="contexts-new-btn"
-            onClick={() => onCreateGroup()}
-          >
+          <button type="button" className="contexts-new-btn" onClick={() => onCreateGroup()}>
             <Plus className="contexts-new-icon" aria-hidden="true" />
             New Context
           </button>
@@ -256,28 +242,18 @@ export const ContextsPanel = ({
               <div className="context-empty">
                 <button
                   type="button"
-                  className={cn(
-                    "context-dropzone",
-                    dragOverId === "__empty__" && "context-dropzone-active"
-                  )}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOverId("__empty__");
-                  }}
+                  className={cn("context-dropzone", dragOverId === "__empty__" && "context-dropzone-active")}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverId("__empty__"); }}
                   onDragLeave={() => setDragOverId(null)}
                   onDrop={(e) => handleDropData(e, undefined)}
-                  onClick={() => {
-                    setFileTargetGroupId(undefined);
-                    fileInputRef.current?.click();
-                  }}
+                  onClick={() => { setFileTargetGroupId(undefined); fileInputRef.current?.click(); }}
                 >
                   <Plus className="contexts-new-icon" aria-hidden="true" />
                   Drag &amp; drop images or text here
                 </button>
                 <p className="context-empty-title">No contexts yet</p>
                 <p className="context-empty-sub">
-                  Drag any image, text selection, code block, or table here
-                  to build a reusable context group.
+                  Drag any image, text selection, code block, or table here to build a reusable context group.
                 </p>
               </div>
             ) : (
@@ -290,15 +266,8 @@ export const ContextsPanel = ({
                 return (
                   <div
                     key={group.id}
-                    className={cn(
-                      "context-card",
-                      dragOverId === group.id && "context-card-dragover",
-                      isInjected && "context-card-injected"
-                    )}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOverId(group.id);
-                    }}
+                    className={cn("context-card", dragOverId === group.id && "context-card-dragover", isInjected && "context-card-injected")}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverId(group.id); }}
                     onDragLeave={() => setDragOverId(null)}
                     onDrop={(e) => handleDropData(e, group.id)}
                   >
@@ -321,16 +290,10 @@ export const ContextsPanel = ({
                           type="button"
                           className="context-card-toggle"
                           aria-expanded={isExpanded}
-                          onClick={() =>
-                            onExpandGroup(isExpanded ? null : group.id)
-                          }
+                          onClick={() => onExpandGroup(isExpanded ? null : group.id)}
                         >
                           <span className="context-card-title">{group.title}</span>
-                          {isExpanded ? (
-                            <ChevronDown className="context-card-chevron" aria-hidden="true" />
-                          ) : (
-                            <ChevronRight className="context-card-chevron" aria-hidden="true" />
-                          )}
+                          {isExpanded ? <ChevronDown className="context-card-chevron" aria-hidden="true" /> : <ChevronRight className="context-card-chevron" aria-hidden="true" />}
                         </button>
                       )}
 
@@ -352,21 +315,11 @@ export const ContextsPanel = ({
                       <div className="context-card-body">
                         <button
                           type="button"
-                          className={cn(
-                            "context-dropzone",
-                            dragOverId === `${group.id}:drop` && "context-dropzone-active"
-                          )}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDragOverId(`${group.id}:drop`);
-                          }}
+                          className={cn("context-dropzone", dragOverId === `${group.id}:drop` && "context-dropzone-active")}
+                          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverId(`${group.id}:drop`); }}
                           onDragLeave={() => setDragOverId(null)}
                           onDrop={(e) => handleDropData(e, group.id)}
-                          onClick={() => {
-                            setFileTargetGroupId(group.id);
-                            fileInputRef.current?.click();
-                          }}
+                          onClick={() => { setFileTargetGroupId(group.id); fileInputRef.current?.click(); }}
                         >
                           <Plus className="contexts-new-icon" aria-hidden="true" />
                           Drag &amp; drop images or text here
@@ -378,20 +331,15 @@ export const ContextsPanel = ({
                               <ContextThumb
                                 key={img.id}
                                 item={img}
-                                isInjected={injectedItemKeys?.has(
-                                  contextItemKey(img)
-                                )}
-                                onInject={
-                                  onInjectItem
-                                    ? () => onInjectItem(img)
-                                    : undefined
+                                isInjected={injectedItemKeys?.has(contextItemKey(img))}
+                                isMenuOpen={activeMenuItemId === img.id}
+                                onToggleMenu={() =>
+                                  setInternalOpenItemId((prev) => (prev === img.id ? null : img.id))
                                 }
+                                onCloseMenu={() => setInternalOpenItemId(null)}
+                                onInject={onInjectItem ? () => onInjectItem(img) : undefined}
                                 onRemove={() => onRemoveItem(group.id, img.id)}
-                                onLocate={
-                                  img.source
-                                    ? () => onLocateItem(img.source!)
-                                    : undefined
-                                }
+                                onLocate={img.source ? () => onLocateItem(img.source!) : undefined}
                               />
                             ))}
                           </div>
@@ -402,78 +350,81 @@ export const ContextsPanel = ({
                             {texts.map((item) => {
                               const KindIcon =
                                 item.kind === "code" ? Code2 : item.kind === "table" ? Table2 : FileText;
-                              const isItemInjected = injectedItemKeys?.has(
-                                contextItemKey(item)
-                              );
+                              const isItemInjected = injectedItemKeys?.has(contextItemKey(item));
+                              const isMenuOpen = activeMenuItemId === item.id;
                               return (
                                 <div
                                   key={item.id}
-                                  className={cn(
-                                    "context-item-row",
-                                    isItemInjected && "context-item-row-injected"
-                                  )}
+                                  className={cn("context-item-row", isItemInjected && "context-item-row-injected")}
                                 >
                                   <KindIcon className="context-item-kind-icon" aria-hidden="true" />
-                                  {/* No preview: the `→` action already shows the
-                                      saved text in the chat, highlighted in place. */}
                                   <span className="context-item-label" title={item.text.slice(0, 120)}>
                                     {item.label}
                                   </span>
-                                  <div className="context-item-actions">
-                                    {onInjectItem && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className={cn(
-                                          "context-item-action context-item-inject tap-expand",
-                                          isItemInjected && "context-item-action-active"
+                                  <div className="context-item-actions" onClick={(e) => e.stopPropagation()}>
+                                    {isMenuOpen ? (
+                                      <>
+                                        {onInjectItem && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={cn(
+                                              "context-item-action context-item-inject tap-expand",
+                                              isItemInjected && "context-item-action-active"
+                                            )}
+                                            onClick={() => { onInjectItem(item); setInternalOpenItemId(null); }}
+                                            title={injectActionLabel(item.label, Boolean(isItemInjected))}
+                                            aria-label={injectActionLabel(item.label, Boolean(isItemInjected))}
+                                            aria-pressed={Boolean(isItemInjected)}
+                                          >
+                                            <ArrowLeft className="context-item-action-icon" aria-hidden="true" />
+                                          </Button>
                                         )}
-                                        onClick={() => onInjectItem(item)}
-                                        title={injectActionLabel(
-                                          item.label,
-                                          Boolean(isItemInjected)
+                                        {item.source ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="context-item-action context-item-locate tap-expand"
+                                            onClick={() => { onLocateItem(item.source!); setInternalOpenItemId(null); }}
+                                            title={`Show ${item.label} in chat`}
+                                            aria-label={`Show ${item.label} in chat`}
+                                          >
+                                            <ArrowRight className="context-item-action-icon" aria-hidden="true" />
+                                          </Button>
+                                        ) : (
+                                          <span
+                                            className="context-item-action context-item-action-disabled"
+                                            title="No source — dragged from outside the chat"
+                                            aria-hidden="true"
+                                          >
+                                            <ArrowRight className="context-item-action-icon opacity-30" aria-hidden="true" />
+                                          </span>
                                         )}
-                                        aria-label={injectActionLabel(
-                                          item.label,
-                                          Boolean(isItemInjected)
-                                        )}
-                                        aria-pressed={Boolean(isItemInjected)}
-                                      >
-                                        <ArrowLeft
-                                          className="context-item-action-icon"
-                                          aria-hidden="true"
-                                        />
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="context-item-action tap-expand"
-                                      onClick={() => onRemoveItem(group.id, item.id)}
-                                      title={`Remove ${item.label}`}
-                                      aria-label={`Remove ${item.label}`}
-                                    >
-                                      <X className="context-item-action-icon" aria-hidden="true" />
-                                    </Button>
-                                    {item.source ? (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="context-item-action tap-expand"
-                                        onClick={() => onLocateItem(item.source!)}
-                                        title={`Show ${item.label} in chat`}
-                                        aria-label={`Show ${item.label} in chat`}
-                                      >
-                                        <ArrowRight className="context-item-action-icon" aria-hidden="true" />
-                                      </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="context-item-action context-item-remove tap-expand"
+                                          onClick={() => { onRemoveItem(group.id, item.id); setInternalOpenItemId(null); }}
+                                          title={`Remove ${item.label}`}
+                                          aria-label={`Remove ${item.label}`}
+                                        >
+                                          <X className="context-item-action-icon" aria-hidden="true" />
+                                        </Button>
+                                      </>
                                     ) : (
-                                      <span
-                                        className="context-item-action context-item-action-disabled"
-                                        title="No source — dragged from outside the chat"
-                                        aria-hidden="true"
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="context-item-action context-item-more tap-expand"
+                                        onClick={() =>
+                                          setInternalOpenItemId((prev) => (prev === item.id ? null : item.id))
+                                        }
+                                        title={`Actions for ${item.label}`}
+                                        aria-label={`Actions for ${item.label}`}
+                                        aria-expanded={false}
                                       >
-                                        <ArrowRight className="context-item-action-icon opacity-30" aria-hidden="true" />
-                                      </span>
+                                        <MoreHorizontal className="context-item-action-icon" aria-hidden="true" />
+                                      </Button>
                                     )}
                                   </div>
                                 </div>
@@ -485,10 +436,7 @@ export const ContextsPanel = ({
                         <div className="context-card-footer">
                           <button
                             type="button"
-                            className={cn(
-                              "context-inject-btn",
-                              isInjected && "context-inject-btn-active"
-                            )}
+                            className={cn("context-inject-btn", isInjected && "context-inject-btn-active")}
                             onClick={() => onInjectGroup(group)}
                             title={`Inject ${group.title} into input`}
                             aria-label={`Inject ${group.title} into input`}
@@ -501,10 +449,7 @@ export const ContextsPanel = ({
                               variant="ghost"
                               size="icon"
                               className="context-card-action tap-expand"
-                              onClick={() => {
-                                setTitleDraft(group.title);
-                                setEditingGroupId(group.id);
-                              }}
+                              onClick={() => { setTitleDraft(group.title); setEditingGroupId(group.id); }}
                               title="Rename context"
                               aria-label={`Rename ${group.title}`}
                             >
@@ -540,13 +485,10 @@ export const ContextsPanel = ({
           aria-label="Add files to context"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
-            if (files.length > 0 && onAddFiles) {
-              onAddFiles(files, fileTargetGroupId);
-            }
+            if (files.length > 0 && onAddFiles) onAddFiles(files, fileTargetGroupId);
             if (fileInputRef.current) fileInputRef.current.value = "";
           }}
         />
-
       </aside>
     </>
   );
