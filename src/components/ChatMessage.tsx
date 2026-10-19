@@ -18,6 +18,7 @@ import { checkAuthStatus } from "@/lib/backend";
 import { synthesizeSpeech, stripMarkdownForSpeech, stopAllSpeech, setCurrentSpeech } from "@/lib/tts";
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { usePuterImage } from "@/hooks/usePuterImage";
+import type { EditedFrom } from "@/lib/backend";
 import type { ModelCatalog } from "@/lib/models";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import { stripImageMarker } from "@/lib/attachments";
@@ -31,6 +32,11 @@ interface ChatMessageProps {
   image?: string;
   /** Puter path of a generated image; loaded from Puter storage for display. */
   imagePath?: string;
+  /**
+   * Set when this image was produced by editing an earlier one. The caption
+   * tells the reader the picture is an edit, not a fresh generation.
+   */
+  editedFrom?: EditedFrom;
   /** The model summarized earlier turns to produce this reply. */
   compacted?: boolean;
   /** Position in the transcript; tags the node for in-conversation search. */
@@ -62,7 +68,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, compacted, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -394,6 +400,13 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                   if (e.key === "Enter" || e.key === " ") setPreviewOpen(true);
                 }}
               />
+            )}
+            {imageSrc && editedFrom && (
+              <div className="msg-image-caption">
+                {editedFrom.origin === "attachment"
+                  ? "Edited from an attached image"
+                  : "Edited from the previous image"}
+              </div>
             )}
             {(thinking || thinkingOpen) && (
               <div className="msg-think-wrap">

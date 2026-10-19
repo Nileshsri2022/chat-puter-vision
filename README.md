@@ -40,6 +40,7 @@ Built with React and TypeScript, the app supports light and dark themes, a docke
 | **Find in chat** | Search the active transcript with highlighted matches, a match counter, and previous/next navigation. |
 | **Artifacts panel** | Open the panel on the right for what the conversation produced: every image (attached and generated) plus the code blocks and tables in the model's answers, filtered by kind. Click an entry to jump to the message, or straight to the code block or table, or preview, copy, or download it directly: code as a source file, a table as CSV or as a table that pastes into documents. Attached and generated images are stored in your Puter Drive, so they survive a reload and follow you to another device; deleting a message or a chat reclaims them. |
 | **Image tools** | Attach up to four images to a vision-capable model. Attachments are converted to a supported format when needed and shrunk before sending (long edge ≤ 1568 px, ≈1.2 MB each), then sent as data URLs inside `image_url` blocks. Extract text with OCR or generate an image from a prompt. |
+| **Image editing** | In image mode, an attached image is the base of the generation: the prompt edits those pixels instead of describing a new picture. Leave the attachment out and the next prompt edits the image the chat already holds, so "now make it night" continues the same picture. The composer says which image the call will act on. |
 | **Voice tools** | Click the microphone to start recording and click again to stop — a recording always stays stoppable, including while a reply streams. The elapsed time is shown, recordings stop automatically after five minutes, and the audio is decoded to 16 kHz mono WAV before transcription. Review the transcription before sending. Read assistant replies aloud. |
 | **Export and sharing** | Export the active conversation as Markdown, copy content, or use native sharing where supported. |
 | **Local cache and cloud sync** | Keep conversations in browser storage and attempt automatic synchronization when signed in. |
@@ -93,7 +94,7 @@ Open **http://localhost:8080**. The Puter SDK is loaded by `index.html`; no prov
 | `npm run typecheck` | Type-check the application without emitting files (`tsc --noEmit -p tsconfig.app.json`). |
 | `npm test` | Run the Bun test suite; Bun must be installed. |
 
-Tests in [`tests/`](tests/) cover streaming, model metadata, media helpers, attachment preparation (`tests/attachments.test.ts`), image conversion and downscaling (`tests/imageConversion.test.ts`), recording/transcription helpers (`tests/audio.test.ts`), account APIs, cloud-sync merging, text-to-speech, Drive export helpers, the artifacts index (images in `tests/artifacts.test.ts`, code-block and table extraction plus CSV and clipboard formats in `tests/artifactBlocks.test.ts`, and the panel render smoke test `tests/artifactsPanel.test.tsx`), and responsive-layout guards. SDK calls are mocked, and storage tests use an in-memory `localStorage` shim; these are not live-provider integration tests.
+Tests in [`tests/`](tests/) cover streaming, model metadata, media helpers, attachment preparation (`tests/attachments.test.ts`), the image-edit context and the image-to-image options (`tests/imageContext.test.ts`), image conversion and downscaling (`tests/imageConversion.test.ts`), recording/transcription helpers (`tests/audio.test.ts`), account APIs, cloud-sync merging, text-to-speech, Drive export helpers, the artifacts index (images in `tests/artifacts.test.ts`, code-block and table extraction plus CSV and clipboard formats in `tests/artifactBlocks.test.ts`, and the panel render smoke test `tests/artifactsPanel.test.tsx`), and responsive-layout guards. SDK calls are mocked, and storage tests use an in-memory `localStorage` shim; these are not live-provider integration tests.
 
 **Known baseline failures:** the existing Drive export test expects the old folder name ([#55](https://github.com/Nileshsri2022/chat-puter-vision/issues/55)), and ESLint reports two blocking violations ([#56](https://github.com/Nileshsri2022/chat-puter-vision/issues/56)). When submitting a change, distinguish these existing failures from any new regressions rather than disabling checks.
 
@@ -127,7 +128,8 @@ src/
 │   ├── artifactFormats.ts   # CSV, clipboard and download formats for code and tables
 │   ├── audio.ts             # Recorder container selection, WAV encoding, duration helpers
 │   ├── dataUrl.ts           # data: URL encode/decode helpers shared by attachments and speech
-│   ├── images.ts            # Image generation
+│   ├── images.ts            # Image generation, and the image-to-image edit options
+│   ├── imageContext.ts      # Which image an image-generation turn edits
 │   ├── ocr.ts               # Text extraction from images
 │   ├── speech.ts            # Audio transcription (decodes recordings, sends a data URL)
 │   ├── tts.ts               # Read-aloud playback and Markdown-to-speech conversion

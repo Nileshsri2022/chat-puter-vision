@@ -101,6 +101,54 @@ deliberately do not, because the conversation may still be alive elsewhere.
 The model receives the text prompt plus the image blocks and responds with
 streaming text, rendered with markdown formatting in `ChatMessage.tsx`.
 
+## Image Editing — An Attachment as the Base of a Generation
+
+The ✨ button in the composer is the *image* path, and it is a different
+request: `puter.ai.txt2img` rather than `puter.ai.chat`. A prompt like
+*"remove the people from image"* only means something if the model receives
+the image, so the call carries it as a **reference**:
+
+```typescript
+// src/lib/images.ts — buildTxt2ImgOptions()
+// One reference:
+{ puter_output_path: "freetalk-abc.png", input_image: "data:image/png;base64,…" }
+// Several:
+{ puter_output_path: "freetalk-abc.png", input_images: ["data:…", "data:…"] }
+```
+
+`input_image` / `input_images` are the documented image-to-image options
+(https://docs.puter.com/AI/txt2img/): a public URL, a data URI or raw
+base64. Without them the request is text-to-image, and an instruction that
+refers to "the image" is meaningless to the model — it invents a scene
+instead of editing the one on screen.
+
+**Which image is the base** (`src/lib/imageContext.ts`):
+
+| Turn | Base |
+| --- | --- |
+| Attachments on this turn | those attachments |
+| No attachment, the chat holds an image | the chat's current image — the newest one in the transcript, a generated result beating the attachments that fed it |
+| No attachment, no image in the chat | none: a plain text-to-image |
+
+The current image is *derived* from the transcript on every read, never
+stored, so a delete or an edit cannot leave it pointing at a picture that is
+gone. It is read back from Drive and encoded as a data URI
+(`loadImageDataUrl`), which is the same wire form the chat path uses. A
+legacy inline image qualifies only when it is a data URI — a hosted URL may
+have expired, and the provider could not fetch it.
+
+The base is scoped to the **open conversation**: an image in another chat is
+not reused. (A cross-chat picker is a follow-up.)
+
+A base that cannot be read aborts the turn with a toast — it never falls
+back to a text-to-image, because an unrelated picture is exactly the failure
+this path exists to prevent.
+
+The lineage is recorded on the generated message (`Message.editedFrom`), so
+the transcript can say that a picture is an edit of an earlier one.
+
+Full design and rationale: [`docs/image-edit-context-spec.md`](docs/image-edit-context-spec.md).
+
 ## Supported Models for Image Analysis
 Vision support is read from the live `puter.ai.listModels()` catalog
 (`modalities.input` includes `"image"`), surfaced via `modelSupportsVision()` in
@@ -137,9 +185,12 @@ does not advertise image input is rejected with HTTP 400
 - `src/lib/attachments.ts` — preparation + the attachment contract
 - `src/lib/artifacts.ts` — the image index behind the artifacts panel
 - `src/lib/images.ts` — Drive persistence + reads for generated and attached images
+- `src/lib/imageContext.ts` — which image an image-generation turn edits
 - `src/lib/utils/imageConversion.ts` — format conversion + downscaling
 - `src/lib/streamingHandler.ts` — message building + streaming
 - `src/lib/models.ts` — live catalog + vision gating
 - `src/components/ChatInput.tsx` — selection, previews, OCR
 - `docs/image-artifacts-panel-spec.md` — the images panel that references all of it
+- `docs/image-edit-context-spec.md` — the image-edit context (attachment as the base of a generation)
 - https://docs.puter.com/AI/chat/
+- https://docs.puter.com/AI/txt2img/

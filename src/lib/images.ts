@@ -4,6 +4,14 @@
 // Each image is saved to the user's Puter storage through `puter_output_path`,
 // so the chat keeps only a small file path instead of a temporary hosted URL or
 // a large data URI. The file is read back with `puter.fs.read` when displayed.
+//
+// The same call is also the *editing* call: `input_image` / `input_images`
+// (docs read 2026-10-19) hand the model pixels to work from, which is what
+// turns "remove the people from this image" into an edit instead of a
+// brand-new picture. Without them the request is text-to-image, and an
+// instruction that refers to "the image" is meaningless to the model.
+
+import { blobToDataUrl, dataUrlMimeType } from "./dataUrl";
 
 interface Txt2ImgErrorBody {
   message?: unknown;
@@ -11,12 +19,20 @@ interface Txt2ImgErrorBody {
   errorCode?: unknown;
 }
 
+/** The error code an SDK rejection carries, when it carries one. */
+function errorCodeOf(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const body = error as Txt2ImgErrorBody;
+  const code = body.errorCode ?? body.code;
+  return typeof code === "string" ? code : undefined;
+}
+
 function friendlyImageError(error: unknown): Error {
   const body =
     typeof error === "object" && error !== null
       ? (error as Txt2ImgErrorBody)
       : {};
-  const code = body.errorCode ?? body.code;
+  const code = errorCodeOf(error);
   const message = typeof body.message === "string" ? body.message : "";
   if (code === "prompt_required")
     return new Error("Please describe the image first.");
@@ -64,17 +80,100 @@ export function newAttachmentPath(mimeType?: string): string {
 }
 
 /**
+ * How one image-generation call is put together.
+ */
+export interface GenerateImageOptions {
+  /**
+   * The images the call edits, as data URIs. Empty (the default) means plain
+   * text-to-image.
+   */
+  inputImages?: string[];
+  /** Image model id, e.g. "gpt-image-2". */
+  model?: string;
+  /** Provider quality tier ("low" | "medium" | "high"). */
+  quality?: string;
+}
+
+/**
+ * The media type every input shares — set only when they all share one, since
+ * a single value cannot describe mixed types.
+ */
+function commonMimeType(dataUrls: string[]): string | undefined {
+  const types = dataUrls
+    .map((url) => dataUrlMimeType(url))
+    .filter((type): type is string => Boolean(type));
+  if (types.length === 0) return undefined;
+  const first = types[0];
+  return types.every((type) => type === first) ? first : undefined;
+}
+
+/**
+ * The exact option object handed to `puter.ai.txt2img`.
+ *
+ * Pure, so the wire form can be pinned by a test: one reference goes in as
+ * `input_image` (the documented single-image shorthand) and several go in as
+ * `input_images`. `input_image_mime_type` is a fallback for providers that
+ * label the upload from the option rather than from the payload — Gemini
+ * rejects a typeless upload.
+ */
+export function buildTxt2ImgOptions(
+  outputPath: string,
+  options: GenerateImageOptions = {}
+): Record<string, unknown> {
+  const opts: Record<string, unknown> = { puter_output_path: outputPath };
+  if (options.model) opts.model = options.model;
+  if (options.quality) opts.quality = options.quality;
+  const inputs = (options.inputImages ?? []).filter(Boolean);
+  if (inputs.length === 0) return opts;
+  if (inputs.length === 1) {
+    opts.input_image = inputs[0];
+  } else {
+    opts.input_images = inputs;
+  }
+  const mimeType = commonMimeType(inputs);
+  if (mimeType) opts.input_image_mime_type = mimeType;
+  return opts;
+}
+
+/**
  * Generate an image and save it to Puter storage.
  * Resolves to the Puter path of the saved file.
+ *
+ * With `inputImages` the call is an edit: the model receives those pixels and
+ * the prompt describes the change. Without them it is a plain
+ * text-to-image — the behaviour every caller had before.
  */
-export async function generateImage(prompt: string): Promise<string> {
+export async function generateImage(
+  prompt: string,
+  options: GenerateImageOptions = {}
+): Promise<string> {
+  const puter = window.puter;
+  if (!puter?.ai?.txt2img)
+    throw new Error("Image generation is not available.");
+  const path = newImagePath();
+  const inputs = options.inputImages ?? [];
   try {
-    const puter = window.puter;
-    if (!puter?.ai?.txt2img)
-      throw new Error("Image generation is not available.");
-    const path = newImagePath();
-    const image = await puter.ai.txt2img(prompt, { puter_output_path: path });
-    if (!image) throw new Error("Image generation returned no image.");
+    if (inputs.length > 1) {
+      let image: unknown;
+      try {
+        image = await puter.ai.txt2img(prompt, buildTxt2ImgOptions(path, options));
+      } catch (error) {
+        // Some routes take a single reference and reject a list with a plain
+        // bad_request (Cloudflare FLUX.2 does). Retry with the first image so
+        // a multi-attachment turn still edits something instead of failing.
+        // bad_request is raised before any credit is checked, so the retry is
+        // free.
+        if (errorCodeOf(error) !== "bad_request") throw error;
+        image = await puter.ai.txt2img(
+          prompt,
+          buildTxt2ImgOptions(path, { ...options, inputImages: inputs.slice(0, 1) })
+        );
+      }
+      if (!image) throw new Error("Image generation returned no image.");
+    } else {
+      const image = await puter.ai.txt2img(prompt, buildTxt2ImgOptions(path, options));
+      if (!image) throw new Error("Image generation returned no image.");
+    }
     return path;
   } catch (error) {
     throw friendlyImageError(error);
@@ -118,6 +217,19 @@ export function loadImageUrl(path: string): Promise<string> {
   imageUrlCache.set(path, pending);
   pending.catch(() => imageUrlCache.delete(path));
   return pending;
+}
+
+/**
+ * Resolves to a stored image encoded as a data URI.
+ *
+ * This is the form `input_image` wants: the same `data:<mime>;base64,…`
+ * shape the chat path sends, which every provider route accepts. The blob
+ * comes from the shared per-path cache, so an image already on screen costs
+ * one read in total.
+ */
+export async function loadImageDataUrl(path: string): Promise<string> {
+  const blob = await loadImageBlob(path);
+  return blobToDataUrl(blob);
 }
 
 /**

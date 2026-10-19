@@ -21,9 +21,11 @@ import {
   type AttachmentRef,
   type BackendUser,
   type CompactionItem,
+  type ImageOrigin,
 } from "@/lib/backend";
 import { streamAIResponse, stripThinkBlocks, toHistory } from "@/lib/streamingHandler";
-import { deleteImage, generateImage, loadImageBlob, newAttachmentPath, persistAttachment } from "@/lib/images";
+import { deleteImage, generateImage, loadImageBlob, loadImageDataUrl, newAttachmentPath, persistAttachment } from "@/lib/images";
+import { findCurrentImage } from "@/lib/imageContext";
 import { reclaimImagePaths } from "@/lib/artifacts";
 import { appendImageMarker, hasImageMarker, prepareImageAttachments, stripImageMarker } from "@/lib/attachments";
 import { syncConversations, recordDelete } from "@/lib/sync";
@@ -260,7 +262,15 @@ const Index = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
-  const messages = currentConversation?.messages || [];
+  // Memoised so the identity is stable: a fresh [] on every render would make
+  // every effect and memo that depends on `messages` re-run for nothing.
+  const messages = useMemo(
+    () => currentConversation?.messages ?? [],
+    [currentConversation]
+  );
+  // The image a follow-up image prompt would edit. Derived from the
+  // transcript, so it can never point at a picture that was deleted.
+  const currentImage = useMemo(() => findCurrentImage(messages), [messages]);
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -739,7 +749,7 @@ const Index = () => {
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
   };
-  const handleGenerateImage = async (prompt: string) => {
+  const handleGenerateImage = async (prompt: string, images?: File[]) => {
     if (!currentConversation) return;
     if (!isAuthenticated) {
       toast({
@@ -750,7 +760,72 @@ const Index = () => {
       });
       return;
     }
-    const userMessage: Message = { role: "user", content: prompt };
+
+    // Attachments on this turn are the edit base: the image model receives
+    // their pixels, so the prompt can talk about "the image" and mean it.
+    let dataUrls: string[] = [];
+    let attachmentRefs: AttachmentRef[] = [];
+    if (images && images.length > 0) {
+      try {
+        ({ dataUrls, refs: attachmentRefs } =
+          await prepareAndStoreAttachments(images, notifyStoreFailed));
+      } catch (error) {
+        toast({
+          title: "Image processing failed",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to process images. Please try again.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
+    // The base of the edit: this turn's attachments, else the conversation's
+    // current image — so a follow-up prompt ("now make it night") edits the
+    // picture the previous turn produced instead of starting over.
+    let inputImages = dataUrls;
+    let base: { src: string; origin: ImageOrigin } | null = null;
+    if (inputImages.length > 0) {
+      base = { src: attachmentRefs[0].path, origin: "attachment" };
+    } else {
+      const current = findCurrentImage(messages);
+      if (current) {
+        try {
+          // A Drive path is read back and encoded; a legacy data URI already
+          // carries its bytes and is sent as it is.
+          inputImages = [
+            current.kind === "data"
+              ? current.ref
+              : await loadImageDataUrl(current.ref),
+          ];
+        } catch {
+          // Never fall back to a plain text-to-image here: that is the exact
+          // bug this path exists to fix. The user would pay for a picture
+          // that has nothing to do with the one they asked to edit.
+          toast({
+            title: "Could not read the image to edit",
+            description:
+              "It may have been deleted. Attach it again to edit it.",
+            variant: "destructive",
+            duration: 6000,
+          });
+          return;
+        }
+        base = { src: current.ref, origin: current.origin };
+      }
+    }
+
+    const userMessage: Message = {
+      role: "user",
+      content:
+        attachmentRefs.length > 0
+          ? appendImageMarker(prompt, attachmentRefs.length)
+          : prompt,
+      ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+    };
     const withPrompt = [...messages, userMessage];
     setConversations((prev) =>
       prev.map((conv) =>
@@ -765,8 +840,13 @@ const Index = () => {
     );
     setIsGeneratingImage(true);
     try {
-      const path = await generateImage(prompt);
-      const assistantMessage: Message = { role: "assistant", content: "", imagePath: path };
+      const path = await generateImage(prompt, { inputImages });
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: "",
+        imagePath: path,
+        ...(base ? { editedFrom: base } : {}),
+      };
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === currentConversationId
@@ -786,6 +866,9 @@ const Index = () => {
           conv.id === currentConversationId ? { ...conv, messages } : conv
         )
       );
+      // The turn rolled back, so nothing points at the files it stored a
+      // moment ago: they are ours to reclaim.
+      for (const ref of attachmentRefs) void deleteImage(ref.path);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -1356,6 +1439,7 @@ const Index = () => {
                       model={message.model}
                       image={message.image}
                       imagePath={message.imagePath}
+                      editedFrom={message.editedFrom}
                       compacted={!!message.compaction}
                       messageIndex={index}
                       searchMatch={searchMatches.includes(index)}
@@ -1397,6 +1481,7 @@ const Index = () => {
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
                 modelCatalog={modelCatalog}
+                hasEditableImage={!!currentImage}
               />
             </div>
           </>
