@@ -1,0 +1,228 @@
+/* ContextsPanel styles — the right-hand collapsible multi-item contexts panel.
+   Mirrors ArtifactsPanel.css: overlay + fixed panel below `xl`, docked above it. */
+
+.contexts-overlay {
+  @apply fixed inset-0 z-30 bg-black/40 backdrop-blur-[1px] xl:hidden;
+}
+
+.contexts-panel {
+  @apply fixed right-0 top-0 z-40 flex flex-col border-l border-border bg-background transition-transform duration-300 ease-in-out;
+  width: min(var(--artifacts-w), 88vw);
+  height: 100vh;
+  height: 100dvh;
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.contexts-panel-open {
+  @apply translate-x-0;
+}
+
+.contexts-panel-closed {
+  @apply translate-x-full;
+}
+
+.contexts-header {
+  @apply flex shrink-0 items-center justify-between border-b border-border px-3 py-3;
+}
+
+.contexts-title-row {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.contexts-title {
+  @apply truncate text-base font-semibold lowercase tracking-tight text-foreground;
+}
+
+.contexts-count {
+  @apply shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground;
+}
+
+.contexts-close-btn {
+  @apply size-8 shrink-0 tap-expand text-muted-foreground hover:text-foreground;
+}
+
+.contexts-close-icon {
+  @apply size-4;
+}
+
+.contexts-toolbar {
+  @apply shrink-0 px-3 pt-3 pb-2;
+}
+
+.contexts-new-btn {
+  @apply flex h-9 w-full items-center justify-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.contexts-new-icon {
+  @apply size-3.5;
+}
+
+.contexts-scroll {
+  @apply min-h-0 flex-1;
+}
+
+.contexts-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+
+.contexts-list {
+  @apply flex flex-col gap-2.5 p-3;
+}
+
+/* Collapsible Context Group card */
+.context-card {
+  @apply flex flex-col rounded-xl border border-border bg-card/60 transition-colors;
+}
+
+.context-card-dragover {
+  @apply border-primary bg-primary/5;
+}
+
+.context-card-injected {
+  @apply border-primary/70;
+}
+
+.context-card-head {
+  @apply flex min-w-0 items-center justify-between gap-1 px-3 py-2.5;
+}
+
+.context-card-toggle {
+  @apply flex min-w-0 flex-1 items-center justify-between gap-1.5 rounded-md text-left text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.context-card-title {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.context-card-title-input {
+  @apply min-w-0 flex-1 rounded border border-primary bg-background px-2 py-0.5 text-xs font-semibold text-foreground outline-none;
+}
+
+.context-card-chevron {
+  @apply size-3.5 shrink-0 text-muted-foreground transition-transform;
+}
+
+.context-card-quick-inject {
+  @apply size-7 shrink-0 rounded-lg border border-border bg-muted/50 tap-expand text-foreground hover:bg-accent;
+}
+
+.context-card-body {
+  @apply flex flex-col gap-2.5 px-3 pb-3;
+}
+
+/* Dashed dropzone inside the expanded context card */
+.context-dropzone {
+  @apply flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/20 px-2.5 py-2 text-center text-[11px] text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.context-dropzone-active {
+  @apply border-primary bg-primary/10 text-foreground;
+}
+
+/* Up to 10 image thumbnails inside a single context */
+.context-images-grid {
+  @apply grid grid-cols-4 gap-1.5;
+}
+
+.context-thumb {
+  @apply relative aspect-square overflow-hidden rounded-lg border border-border bg-muted/40;
+}
+
+.context-thumb-img {
+  @apply size-full object-cover;
+}
+
+.context-thumb-missing {
+  @apply flex size-full items-center justify-center p-1 text-center text-[10px] text-muted-foreground;
+}
+
+/* Corner right-arrow (`→`) locate button on every image thumbnail */
+.context-thumb-locate {
+  @apply absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm tap-expand hover:bg-background;
+  --tap-size: 28px;
+}
+
+.context-thumb-actions {
+  @apply absolute bottom-1 left-1 flex items-center opacity-100 transition-opacity;
+}
+
+.context-thumb-remove {
+  @apply flex size-5 items-center justify-center rounded-full bg-black/65 text-white tap-expand hover:bg-destructive;
+  --tap-size: 28px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .context-thumb-actions {
+    opacity: 0;
+  }
+
+  .group:hover .context-thumb-actions,
+  .context-thumb-actions:focus-within {
+    opacity: 1;
+  }
+}
+
+.context-thumb-icon {
+  @apply size-3;
+}
+
+/* Stacked text, code, and table item rows inside the expanded context */
+.context-items-list {
+  @apply flex flex-col gap-1.5;
+}
+
+.context-item-row {
+  @apply flex min-w-0 items-center justify-between gap-1 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-foreground;
+}
+
+.context-item-label {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.context-item-actions {
+  @apply flex shrink-0 items-center gap-0.5;
+}
+
+.context-item-action {
+  @apply size-6 shrink-0 rounded-md tap-expand text-muted-foreground hover:bg-accent hover:text-foreground;
+  --tap-size: 30px;
+}
+
+.context-item-action-icon {
+  @apply size-3.5;
+}
+
+/* Card footer: `← Inject into input` and delete button */
+.context-card-footer {
+  @apply flex items-center justify-between gap-2 pt-0.5;
+}
+
+.context-inject-btn {
+  @apply inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.context-inject-btn-active {
+  @apply bg-primary/15 text-primary;
+}
+
+.context-card-action {
+  @apply size-7 shrink-0 tap-expand text-muted-foreground hover:text-foreground;
+}
+
+.context-card-action-danger {
+  @apply size-7 shrink-0 tap-expand text-muted-foreground hover:text-destructive;
+}
+
+.context-empty {
+  @apply flex flex-col items-center gap-2 px-4 py-8 text-center;
+}
+
+.context-empty-title {
+  @apply text-sm font-medium text-foreground;
+}
+
+.context-empty-sub {
+  @apply text-xs leading-relaxed text-muted-foreground text-pretty;
+}

@@ -108,6 +108,14 @@
   @apply relative inline-flex;
 }
 
+.app-header-contexts {
+  @apply relative inline-flex;
+}
+
+.app-header-contexts-active {
+  @apply bg-accent text-accent-foreground;
+}
+
 .app-header-artifacts-count {
   @apply absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none tabular-nums text-primary-foreground;
 }
@@ -257,6 +265,10 @@
   animation: artifact-block-flash 1.4s ease-out;
 }
 
+.msg-image[data-artifact-flash] {
+  animation: artifact-block-flash 1.4s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-artifact-flash] {
     animation: none;
@@ -266,6 +278,10 @@
 
   /* More specific than the rule above, so it needs its own override. */
   .msg-answer [data-artifact-at][data-artifact-flash] {
+    animation: none;
+  }
+
+  .msg-image[data-artifact-flash] {
     animation: none;
   }
 }

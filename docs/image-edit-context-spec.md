@@ -499,3 +499,15 @@ Puter session, and the provider calls cost credits):
   a natural follow-up now that the base is explicit.
 - No image-model picker, so the reference count is whatever the default route
   accepts (and the single-reference retry in §6 covers the rest).
+
+## 15. Superseded — Explicit Context Selection (2026-10-19)
+
+> **[MARK — SUPERSEDED BY [`explicit-context-panel-spec.md`](explicit-context-panel-spec.md)]**
+> The automatic last-image edit base (§5.1–§5.2) and the non-dismissible
+> *"Editing the last image in this chat."* composer hint (§7.3) are replaced by
+> **Explicit Context Selection** via the right-hand **Contexts Panel**
+> (`docs/explicit-context-panel-spec.md` & `docs/screenshots/context-panel-mockup.png`),
+> where users drag-and-drop images, text, code, or messages into date-organized
+> Context Groups and click **`← Inject into input`** to attach a dismissible
+> Context Pill to any chat or image-generation turn.
+

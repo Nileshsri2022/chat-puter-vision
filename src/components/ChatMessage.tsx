@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
+import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw, FolderPlus } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
@@ -22,6 +22,11 @@ import type { EditedFrom } from "@/lib/backend";
 import type { ModelCatalog } from "@/lib/models";
 import { splitThinkBlocks, stripThinkBlocks } from "@/lib/streamingHandler";
 import { stripImageMarker } from "@/lib/attachments";
+import {
+  CONTEXT_DRAG_MIME,
+  encodeContextDragPayload,
+  type ContextDropPayload,
+} from "@/lib/contextGroups";
 import "./ChatMessage.css";
 
 interface ChatMessageProps {
@@ -41,6 +46,8 @@ interface ChatMessageProps {
   compacted?: boolean;
   /** Position in the transcript; tags the node for in-conversation search. */
   messageIndex?: number;
+  /** Conversation ID for context source provenance (`→` jump to source). */
+  conversationId?: string;
   /** In-conversation search: this message contains the query. */
   searchMatch?: boolean;
   /** In-conversation search: this is the match the finder is sitting on. */
@@ -48,6 +55,8 @@ interface ChatMessageProps {
   onCopy?: (content: string) => void;
   onDelete?: () => void;
   onEdit?: (content: string, images?: File[], model?: string) => void;
+  /** Add this message or image into the active Context Group. */
+  onAddToContext?: (payload: ContextDropPayload) => void;
   /** Model state shared with the bottom composer, so edit uses the same selector. */
   selectedModel?: string;
   onModelChange?: (model: string) => void;
@@ -68,7 +77,7 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, onAddToContext, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -155,6 +164,57 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
   };
 
   const getModelDisplayName = (modelId?: string) => modelDisplayName(modelId);
+
+  const sourceBase =
+    conversationId && typeof messageIndex === "number"
+      ? { conversationId, messageIndex }
+      : undefined;
+
+  const buildTextPayload = (rawText?: string): ContextDropPayload | null => {
+    const clean = (rawText ?? stripImageMarker(stripThinkBlocks(content))).trim();
+    if (!clean) return null;
+    const firstLine = clean.split("\n")[0]?.trim().slice(0, 36) || "Message";
+    return {
+      kind: "text",
+      text: clean,
+      label: firstLine.length < clean.length ? `${firstLine}…` : firstLine,
+      ...(sourceBase
+        ? { source: { ...sourceBase, highlightText: clean.slice(0, 120) } }
+        : {}),
+    };
+  };
+
+  const buildImagePayload = (): ContextDropPayload | null => {
+    if (imagePath) {
+      return {
+        kind: "image",
+        ref: imagePath,
+        refKind: "drive",
+        origin: "generated",
+        label: "Generated image",
+        ...(sourceBase ? { source: sourceBase } : {}),
+      };
+    }
+    if (image && image.startsWith("data:")) {
+      return {
+        kind: "image",
+        ref: image,
+        refKind: "data",
+        origin: "generated",
+        label: "Generated image",
+        ...(sourceBase ? { source: sourceBase } : {}),
+      };
+    }
+    return null;
+  };
+
+  const handleAddMessageToContext = () => {
+    if (!onAddToContext) return;
+    const imgPayload = buildImagePayload();
+    if (imgPayload) onAddToContext(imgPayload);
+    const txtPayload = buildTextPayload();
+    if (txtPayload) onAddToContext(txtPayload);
+  };
 
   // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
   // nested lists). Raw HTML in model output is escaped by default, so a
@@ -332,11 +392,25 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
               <div className="msg-user-row">
                 {/* `data-search-text` tags the regions in-conversation search
                     scans — see lib/utils/highlight.ts. */}
-                <div className="msg-user-bubble" data-search-text>
+                <div
+                  className="msg-user-bubble"
+                  data-search-text
+                  draggable
+                  onDragStart={(e) => {
+                    const selected = window.getSelection?.()?.toString()?.trim();
+                    const payload = buildTextPayload(selected || undefined);
+                    if (payload) {
+                      e.dataTransfer.setData(
+                        CONTEXT_DRAG_MIME,
+                        encodeContextDragPayload(payload)
+                      );
+                    }
+                  }}
+                >
                   {content}
                 </div>
               </div>
-              {(onCopy || onEdit) && (
+              {(onCopy || onEdit || onAddToContext) && (
                 <div className="msg-user-actions">
                   {onCopy && (
                     <Button
@@ -360,6 +434,18 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                       aria-label="Edit message"
                     >
                       <Pencil className="msg-action-icon" aria-hidden="true" />
+                    </Button>
+                  )}
+                  {onAddToContext && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleAddMessageToContext}
+                      className="msg-action-btn"
+                      title="Add to context"
+                      aria-label="Add message to context"
+                    >
+                      <FolderPlus className="msg-action-icon" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
@@ -391,6 +477,16 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 alt="Generated image"
                 className="msg-image"
                 loading="lazy"
+                draggable
+                onDragStart={(e) => {
+                  const payload = buildImagePayload();
+                  if (payload) {
+                    e.dataTransfer.setData(
+                      CONTEXT_DRAG_MIME,
+                      encodeContextDragPayload(payload)
+                    );
+                  }
+                }}
                 role="button"
                 tabIndex={0}
                 title="Open image preview"
@@ -440,7 +536,20 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 )}
               </div>
             )}
-            <div className="msg-answer" data-search-text>
+            <div
+              className="msg-answer"
+              data-search-text
+              onDragStart={(e) => {
+                const selected = window.getSelection?.()?.toString()?.trim();
+                const payload = buildTextPayload(selected || undefined);
+                if (payload) {
+                  e.dataTransfer.setData(
+                    CONTEXT_DRAG_MIME,
+                    encodeContextDragPayload(payload)
+                  );
+                }
+              }}
+            >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={answerComponents}
@@ -460,7 +569,7 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                 <div className="msg-typing-dot" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {!isStreaming && (speakable || onCopy || onDelete || onShareExchange || onRetry) && (
+            {!isStreaming && (speakable || onCopy || onDelete || onShareExchange || onRetry || onAddToContext) && (
               <div className="msg-actions">
                 {speakable && (
                   <Button
@@ -491,6 +600,18 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                     aria-label={copied ? "Copied" : "Copy message"}
                   >
                     {copied ? <Check className="msg-action-icon" aria-hidden="true" /> : <Copy className="msg-action-icon" aria-hidden="true" />}
+                  </Button>
+                )}
+                {onAddToContext && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAddMessageToContext}
+                    className="msg-action-btn"
+                    title="Add to context"
+                    aria-label="Add to context"
+                  >
+                    <FolderPlus className="msg-action-icon" aria-hidden="true" />
                   </Button>
                 )}
                 {onRetry && (

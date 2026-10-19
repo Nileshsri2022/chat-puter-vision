@@ -398,19 +398,20 @@ test("attaching is not gated on the chat model in generation mode", () => {
   );
 });
 
-test("the page resolves the edit base and passes the reference on", () => {
+test("the page resolves explicit context or attachments and passes the reference on", () => {
   const page = read("pages/Index.tsx");
-  expect(page).toContain("findCurrentImage(messages)");
-  expect(page).toContain("loadImageDataUrl(current.ref)");
-  expect(page).toContain("generateImage(prompt, { inputImages })");
+  expect(page).toContain("resolveContextGroupForTask");
+  expect(page).toContain("loadImageDataUrl");
+  expect(page).toContain("generateImage(generationPrompt, { inputImages })");
   // A base that cannot be read must not fall back to a text-to-image: that is
   // the bug this whole path exists to fix.
   expect(page).toContain("Could not read the image to edit");
 });
 
-test("the composer says which image the call will edit", () => {
+test("the composer shows the explicit injected context pill and attachment hint without forcing last-image edit", () => {
   const input = read("components/ChatInput.tsx");
   expect(input).toContain("will be edited.");
-  expect(input).toContain("Editing the last image in this chat.");
+  expect(input).toContain("composer-context-pill");
+  expect(input).not.toContain("Editing the last image in this chat.");
   expect(input).toContain('aria-live="polite"');
 });
