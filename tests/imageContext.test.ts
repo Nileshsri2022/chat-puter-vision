@@ -19,7 +19,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mockPuter, throwsMsg } from "./helpers";
 import type { Message } from "../src/lib/backend";
-import { findCurrentImage } from "../src/lib/imageContext";
+import {
+  findCurrentImage,
+  resolveGenerationEditBase,
+} from "../src/lib/imageContext";
 import {
   buildTxt2ImgOptions,
   generateImage,
@@ -335,6 +338,120 @@ test("a follow-up prompt edits the image the previous turn produced", async () =
   expect(inputImages[0].startsWith("data:image/png;base64,")).toBe(true);
 });
 
+// ---- resolveGenerationEditBase: the decision that picks the edit base ----
+
+// What the page used to get wrong: a follow-up turn with no new attachment does
+// not resolve to the conversation's current image, so the prompt "now make it
+// night" text-to-images a fresh scene instead of editing the one on screen.
+const fakeLoad = (map: Record<string, string>) => async (path: string) => {
+  const url = map[path];
+  if (!url) throw new Error(`no such file: ${path}`);
+  return url;
+};
+
+test("a follow-up turn with no attachment edits the conversation's current image", async () => {
+  const messages: Message[] = [
+    {
+      role: "user",
+      content: "remove the people\n\n[Images: 1 attached]",
+      attachments: [{ path: "freetalk-upload-1.png" }],
+    },
+    {
+      role: "assistant",
+      content: "",
+      imagePath: "freetalk-edit-1.png",
+      editedFrom: { src: "freetalk-upload-1.png", origin: "attachment" },
+    },
+  ];
+  const load = fakeLoad({
+    "freetalk-edit-1.png": "data:image/png;base64,EDITED",
+  });
+  const { inputImages, base } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [],
+    attachmentBase: null,
+    contextImageDataUrls: [],
+    contextBase: null,
+    loadImageDataUrl: load,
+  });
+  // The model gets the current image's pixels — this is what was missing.
+  expect(inputImages).toEqual(["data:image/png;base64,EDITED"]);
+  expect(base).toEqual({ src: "freetalk-edit-1.png", origin: "generated" });
+});
+
+test("a generate turn with no image anywhere is a plain text-to-image", async () => {
+  const messages: Message[] = [
+    { role: "user", content: "hi" },
+    { role: "assistant", content: "hello" },
+  ];
+  const { inputImages, base } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [],
+    attachmentBase: null,
+    contextImageDataUrls: [],
+    contextBase: null,
+    loadImageDataUrl: fakeLoad({}),
+  });
+  expect(inputImages).toEqual([]);
+  expect(base).toBeNull();
+});
+
+test("this turn's attachments beat the conversation's current image", async () => {
+  let loadCalled = false;
+  const messages: Message[] = [
+    { role: "assistant", content: "", imagePath: "freetalk-old.png" },
+  ];
+  const { inputImages, base } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [PNG_URL],
+    attachmentBase: { src: "freetalk-upload-1.png", origin: "attachment" },
+    contextImageDataUrls: [],
+    contextBase: null,
+    loadImageDataUrl: async () => {
+      loadCalled = true;
+      return "data:image/png;base64,x";
+    },
+  });
+  expect(inputImages).toEqual([PNG_URL]);
+  expect(base).toEqual({ src: "freetalk-upload-1.png", origin: "attachment" });
+  // The current image must not be read when an attachment is explicit.
+  expect(loadCalled).toBe(false);
+});
+
+test("an injected context group's images are edited when there are no attachments", async () => {
+  const messages: Message[] = [
+    { role: "assistant", content: "", imagePath: "freetalk-old.png" },
+  ];
+  const { inputImages, base } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [],
+    attachmentBase: null,
+    contextImageDataUrls: [JPEG_URL],
+    contextBase: { src: "ctx-1.png", origin: "generated" },
+    loadImageDataUrl: async () => "data:image/png;base64,x",
+  });
+  expect(inputImages).toEqual([JPEG_URL]);
+  expect(base).toEqual({ src: "ctx-1.png", origin: "generated" });
+});
+
+test("a current image whose bytes cannot be read aborts the edit", async () => {
+  const messages: Message[] = [
+    { role: "assistant", content: "", imagePath: "freetalk-edit-1.png" },
+  ];
+  await expect(
+    resolveGenerationEditBase({
+      messages,
+      attachmentDataUrls: [],
+      attachmentBase: null,
+      contextImageDataUrls: [],
+      contextBase: null,
+      loadImageDataUrl: async () => {
+        throw new Error("read failed");
+      },
+    })
+  ).rejects.toThrow();
+});
+
 // ---- the lineage survives a sync ----
 
 interface TestConv {
@@ -406,6 +523,16 @@ test("the page resolves explicit context or attachments and passes the reference
   // A base that cannot be read must not fall back to a text-to-image: that is
   // the bug this whole path exists to fix.
   expect(page).toContain("Could not read the image to edit");
+});
+
+test("the generate path edits the conversation's current image when nothing is attached", () => {
+  // The img-to-img (image-as-context) bug: a ✨ turn with a current image in
+  // the chat but no fresh attachment used to become a plain text-to-image. The
+  // page must derive the base from the transcript, not only from this turn's
+  // attachments or the injected context.
+  const page = read("pages/Index.tsx");
+  expect(page).toContain("resolveGenerationEditBase");
+  expect(page).toContain("findCurrentImage");
 });
 
 test("the composer shows the explicit injected context pill and attachment hint without forcing last-image edit", () => {

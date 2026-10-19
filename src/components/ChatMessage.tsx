@@ -1,4 +1,4 @@
-import { Copy, Trash2, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
+import { Copy, Check, Volume2, Square, ChevronDown, Pencil, Share2, RotateCcw } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import { ChatInput } from "./ChatInput";
@@ -58,7 +58,6 @@ interface ChatMessageProps {
   /** In-conversation search: this is the match the finder is sitting on. */
   searchActive?: boolean;
   onCopy?: (content: string) => void;
-  onDelete?: () => void;
   onEdit?: (content: string, images?: File[], model?: string) => void;
   /** Model state shared with the bottom composer, so edit uses the same selector. */
   selectedModel?: string;
@@ -190,7 +189,7 @@ const answerComponents: Components = {
   ),
 };
 
-export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry, onUseAsContext, selectedText }: ChatMessageProps) => {
+export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry, onUseAsContext, selectedText }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -723,18 +722,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                )}
-                {onDelete && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onDelete}
-                    className="msg-action-btn-danger"
-                    title="Delete message"
-                    aria-label="Delete message"
-                  >
-                    <Trash2 className="msg-action-icon" aria-hidden="true" />
-                  </Button>
                 )}
               </div>
             )}

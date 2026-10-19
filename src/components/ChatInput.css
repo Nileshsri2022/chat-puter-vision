@@ -4,6 +4,18 @@
   @apply mx-auto w-full max-w-3xl px-4 pb-2;
 }
 
+/* Drag-and-drop attachment: highlight the composer while an image file hovers
+   over it, so dropping is discoverable. The ring sits on the box, not the wrap,
+   so the whole input area reads as the drop target. */
+.composer-drag-over .composer-box {
+  @apply border-dashed border-primary ring-2 ring-primary/40 ring-offset-2 ring-offset-background;
+  background-color: color-mix(in srgb, hsl(var(--primary)) 8%, hsl(var(--background)));
+}
+
+.composer-drag-over .composer-drag-hint {
+  @apply pointer-events-none absolute inset-x-0 top-2 z-10 text-center text-xs font-medium text-primary;
+}
+
 .composer-form {
   @apply flex min-w-0 flex-col gap-2;
 }
@@ -104,7 +116,7 @@
 
 /* Composer box */
 .composer-box {
-  @apply rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md;
+  @apply relative rounded-[26px] border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md;
 }
 
 /* ChatGPT-style Selection cards inside the composer box. */

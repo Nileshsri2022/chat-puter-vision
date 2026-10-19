@@ -81,3 +81,82 @@ export function findCurrentImage(messages: Message[]): CurrentImage | null {
   }
   return null;
 }
+
+/**
+ * Which image(s) a ✨ image-generation turn edits.
+ *
+ * Encapsulates the precedence the generate path used to get wrong (the bug
+ * where attaching an image and asking for a change produced a brand-new
+ * picture): this turn's own attachments, then the explicitly injected Context
+ * Group, then the conversation's current image (derived from the transcript).
+ *
+ * Returns empty `inputImages` (and a null `base`) when none of those apply,
+ * which is a plain text-to-image — the behaviour every caller had before image
+ * editing existed.
+ *
+ * `loadImageDataUrl` is injected so the decision stays pure and testable
+ * without a live Puter Drive; it reads a stored image back as the data URI the
+ * provider actually receives.
+ *
+ * A current image whose bytes cannot be read throws rather than falling back to
+ * a text-to-image: an unrelated picture is exactly the failure this path exists
+ * to prevent.
+ *
+ * @see docs/image-edit-context-spec.md §5.2
+ */
+export interface ResolveEditBaseParams {
+  /** The transcript, scanned for the conversation's current image. */
+  messages: Message[];
+  /** Data URIs of this turn's own attachments (highest priority). */
+  attachmentDataUrls: string[];
+  /** Provenance of the first attachment, recorded as `editedFrom`. */
+  attachmentBase: { src: string; origin: ImageOrigin } | null;
+  /** Data URIs from the explicitly injected Context Group (explicit). */
+  contextImageDataUrls: string[];
+  /** Provenance of the injected context's primary image. */
+  contextBase: { src: string; origin: ImageOrigin } | null;
+  /** Reads a Drive path back as a data URI (injected for testability). */
+  loadImageDataUrl: (path: string) => Promise<string>;
+}
+
+export interface ResolvedEditBase {
+  /** Data URIs passed to `puter.ai.txt2img` as `input_image` / `input_images`. */
+  inputImages: string[];
+  /** Provenance to record on the generated message, or null for text-to-image. */
+  base: { src: string; origin: ImageOrigin } | null;
+}
+
+export async function resolveGenerationEditBase(
+  params: ResolveEditBaseParams
+): Promise<ResolvedEditBase> {
+  // 1. This turn's own attachments always win — they are what the user sees in
+  //    the composer, so an explicit attachment outranks any implicit context.
+  // 2. The injected Context Group is explicit too, but a secondary statement of
+  //    intent, so its images are added alongside the attachments and its base
+  //    is used only when there is no attachment base.
+  const inputImages = [
+    ...params.attachmentDataUrls,
+    ...params.contextImageDataUrls,
+  ];
+  const base = params.attachmentBase ?? params.contextBase;
+  if (inputImages.length > 0) {
+    return { inputImages, base };
+  }
+
+  // 3. No explicit image this turn: edit the conversation's current image, so a
+  //    follow-up prompt ("now make it night", "remove the people") continues the
+  //    same picture instead of starting over. A bare text-to-image is the only
+  //    other option, and only when the chat holds no image at all.
+  const current = findCurrentImage(params.messages);
+  if (!current) {
+    return { inputImages: [], base: null };
+  }
+  const dataUrl =
+    current.kind === "data"
+      ? current.ref
+      : await params.loadImageDataUrl(current.ref);
+  return {
+    inputImages: [dataUrl],
+    base: { src: current.ref, origin: current.origin },
+  };
+}
