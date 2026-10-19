@@ -59,7 +59,6 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     "components/ChatInput.css",
     "components/ChatMessage.css",
     "components/ArtifactsPanel.css",
-    "components/ContextsPanel.css",
     "components/ArtifactRow.css",
   ]) {
     expect(read(file)).toContain("@media (hover: hover) and (pointer: fine)");
@@ -78,7 +77,8 @@ test("interactive controls stay visible without a hover-capable pointer", () => 
     ".artifacts-tile-action",
     ".artifacts-close-btn",
     ".contexts-close-btn",
-    ".context-thumb-locate",
+    ".context-thumb-more",
+    ".context-actions-menu-item-danger",
     ".context-item-action",
     ".artifact-row-action",
   ]) {
@@ -92,13 +92,20 @@ test("a hover-revealed action group also opens for keyboard focus", () => {
   // The reveal has to target the group, while focus is anywhere inside it.
   for (const [file, group] of [
     ["components/ArtifactsPanel.css", ".artifacts-tile-actions"],
-    ["components/ContextsPanel.css", ".context-thumb-actions"],
     ["components/ArtifactRow.css", ".artifact-row-actions"],
   ] as const) {
     const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
     const guard = /@media \(hover: hover\) and \(pointer: fine\)\s*\{([\s\S]*)\}/.exec(css)?.[1] ?? "";
     expect(`${file}: ${guard.includes(`${group}:focus-within`)}`).toBe(`${file}: true`);
   }
+});
+
+test("Contexts item actions stay visible without hover and keep touch-sized triggers", () => {
+  const css = read("components/ContextsPanel.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  expect(css).toMatch(/\.context-thumb-actions\s*\{[^}]*right-1 top-1/);
+  expect(css).not.toMatch(/\.context-thumb-actions[^}]*opacity-0/);
+  expect(css).toMatch(/\.context-thumb-more\s*\{[^}]*tap-expand/);
+  expect(css).toContain(".context-actions-menu {");
 });
 
 test("icon buttons expand their touch target on coarse pointers", () => {

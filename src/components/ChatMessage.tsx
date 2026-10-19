@@ -93,6 +93,103 @@ const ThoughtIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// Keep ReactMarkdown's component types stable across ChatMessage state updates.
+// In particular, updating the selection popup must not replace Markdown text
+// nodes: the browser's live Selection is anchored to those nodes while dragging.
+const CodeBlock = ({ children, at }: { children?: ReactNode; at?: number }) => {
+  const [codeCopied, setCodeCopied] = useState(false);
+  const preRef = useRef<HTMLPreElement>(null);
+  const { toast } = useToast();
+
+  const handleCopyCode = async () => {
+    const text = preRef.current?.querySelector("code")?.innerText ?? "";
+    if (!(await copyToClipboard(text))) {
+      toast({
+        title: "Copy failed",
+        description: "The clipboard rejected the request.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 1500);
+  };
+
+  return (
+    <div className="msg-codeblock group/code" data-artifact-at={at}>
+      <pre ref={preRef} className="msg-codeblock-pre">
+        {children}
+      </pre>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleCopyCode}
+        title="Copy code"
+        className="msg-codeblock-copy"
+      >
+        {codeCopied ? (
+          <Check className="msg-codeblock-copy-icon" />
+        ) : (
+          <Copy className="msg-codeblock-copy-icon" />
+        )}
+      </Button>
+    </div>
+  );
+};
+
+const markdownComponents: Components = {
+  h1: ({ children }) => <h1 className="md-h1">{children}</h1>,
+  h2: ({ children }) => <h2 className="md-h2">{children}</h2>,
+  h3: ({ children }) => <h3 className="md-h3">{children}</h3>,
+  p: ({ children }) => <p className="md-p">{children}</p>,
+  ul: ({ children }) => <ul className="md-ul">{children}</ul>,
+  ol: ({ children }) => <ol className="md-ol">{children}</ol>,
+  li: ({ children }) => <li className="md-li">{children}</li>,
+  strong: ({ children }) => <strong className="md-strong">{children}</strong>,
+  em: ({ children }) => <em className="md-em">{children}</em>,
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="md-a">
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }) => <blockquote className="md-blockquote">{children}</blockquote>,
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  code: ({ className, children }) => {
+    const text = String(children ?? "");
+    const isBlock = /language-/.test(className || "") || text.includes("\n");
+    return isBlock ? (
+      <code className="md-code-block">{children}</code>
+    ) : (
+      <code className="md-code-inline">{children}</code>
+    );
+  },
+  table: ({ children }) => (
+    <div className="md-table-wrap">
+      <div className="md-table-scroll">
+        <table className="md-table">{children}</table>
+      </div>
+    </div>
+  ),
+  th: ({ children }) => <th className="md-th">{children}</th>,
+  td: ({ children }) => <td className="md-td">{children}</td>,
+  img: ({ src, alt }) => <img src={src} alt={alt ?? ""} className="md-img" />,
+};
+
+// Answer artifacts need stable renderer functions too, while carrying source
+// offsets so code blocks and tables locate the exact response artifact.
+const answerComponents: Components = {
+  ...markdownComponents,
+  pre: ({ node, children }) => <CodeBlock at={node?.position?.start.offset}>{children}</CodeBlock>,
+  table: ({ node, children }) => (
+    <div className="md-table-wrap" data-artifact-at={node?.position?.start.offset}>
+      <div className="md-table-scroll">
+        <table className="md-table">{children}</table>
+      </div>
+    </div>
+  ),
+};
+
 export const ChatMessage = ({ role, content, isStreaming, model, image, imagePath, editedFrom, compacted, messageIndex, conversationId, searchMatch, searchActive, onCopy, onDelete, onEdit, selectedModel, onModelChange, modelCatalog, onShareExchange, onRetry, onUseAsContext, selectedText }: ChatMessageProps) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
@@ -353,156 +450,6 @@ export const ChatMessage = ({ role, content, isStreaming, model, image, imagePat
     } catch {
       // Ignore browsers that disallow setting effectAllowed.
     }
-  };
-
-  // Markdown rendering via react-markdown + remark-gfm (tables, task lists,
-  // nested lists). Raw HTML in model output is escaped by default, so a
-  // response can never inject markup/scripts.
-  // `at`: the block's offset in the answer, stamped for the artifacts panel's
-  // block-level locate (see answerComponents below).
-  const CodeBlock = ({ children, at }: { children?: ReactNode; at?: number }) => {
-    const [codeCopied, setCodeCopied] = useState(false);
-    const preRef = useRef<HTMLPreElement>(null);
-
-    // Honest copy (#45): only an accepted write earns the check mark.
-    const handleCopyCode = async () => {
-      const text = preRef.current?.querySelector("code")?.innerText ?? "";
-      if (!(await copyToClipboard(text))) {
-        toast({
-          title: "Copy failed",
-          description: "The clipboard rejected the request.",
-          variant: "destructive",
-          duration: 5000,
-        });
-        return;
-      }
-      setCodeCopied(true);
-      setTimeout(() => setCodeCopied(false), 1500);
-    };
-
-    return (
-      <div className="msg-codeblock group/code" data-artifact-at={at}>
-        <pre
-          ref={preRef}
-          className="msg-codeblock-pre"
-        >
-          {children}
-        </pre>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleCopyCode}
-          title="Copy code"
-          className="msg-codeblock-copy"
-        >
-          {codeCopied ? (
-            <Check className="msg-codeblock-copy-icon" />
-          ) : (
-            <Copy className="msg-codeblock-copy-icon" />
-          )}
-        </Button>
-      </div>
-    );
-  };
-
-  const markdownComponents: Components = {
-    h1: ({ children }) => (
-      <h1 className="md-h1">
-        {children}
-      </h1>
-    ),
-    h2: ({ children }) => (
-      <h2 className="md-h2">
-        {children}
-      </h2>
-    ),
-    h3: ({ children }) => (
-      <h3 className="md-h3">
-        {children}
-      </h3>
-    ),
-    p: ({ children }) => <p className="md-p">{children}</p>,
-    ul: ({ children }) => (
-      <ul className="md-ul">{children}</ul>
-    ),
-    ol: ({ children }) => (
-      <ol className="md-ol">{children}</ol>
-    ),
-    li: ({ children }) => <li className="md-li">{children}</li>,
-    strong: ({ children }) => (
-      <strong className="md-strong">{children}</strong>
-    ),
-    em: ({ children }) => <em className="md-em">{children}</em>,
-    a: ({ children, href }) => (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="md-a"
-      >
-        {children}
-      </a>
-    ),
-    blockquote: ({ children }) => (
-      <blockquote className="md-blockquote">
-        {children}
-      </blockquote>
-    ),
-    pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-    code: ({ className, children }) => {
-      const text = String(children ?? "");
-      const isBlock =
-        /language-/.test(className || "") || text.includes("\n");
-      if (!isBlock) {
-        return (
-          <code className="md-code-inline">
-            {children}
-          </code>
-        );
-      }
-      return (
-        <code className="md-code-block">{children}</code>
-      );
-    },
-    table: ({ children }) => (
-      <div className="md-table-wrap">
-        <div className="md-table-scroll">
-          <table className="md-table">{children}</table>
-        </div>
-      </div>
-    ),
-    th: ({ children }) => (
-      <th className="md-th">
-        {children}
-      </th>
-    ),
-    td: ({ children }) => (
-      <td className="md-td">{children}</td>
-    ),
-    img: ({ src, alt }) => (
-      <img
-        src={src}
-        alt={alt ?? ""}
-        className="md-img"
-      />
-    ),
-  };
-
-  // The answer stamps each code block and table with its offset in `answer`
-  // (`data-artifact-at`), matching what lib/artifactBlocks.ts computes, so
-  // the artifacts panel can locate one block rather than the whole message.
-  // Thinking renders a different string through `markdownComponents`, so
-  // its offsets would collide; it stays unstamped.
-  const answerComponents: Components = {
-    ...markdownComponents,
-    pre: ({ node, children }) => <CodeBlock at={node?.position?.start.offset}>{children}</CodeBlock>,
-    table: ({ node, children }) => (
-      <div className="md-table-wrap" data-artifact-at={node?.position?.start.offset}>
-        <div className="md-table-scroll">
-          <table className="md-table">{children}</table>
-        </div>
-      </div>
-    ),
   };
 
   const askPopover =
