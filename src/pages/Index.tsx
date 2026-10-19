@@ -543,7 +543,8 @@ const Index = () => {
           content,
           injectedContext.title,
           resolved.contextText,
-          "chat"
+          "chat",
+          resolved.itemSummary
         );
         // Only URLs the chat API can resolve may reach the request; anything
         // else is reported instead of failing the whole message.
@@ -568,10 +569,14 @@ const Index = () => {
       }
     }
 
-    // Create user message with content and image info if present
+    // Create user message with content and attachment info if present.
+    // `imageUrls` also holds images resolved from the injected Context Group,
+    // but those are prompt context, not attachments: counting them here used
+    // to make a context-only turn read "[Images: 1 attached]" in the
+    // transcript and made the artifacts panel report an unsaved attachment.
     let messageContent = content;
-    if (imageUrls.length > 0) {
-      messageContent = appendImageMarker(content, imageUrls.length);
+    if (attachmentRefs.length > 0) {
+      messageContent = appendImageMarker(content, attachmentRefs.length);
     }
 
     const userMessage: Message = {

@@ -539,3 +539,15 @@ test("a send that rolled back reclaims the attachments it had just stored", () =
   // ...and only a rollback: a stopped reply keeps the message and its images.
   expect(page).toMatch(/a user abort keeps/);
 });
+
+test("context images are not recorded as attachments on the user message", () => {
+  const page = readSrc("pages/Index.tsx");
+  const send = /const handleSendMessage[\s\S]*?^\s{2}\};/m.exec(page)?.[0] ?? "";
+  // Injected context images are sent with the prompt, but they are not
+  // attachments: the marker (and countUnsavedAttachments) must count only
+  // files the user chose, or a context-only turn claims "[Images: 1 attached]".
+  expect(send).toMatch(
+    /if \(attachmentRefs\.length > 0\) \{\s*messageContent = appendImageMarker\(content, attachmentRefs\.length\)/
+  );
+  expect(send).not.toMatch(/appendImageMarker\(content, imageUrls\.length\)/);
+});

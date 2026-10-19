@@ -177,6 +177,61 @@ test("resolveContextGroupForTask resolves all 10 images and formats text, code, 
   expect(chatPrompt).toContain("Explain this setup");
 });
 
+test("resolveContextGroupForTask reports the item composition so the model can answer count questions", async () => {
+  let group = createContextGroup(undefined, OCT_19);
+  group = addItemToContextGroup(
+    group,
+    {
+      kind: "image",
+      ref: "freetalk-context-image.png",
+      refKind: "drive",
+      origin: "generated",
+      label: "Generated image",
+    },
+    OCT_19
+  ).group;
+  group = addItemToContextGroup(
+    group,
+    {
+      kind: "text",
+      text: "A man dancing in water",
+      label: "A man dancing in water",
+    },
+    OCT_19
+  ).group;
+  const resolved = await resolveContextGroupForTask(
+    group,
+    async (path) => `data:image/png;base64,${path}`
+  );
+
+  expect(resolved.itemSummary).toBe("2 items (1 image, 1 text item)");
+
+  const chatPrompt = combinePromptWithContext(
+    "how many in context?",
+    group.title,
+    resolved.contextText,
+    "chat",
+    resolved.itemSummary
+  );
+  expect(chatPrompt).toContain(
+    "This context group contains 2 items (1 image, 1 text item)."
+  );
+  expect(chatPrompt).toContain("A man dancing in water");
+  expect(chatPrompt.endsWith("how many in context?")).toBe(true);
+
+  // The image-generation path must not receive the inventory: it is metadata,
+  // not scene content.
+  const imagePrompt = combinePromptWithContext(
+    "make it night",
+    group.title,
+    resolved.contextText,
+    "image",
+    resolved.itemSummary
+  );
+  expect(imagePrompt).not.toContain("This context group contains");
+  expect(imagePrompt).toContain("A man dancing in water");
+});
+
 test("removeItemFromContextGroup and reclaimContextImagePaths track owned Drive files", () => {
   let group = createContextGroup(
     {
@@ -290,6 +345,9 @@ test("resolveContextGroupForTask skips images it cannot make sendable and counts
     "data:image/png;base64,freetalk-upload-a.png",
   ]);
   expect(resolved.missingImages).toBe(1);
+  // Only the two sendable images are claimed to the model; the missing one is
+  // reported through `missingImages` and the skip toast instead.
+  expect(resolved.itemSummary).toBe("2 items (2 images)");
   // Provenance follows the first image that actually resolved.
   expect(resolved.primaryImageBase).toEqual({
     src: "data:image/png;base64,AAAA",

@@ -429,6 +429,45 @@ export interface ResolvedContextInput {
   missingImages: number;
   /** Provenance for `Message.editedFrom` when used in image-generation mode. */
   primaryImageBase: { src: string; origin: ImageOrigin } | null;
+  /**
+   * Human-readable count of the items that were actually resolved and sent,
+   * e.g. `"2 items (1 image, 1 text item)"`. The chat prompt carries this so
+   * the model can answer questions about the context itself; without it, an
+   * image and its caption look like a single item.
+   */
+  itemSummary: string;
+}
+
+/** Per-kind item counts used to describe a Context Group to the model. */
+interface ContextItemCounts {
+  images: number;
+  text: number;
+  code: number;
+  table: number;
+  ocr: number;
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/**
+ * `"2 items (1 image, 1 text item)"` — what the model is told is in the
+ * injected context. Counts only what actually resolved, so a deleted image
+ * is never claimed to the model.
+ */
+function formatContextItemSummary(counts: ContextItemCounts): string {
+  const parts: string[] = [];
+  if (counts.images > 0) parts.push(pluralize(counts.images, "image"));
+  if (counts.text > 0) parts.push(pluralize(counts.text, "text item"));
+  if (counts.code > 0) parts.push(pluralize(counts.code, "code block"));
+  if (counts.table > 0) parts.push(pluralize(counts.table, "table"));
+  if (counts.ocr > 0) parts.push(pluralize(counts.ocr, "OCR snippet"));
+  const total =
+    counts.images + counts.text + counts.code + counts.table + counts.ocr;
+  if (total === 0) return "";
+  const label = total === 1 ? "item" : "items";
+  return `${total} ${label}${parts.length > 0 ? ` (${parts.join(", ")})` : ""}`;
 }
 
 /**
@@ -444,6 +483,9 @@ export async function resolveContextGroupForTask(
     .slice(0, MAX_CONTEXT_IMAGES);
   const textItems = group.items
     .filter(isContextTextItem)
+    // A malformed persisted item with no text is not context: skip it so the
+    // summary and the prompt describe the same set of items.
+    .filter((item) => item.text.trim().length > 0)
     .slice(0, MAX_CONTEXT_TEXT_ITEMS);
 
   // One broken image must never take the whole turn down: the chat API only
@@ -473,30 +515,54 @@ export async function resolveContextGroupForTask(
     ? { src: firstImage.ref, origin: firstImage.origin }
     : null;
 
+  const counts: ContextItemCounts = {
+    images: imageDataUrls.length,
+    text: 0,
+    code: 0,
+    table: 0,
+    ocr: 0,
+  };
+  for (const item of textItems) counts[item.kind] += 1;
+
   return {
     contextText,
     imageDataUrls,
     missingImages: imageItems.length - imageDataUrls.length,
     primaryImageBase,
+    itemSummary: formatContextItemSummary(counts),
   };
 }
 
 /**
  * Combine the user's prompt with the resolved text items from an injected
- * Context Group. Returns `prompt` untouched when the group has no text items.
+ * Context Group. Returns `prompt` untouched when there is neither text nor a
+ * non-empty item summary.
+ *
+ * In chat mode `itemSummary` is included as a manifest
+ * (`This context group contains 2 items (1 image, 1 text item).`) so the model
+ * knows the shape of the context, not just its flattened contents. That is
+ * what makes "how many items are in context?" answerable; previously a single
+ * image plus its caption looked like one item. Image-generation prompts skip
+ * the manifest because it is metadata, not scene content.
  */
 export function combinePromptWithContext(
   prompt: string,
   groupTitle: string,
   contextText: string,
-  mode: "chat" | "image"
+  mode: "chat" | "image",
+  itemSummary?: string
 ): string {
   const cleanContext = contextText.trim();
-  if (!cleanContext) return prompt;
+  const manifest =
+    mode === "chat" && itemSummary?.trim()
+      ? `This context group contains ${itemSummary.trim()}.`
+      : "";
+  if (!cleanContext && !manifest) return prompt;
+  const body = [manifest, cleanContext].filter(Boolean).join("\n");
   if (mode === "image") {
-    return `${prompt}\n\nReference context (${groupTitle}):\n${cleanContext}`;
+    return `${prompt}\n\nReference context (${groupTitle}):\n${body}`;
   }
-  return `[Context: ${groupTitle}]\n${cleanContext}\n\n${prompt}`;
+  return `[Context: ${groupTitle}]\n${body}\n\n${prompt}`;
 }
 
 export function loadContextGroups(): ContextGroup[] {
