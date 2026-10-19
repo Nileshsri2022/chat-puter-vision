@@ -452,6 +452,50 @@ test("a current image whose bytes cannot be read aborts the edit", async () => {
   ).rejects.toThrow();
 });
 
+test("multiple attachments on this turn edit all of them, base is the first", async () => {
+  // All this turn's attachments go to the model as references (multi-image
+  // edit), but the lineage records only the first as the primary subject.
+  const messages: Message[] = [
+    { role: "user", content: "combine these" },
+    { role: "assistant", content: "", imagePath: "freetalk-current.png" },
+  ];
+  const { inputImages, base } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [PNG_URL, JPEG_URL],
+    attachmentBase: { src: "freetalk-upload-1.png", origin: "attachment" },
+    contextImageDataUrls: [],
+    contextBase: null,
+    loadImageDataUrl: fakeLoad({}),
+  });
+  expect(inputImages).toEqual([PNG_URL, JPEG_URL]);
+  expect(base).toEqual({ src: "freetalk-upload-1.png", origin: "attachment" });
+});
+
+test("a chat image is used even when the attachment that fed it also exists", async () => {
+  // A result must beat the attachments that fed it, so an edit chain moves
+  // forward instead of re-anchoring on the original attachment.
+  const messages: Message[] = [
+    {
+      role: "user",
+      content: "remove the people",
+      attachments: [{ path: "freetalk-upload-1.png" }],
+    },
+    { role: "assistant", content: "", imagePath: "freetalk-edit-1.png" },
+  ];
+  const { inputImages, base } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [],
+    attachmentBase: null,
+    contextImageDataUrls: [],
+    contextBase: null,
+    loadImageDataUrl: fakeLoad({
+      "freetalk-edit-1.png": "data:image/png;base64,EDITED",
+    }),
+  });
+  expect(inputImages).toEqual(["data:image/png;base64,EDITED"]);
+  expect(base).toEqual({ src: "freetalk-edit-1.png", origin: "generated" });
+});
+
 // ---- the lineage survives a sync ----
 
 interface TestConv {

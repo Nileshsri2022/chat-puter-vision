@@ -116,6 +116,32 @@ test("a chat image used as context is edited in place via input_image", async ()
   expect(calls[0].options).not.toHaveProperty("input_images");
 });
 
+test("a text-only injected context still edits the current chat image (not a new one)", async () => {
+  // The user injected a Context Group containing only text (no images), so the
+  // resolved context contributes no `input_image`. The current chat image must
+  // still be the edit base, or the prompt would silently text-to-image a new
+  // picture instead of editing it.
+  const messages: Message[] = [
+    { role: "user", content: "draw a cat" },
+    { role: "assistant", content: "", imagePath: "freetalk-current.png" },
+  ];
+  const { inputImages } = await resolveGenerationEditBase({
+    messages,
+    attachmentDataUrls: [],
+    attachmentBase: null,
+    contextImageDataUrls: [], // text-only context resolved to no images
+    contextBase: null,
+    loadImageDataUrl,
+  });
+  expect(inputImages).toHaveLength(1);
+  expect(inputImages[0].startsWith("data:image/png;base64,")).toBe(true);
+
+  await generateImage("add a hat", { inputImages });
+  expect(calls).toHaveLength(1);
+  expect(calls[0].options.input_image).toBe(inputImages[0]);
+  expect(calls[0].options).not.toHaveProperty("input_images");
+});
+
 test("with no image anywhere a prompt is a plain text-to-image (input_image absent)", async () => {
   const messages: Message[] = [
     { role: "user", content: "hi" },
